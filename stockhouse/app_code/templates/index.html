@@ -1,0 +1,612 @@
+{% extends 'layout.html' %}
+{% block title %}Inserisci Prodotto{% endblock %}
+
+{% block content %}
+<h2>🛒 Gestione prodotti</h2>
+<br>
+<!-- Stile per righe alternate -->
+<style>
+  thead th {
+      background-color: #0050b9 !important;
+      color: white !important;
+  }
+
+  table.custom-table tbody tr:nth-child(odd) td {
+      background-color: #ffffff !important;
+  }
+
+  table.custom-table tbody tr:nth-child(even) td {
+      background-color: #e7f1ff !important;
+  }
+
+  /* 🔽 Stile per la cornice dell'immagine */
+  .product-image-frame {
+      border: 2px solid #ccc;
+      border-radius: 12px;
+      padding: 10px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+      background-color:  #e6f2ff;
+      max-width: 300px;
+      text-align: center;
+  }
+
+  .product-image-frame img {
+      max-width: 100%;
+      border-radius: 8px;
+  }
+  
+  
+</style>
+
+<!-- Crea le 3 tab -->
+<ul class="nav nav-tabs" id="categoryTabs" role="tablist">
+  <li class="nav-item" role="presentation">
+      <button class="nav-link active" id="add-tab" data-bs-toggle="tab" data-bs-target="#add" type="button" role="tab">
+          ➕ Aggiungi Prodotto
+      </button>
+  </li>
+  <li class="nav-item" role="presentation">
+    <button class="nav-link" id="manage-tab" data-bs-toggle="tab" data-bs-target="#manage" type="button" role="tab">
+        🛠️ Modifica/Rimuovi Prodotto
+    </button>
+  </li>  
+  <!-- Tab header -->
+  <li class="nav-item" role="presentation">
+    <button class="nav-link" id="consumed-tab" data-bs-toggle="tab" data-bs-target="#consumed" type="button" role="tab">
+      🍽️ Prodotto Consumato
+    </button>
+  </li>
+</ul>
+
+<!-- Contenuto delle tab -->
+<div class="tab-content mt-3">
+  
+  <!-- Prima tab: Aggiungi Prodotto -->
+  <div class="tab-pane fade show active" id="add" role="tabpanel">
+    <div class="row">
+      <div class="col-md-7">
+        <form method="POST" class="text-start" id="product-form">
+            <br> <!-- Aggiungi qui linee vuote -->
+
+            <!-- Barcode -->
+            <div class="row mb-2 align-items-center">
+                <div class="col-2">
+                  <label for="barcode" class="form-label mb-0" style="color: #00008B" >Barcode</label>
+                </div>
+                <div class="col-5">
+                  <input type="text" class="form-control form-control-sm" id="barcode" name="barcode" required maxlength="25" style="background-color:  #e6f2ff;" onchange="autoFillProduct()" onblur="autoFillProduct()">   
+                </div>
+            </div>
+
+            <!-- Nome -->
+            <div class="row mb-2 align-items-center">
+              <div class="col-2">
+                <label for="name" class="form-label mb-0" style="color: #00008B" >Nome</label>
+              </div>
+              <div class="col-5">
+                <input type="text" class="form-control form-control-sm" id="name" name="name" required maxlength="25" style="background-color:  #e6f2ff;">
+              </div>
+            </div>
+        
+            <!-- Marca -->
+            <div class="row mb-2 align-items-center">
+              <div class="col-2">
+                <label for="brand" class="form-label mb-0" style="color: #00008B" >Marca</label>
+              </div>
+              <div class="col-5">
+                <input type="text" class="form-control form-control-sm" id="brand" name="brand" required maxlength="25" style="background-color:  #e6f2ff;">
+              </div>
+            </div>
+        
+            <!-- Negozio -->
+            <div class="row mb-2 align-items-center">
+              <div class="col-2">
+                <label for="shop" class="form-label mb-0" style="color: #00008B" >Negozio</label>
+              </div>
+              <div class="col-5">
+                <select class="form-select form-select-sm" id="shop" name="shop" required style="background-color:  #e6f2ff;">
+                  <option value="">Seleziona un negozio</option>
+                  {% for shop in shops %}
+                    <option value="{{ shop[1] }}">{{ shop[1] }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+            </div>
+        
+            <!-- Prezzo -->
+            <div class="row mb-2 align-items-center">
+              <div class="col-2">
+                <label for="price" class="form-label mb-0" style="color: #00008B" >Prezzo</label>
+              </div>
+              <div class="col-5">
+                <input type="number" step="0.01" class="form-control form-control-sm" id="price" name="price" required style="background-color:  #e6f2ff;">
+              </div>
+            </div>
+        
+            <!-- Quantità dei pezzi acquistati-->
+            <div class="row mb-2 align-items-center">
+              <div class="col-2">
+                <label for="quantity" class="form-label mb-0" style="color: #00008B" >Quantita`</label>
+              </div>
+              <div class="col-5">
+                <input type="number" min="1" class="form-control form-control-sm" id="quantity" name="quantity" required style="background-color:  #e6f2ff;">
+              </div>
+            </div>
+
+
+ 
+            <!-- Items -->
+            <div class="row mb-2 align-items-center">
+              <div class="col-2">
+                <label for="item" class="form-label mb-0" style="color: #00008B" >Articolo</label>
+              </div>
+              <div class="col-5">
+                <select class="form-select form-select-sm" id="item" name="item" required style="background-color:  #e6f2ff;">
+                  <option value="">Seleziona un tipo di articolo</option>
+                  {% for cat in items %}
+                    <option value="{{ cat[1] }}">{{ cat[1] }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+            </div>
+
+
+            <!-- Scadenza -->
+            <div class="row mb-2 align-items-center">
+              <div class="col-2">
+                <label for="expiry_date" class="form-label mb-0" style="color: #00008B" >Scadenza</label>
+              </div>
+              <div class="col-5">
+                <input type="date" class="form-control form-control-sm" id="expiry_date" name="expiry_date" style="background-color:  #e6f2ff;">
+              </div>
+            </div>
+
+            <!-- Submit -->
+            <button type="submit" class="btn btn-primary mt-2">Aggiungi Prodotto</button>
+
+        </form>
+      </div>
+      
+      <div class="product-image-frame">
+        <img id="productImage" src="" alt="Immagine prodotto" style="display: none; max-width: 100%;">
+        <p id="image-placeholder" class="text-muted">🔍 Inserisci un barcode per vedere l'immagine.</p>
+      </div>
+
+    </div>
+    <hr class="my-4">
+
+    <h2 class="mt-5">📦 Prodotti Aggiunti</h2>
+    <ul>
+      {% for product in products %}
+        <li>
+          {{ product[1] }} - {{ product[2] or 'Marca sconosciuta' }} - €{{ product[4] or 'N/D' }}
+          (Barcode: {{ product[0] }})
+        </li>
+      {% endfor %}
+    </ul>
+  
+  </div>
+
+  <!-- Seconda tab: Modifica/Rimuovi Prodotto -->
+  <div class="tab-pane fade" id="manage" role="tabpanel">
+    <table class="table table-striped custom-table">
+        <thead>
+            <tr>
+                <th>Immagine</th>
+                <th>Nome</th>
+                <th>Negozio</th>
+                <th>Prezzo</th>
+                <th>Quantita</th>
+                <th>Categoria</th>
+                <th>Articolo</th>
+                <th>Inserito il</th>
+                <th>Scadenza</th>      
+                <th>Azioni</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for product in products %}
+            <tr>
+                <td>
+                  {% if product.image %}
+                      <img src="{{ product.image }}" alt="Immagine prodotto" width="50">
+                  {% else %}
+                      N/A
+                  {% endif %}
+                </td>
+                <td>{{ product.name }}</td>
+                <td>{{ product.shop }}</td>
+                <td>{{ product.price }} €</td>
+                <td>{{ product.quantity }}</td>
+                <td>{{ product.category }}</td>
+                <td>{{ product.item }}</td>
+                <td>{{ product.ins_date }}</td>
+                <td>{{ product.expiry_date if product.expiry_date else 'N/A' }}</td>
+                <td>
+                  <a href="{{ url_for('main.edit_product', name=product.name, ins_date=product.ins_date) }}" class="btn btn-sm btn-warning">✏️ Modifica</a>
+                  <a href="{{ url_for('main.delete_product', id=product.id) }}" class="btn btn-sm btn-danger" onclick="return confirm('Sei sicuro di voler eliminare questo negozio?');">❌ Elimina</a>
+                </td>            
+             </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+  </div>
+
+
+  <!-- Terza tab: Prodotto Consumato -->
+  <div class="tab-pane fade" id="consumed" role="tabpanel">
+    <div id="search-consumati" style="margin-top: 20px; width: 100%;">
+      <div style="display: flex; align-items: center;">
+        <label for="productSearch" style="margin-right: 10px;">Cerca prodotto o barcode:</label>
+        <input type="text" id="productSearch" name="productSearch" placeholder="Cerca..." style="width: 250px; padding: 8px; border-radius: 8px; background-color: #e0f7fa; border: 1px solid #ccc; font-size: 14px;">
+      </div>
+      
+    
+      <ul id="suggestions" style="
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        border: 1px solid #ccc;
+        border-top: none;
+        max-height: 200px;
+        overflow-y: auto;
+        position: absolute;
+        background-color: white;
+        z-index: 10;
+        width: 100%;
+        display: none;
+      "></ul>
+    </div>
+    <style>
+      /* Stile per la tabella */
+      #resultsTable {
+        width: 100%;
+        border-collapse: collapse;
+      }
+    
+      /* Righe alternate colorate (bianco e celeste) */
+      #resultsTable tr:nth-child(even) {
+        background-color: #f1faff;  /* Celeste chiaro */
+      }
+      #resultsTable tr:nth-child(odd) {
+        background-color: #ffffff;  /* Bianco */
+      }
+    
+      /* Stile per le celle */
+      #resultsTable th, #resultsTable td {
+        padding: 10px;
+        text-align: left;
+        border: 1px solid #d1d1d1;  /* Linee grigie tra le celle */
+      }
+    
+      /* Header con colore di sfondo e testo centrato */
+      #resultsTable th {
+        background-color: #e2e2e2;
+        font-weight: bold;
+      }
+    
+      /* Separazione verticale tra le righe e orizzontale tra le celle */
+      #resultsTable td, #resultsTable th {
+        border: 1px solid #d1d1d1; /* Aggiungi linee di separazione grigie */
+      }
+    </style>
+
+    <br><br><br>
+    <div id="resultsContainer" style="margin-top: 20px;">
+      <table id="resultsTable" style="width: 100%; border-collapse: collapse;">
+        <thead style="position: sticky; top: 0; background-color: #f1f1f1; z-index: 1;">
+          <tr>
+            <th style="padding: 8px; text-align: center;">Nome prodotto</th>
+            <th style="padding: 8px; text-align: center;">Barcode</th>
+            <th style="padding: 8px; text-align: center;">Quantita</th>
+            <th style="padding: 8px; text-align: center;">Data insert</th>
+            <th style="padding: 8px; text-align: center ;">Scadenza</th>
+            <th style="padding: 8px; text-align: center ;">Data consumo</th>
+            <th style="padding: 8px; text-align: center ;">Stato</th>
+            <th style="padding: 8px; text-align: center;">Azione</th>
+          </tr>
+        </thead>
+        <tbody id="selectedProductsBody" style="max-height: 300px; overflow-y: auto;">
+          <!-- I risultati verranno inseriti qui dinamicamente -->
+        </tbody>
+      </table>
+    </div>
+
+  
+  </div>
+</div>
+
+
+
+
+<!-- questo script Riempie la prima TAB -->
+<script>
+  function autoFillProduct() {
+    const barcode = document.getElementById("barcode").value.trim();
+    const name = document.getElementById("name").value.trim();
+
+    let lookupURL = "";
+
+    if (barcode) {
+      lookupURL = `/lookup?barcode=${encodeURIComponent(barcode)}`;
+    } else if (name) {
+      lookupURL = `/lookup?name=${encodeURIComponent(name)}`;
+    } else {
+      console.log("Nessun dato per la lookup.");
+      return;
+    }
+
+    fetch(lookupURL)
+      .then(response => response.json())
+      .then(data => {
+        console.log("Risultato lookup DB:", data);
+
+        if (data.found) {
+          document.getElementById("name").value = data.name || '';
+          document.getElementById("brand").value = data.brand || '';
+          document.getElementById("shop").value = data.shop || '';
+          document.getElementById("price").value = data.price || '';
+          document.getElementById("quantity").value = data.quantity || 1;
+          document.getElementById("item").value = data.item || '';
+
+          if (data.image) {
+            console.log("Immagine trovata:", data.image);
+            document.getElementById("productImage").src = data.image;
+            document.getElementById("productImage").style.display = "block";
+            document.getElementById("image-placeholder").style.display = "none";
+          } else {
+            console.log("Nessuna immagine trovata nel DB.");
+            document.getElementById("productImage").style.display = "none";
+            document.getElementById("image-placeholder").style.display = "block";
+          }
+
+        } else {
+          if (barcode) {
+            console.log("Prodotto non trovato nel DB. Provo lookup online...");
+            fetch(`/lookup_online/${barcode}`)
+              .then(response => response.json())
+              .then(onlineData => {
+                console.log("Risultato lookup online:", onlineData);
+                if (onlineData.found) {
+                  document.getElementById("name").value = onlineData.name || '';
+                  document.getElementById("brand").value = onlineData.brand || '';
+                  document.getElementById("quantity").value = onlineData.quantity || 1;
+
+                  if (onlineData.image) {
+                    document.getElementById("productImage").src = onlineData.image;
+                    document.getElementById("productImage").style.display = "block";
+                    document.getElementById("image-placeholder").style.display = "none";
+                  } else {
+                    document.getElementById("productImage").style.display = "none";
+                    document.getElementById("image-placeholder").style.display = "block";
+                  }
+                }
+              })
+              .catch(error => console.error("Errore lookup online:", error));
+          } else {
+            console.log("Nessun barcode disponibile per il lookup online.");
+          }
+        }
+      })
+      .catch(error => console.error("Errore lookup DB:", error));
+  }
+</script>
+
+
+<!-- Riempie la terza tab -->
+<script>
+  const input = document.getElementById('productSearch');
+  const suggestions = document.getElementById('suggestions'); // Dropdown dei suggerimenti
+  const selectedTableBody = document.getElementById('selectedProductsBody'); // Tabella prodotti selezionati
+
+  let selectedProducts = [];
+
+  input.addEventListener('input', function () {
+  const query = this.value.trim();
+
+  if (query.length < 2) {
+    suggestions.innerHTML = '';
+    suggestions.style.display = 'none';
+    return;
+  }
+
+  fetch(`/consumed/search?q=${encodeURIComponent(query)}`)
+    .then(response => response.json())
+    .then(results => {
+      suggestions.innerHTML = '';
+
+      if (results.length === 0) {
+        suggestions.style.display = 'none';
+        return;
+      }
+
+      suggestions.style.display = 'block';
+
+      results.forEach(item => {
+        const li = document.createElement('li');
+        li.textContent = `${item.name} (${item.barcode})`;
+        li.style.padding = '8px';
+        li.style.cursor = 'pointer';
+
+        li.addEventListener('click', () => {
+          // Recupera tutti i record per il prodotto selezionato
+          fetch(`/consumed/get_records?nome=${encodeURIComponent(item.name)}`)
+            .then(response => response.json())
+            .then(data => {
+              // Controlla se la risposta è positiva e se c'è la chiave 'data' che è un array
+              if (data.success && Array.isArray(data.data)) {
+                // Aggiungi i record alla tabella
+                data.data.forEach(record => {
+                  selectedProducts.push(record); // Aggiungi alla lista dei prodotti selezionati
+                });
+
+                // Aggiorna la tabella con i nuovi record
+               
+                updateSelectedTable();
+
+                // Pulisce il campo di input e i suggerimenti
+                input.value = '';
+                suggestions.innerHTML = '';
+                suggestions.style.display = 'none';
+              } else {
+                console.error("Nessun record trovato o errore nella risposta.");
+              }
+            })
+            .catch(err => {
+              console.error('Errore nel recupero dei record:', err);
+            });
+        });
+
+        suggestions.appendChild(li);
+      });
+    })
+    .catch(err => {
+      console.error('Errore durante la ricerca:', err);
+    });
+});
+
+  function updateSelectedTable() {
+    selectedTableBody.innerHTML = '';
+    console.error('TAB3 4');
+    selectedProducts.forEach(item => {
+      console.log("Script updateSelectedTable: ", item)
+      const tr = document.createElement('tr');
+      console.error('TAB3 5');
+      const tdName = document.createElement('td');
+      tdName.textContent = item.name;
+      tdName.style.textAlign = 'center'; // Centra il testo
+      tr.appendChild(tdName);
+      console.log("Script tdname: ", tdName.textContent)
+
+      const tdBarcode = document.createElement('td');
+      tdBarcode.textContent = item.barcode;
+      tdBarcode.style.textAlign = 'center'; 
+      tr.appendChild(tdBarcode);
+      console.log("Script Barcode: ", tdBarcode.textContent)
+
+      const tdQuantity = document.createElement('td');
+      tdQuantity.textContent = item.quantity || 'N/D';
+      tdQuantity.style.textAlign = 'center'; 
+      tr.appendChild(tdQuantity);
+
+      const tdInsDte = document.createElement('td');
+      tdInsDte.textContent = item.inserito || 'N/D';
+      tdInsDte.style.textAlign = 'center'; 
+      tr.appendChild(tdInsDte);
+
+      const tdExpiry = document.createElement('td');
+      tdExpiry.textContent = item.scadenza || 'N/D';
+      tdExpiry.style.textAlign = 'center'; 
+      tr.appendChild(tdExpiry);
+
+      const tdConsume = document.createElement('td');
+      tdConsume.textContent = item.consumo || 'N/D';
+      tdConsume.style.textAlign = 'center'; 
+      tr.appendChild(tdConsume);
+
+
+      const tdStato = document.createElement('td');
+      tdStato.textContent = item.stato || 'N/D';
+      tdStato.style.textAlign = 'center'; 
+      tr.appendChild(tdStato);
+
+
+      const tdAction = document.createElement('td');
+      const button = document.createElement('button');
+      button.textContent = '🍽️ Consumato';
+      button.disabled = false;
+
+      // Cambia il colore di sfondo e del testo del bottone
+      button.style.backgroundColor = 'orange'; // Colore di sfondo
+      button.style.color = 'white'; // Colore del testo
+
+      // Aggiungi l'evento di click
+      button.addEventListener('click', () => {
+        console.log('Bottone "Consumato" cliccato per il prodotto: ', item.name);
+        console.error('TAB3 6');
+        // Costruisci l'URL della route per aggiornare il prodotto
+        const url = `/consumed_product?id=${item.id}&ins_date=${item.inserito}&expiry_date=${item.scadenza}&quantity=${item.quantity}`;
+
+        // Chiamata API per aggiornare lo stato del prodotto nel database
+        fetch(url)
+          .then(response => response.json())
+          .then(data => {
+            console.log('Risposta API:', data);  
+            if (data.success) {
+              console.log('Prodotto aggiornato nel database.');
+              console.error('TAB3 7', data);
+              // Aggiorna la riga nella tabella con i nuovi valori
+              updateTableRow(item.id, data.consumo, data.quantita, data.status);
+
+              item.consumo = data.consumo;
+              item.quantity = data.quantita;
+              item.stato = data.status;
+              updateSelectedTable();
+
+              // Mostra un messaggio di conferma
+              showSuccessMessage();
+            } else {
+              console.log('Errore durante l\'aggiornamento del prodotto.');
+            }
+          })
+          .catch(error => {
+            console.error('Errore nella chiamata API:', error);
+        });
+      });
+
+      tdAction.appendChild(button);
+      tdAction.style.textAlign = 'center';
+      tr.appendChild(tdAction);
+
+      selectedTableBody.appendChild(tr);
+    });
+  }
+
+// Funzione per aggiornare la riga della tabella con la data di consumo, quantità e stato
+function updateTableRow(productId, consumoData, nuovaQuantita, nuovoStato) {
+  const rows = selectedTableBody.getElementsByTagName('tr');
+  for (let row of rows) {
+    const barcodeCell = row.querySelectorAll('td')[1]; // Colonna barcode
+    const currentBarcode = barcodeCell.textContent;
+    const matchedProduct = selectedProducts.find(p => p.id === productId);
+
+    if (matchedProduct) {
+      // Aggiorna la cella "Consumo"
+      const tdConsume = row.querySelectorAll('td')[5]; // colonna consumo
+      tdConsume.textContent = consumoData || 'N/D';  // Se consumoData è nullo, mostra 'N/D'
+
+      // Aggiorna la cella "Quantità"
+      const tdQuantity = row.querySelectorAll('td')[2]; // colonna quantità
+      tdQuantity.textContent = nuovaQuantita || 'N/D';  // Se nuovaQuantita è nullo, mostra 'N/D'
+
+      // Aggiorna la cella "Stato"
+      const tdStatus = row.querySelectorAll('td')[6]; // colonna stato (se presente)
+      tdStatus.textContent = nuovoStato || 'N/D';  // Se nuovoStato è nullo, mostra 'N/D'
+
+      row.style.backgroundColor = '#ADD8E6'; // Evidenzia la riga aggiornata
+      break;
+    }
+  }
+}
+
+  // Funzione per mostrare il messaggio di conferma
+  function showSuccessMessage() {
+    const successMessage = document.createElement('div');
+    successMessage.textContent = 'Prodotto consumato con successo!';
+    successMessage.style.backgroundColor = 'green';
+    successMessage.style.color = 'white';
+    successMessage.style.padding = '10px';
+    successMessage.style.marginBottom = '10px';
+    
+    document.body.insertBefore(successMessage, document.body.firstChild);
+    console.error('TAB3 10', document.body.firstChild);
+
+    // Rimuove il messaggio dopo 3 secondi
+    setTimeout(() => {
+        successMessage.remove();
+    }, 3000);
+  }
+
+</script>
+
+{% endblock %}

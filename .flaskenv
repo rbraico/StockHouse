@@ -1,0 +1,2 @@
+FLASK_APP=stockhouse.app_code:create_app
+FLASK_ENV=development

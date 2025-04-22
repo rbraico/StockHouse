@@ -1,0 +1,18 @@
+{% extends "layout.html" %}
+
+{% block content %}
+    <h2>✏️ Modifica Categoria</h2>
+
+    <form method="POST">
+        <div class="mb-3">
+            <label for="name" class="form-label">Nome Categoria</label>
+            <input type="text" class="form-control" id="name" name="name" value="{{ category[1] }}" required>
+        </div>
+        <div class="mb-3">
+            <label for="note" class="form-label">Note</label>
+            <input type="text" class="form-control" id="note" name="note" value="{{ category[2] }}">
+        </div>
+        <button type="submit" class="btn btn-primary">Salva modifiche</button>
+        <a href="{{ url_for('main.categories') }}" class="btn btn-secondary">Annulla</a>
+    </form>
+{% endblock %}

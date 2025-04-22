@@ -1,0 +1,21 @@
+name: stockhouse
+description: "Gestione dell'inventario con stockhouse per Home Assistant"
+version: "1.0.0"
+slug: "stockhouse"
+url: "https://github.com/rbraico/stockhouse"
+init: false
+arch:
+  - aarch64
+  - amd64
+  - armhf
+  - armv7
+  - i386
+startup: services
+ports:
+  "9192/tcp": 9192
+  
+environment:
+  DB_PATH: "/config/sqlite_db/stockhouse.db"
+
+map:
+  - config:rw
