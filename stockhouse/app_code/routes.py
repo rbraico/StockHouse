@@ -9,6 +9,10 @@ import sqlite3
 import hashlib
 import datetime
 from config import Config  # usa il path corretto se è diverso
+from flask import send_from_directory
+import os
+from config import Config
+
 
 main = Blueprint('main', __name__)
 
@@ -18,6 +22,11 @@ def fake_db_changed_time():
         "changed": "2025-04-19T16:00:00Z"  # data finta, oppure dinamica
     })
 
+#Converte il path locale in uno relativo per il browser
+@main.route('/images/<filename>')
+def serve_image(filename):
+    image_folder = Config.get_image_folder()
+    return send_from_directory(image_folder, filename)
 
 #Chiamata dallo script in index.html
 @main.route("/lookup", methods=["GET"])
@@ -42,15 +51,26 @@ def lookup():
 
     # 3️⃣ Se c'è barcode e non abbiamo ancora trovato nulla, cerca online
     if barcode:
-        data = lookup_barcode(barcode)
-        if "error" not in data:
-            return jsonify({
-                "found": True,
-                "name": data["name"],
-                "brand": data["brand"],
-                "quantity": 0,
-                "image": data.get("image", None)
-            })
+       data = lookup_barcode(barcode)
+       print("lookup online: ", data)
+       if "error" not in data:
+           image_path = data.get("image", None)
+        
+           # Se l'immagine è salvata localmente, converti il path assoluto in uno relativo per il browser
+           if image_path and image_path.startswith("C:/Users/Gebruiker/Projects/StockHouse/stockhouse_images"):
+               image_filename = os.path.basename(image_path)
+               image_url = f"/images/{image_filename}"
+           else:
+               image_url = None  # Nessuna immagine o path non valido
+
+           return jsonify({
+               "found": True,
+               "name": data["name"],
+               "brand": data["brand"],
+               "quantity": 0,
+               "image": image_url
+           })
+
 
     # 4️⃣ Niente trovato
     return jsonify({"found": False, "error": "Prodotto non trovato"})
@@ -108,7 +128,7 @@ def index():
         status       = 'in stock'
         product_key  = None
         
-        # Verifica se il prodotto e` presente in product_dim isando name poiche barcode puo anche essere null
+        # Verifica se il prodotto e` presente in product_dim usando name, poiche barcode puo anche essere null
         prodotto_esistente = lookup_products_by_name(name)
 
         print(f"Risultato lookup DB: {prodotto_esistente}")
@@ -147,9 +167,30 @@ def index():
             # INSERT in product_dim anche se il barcode e` null oppure non e`stato trovato online
             print ("index -> add_product_dim: ", barcode, name, brand, shop, category, item, image)      
         
-            # Il nome e`comunque quello impostato nel form!
+            # Prepara l'immagine per il DB
+            if barcode:
+                # Ottieni l'URL base per le immagini
+                image_url = Config.get_image_url()
+                # Costruisci il nome del file immagine
+                image_filename = f"{barcode}.jpg"
+                # Percorso assoluto dell'immagine sul filesystem
+                image_path = os.path.join(Config.get_image_folder(), image_filename)
+
+                if os.path.exists(image_path):
+                    # Percorso per il browser (Home Assistant espone /config/www come /local)
+                    image_browser_path = f"{image_url}/{image_filename}"
+                else:
+                    # Se l'immagine non esiste, nessun percorso per il browser
+                    image_browser_path = None
+            else:
+                # Nessun barcode, nessun percorso immagine
+                image_browser_path = None
+            
+            print("index -> add_product_dim: ", image_path)
+
+            # Il nome e`comunque quello impostato nel form! 
             name = request.form["name"]
-            add_product_dim(barcode, name, brand, shop, category, item, image)
+            add_product_dim(barcode, name, brand, shop, category, item, image_browser_path)
 
         # Ottiene ID del prodotto
         if product_key is None:
