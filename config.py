@@ -1,5 +1,7 @@
 import os
+import json
 import secrets
+import platform
 
 class Config:
     SECRET_KEY = secrets.token_hex(16)
@@ -22,8 +24,7 @@ class Config:
                 print(f"[Config] DB trovato in: {db_path}")
             return db_path
 
-        # fallback per Windows (dev locale)
-        elif os.name == "nt":
+        elif os.name == "nt":  # Windows
             path = os.path.join(os.getcwd(), "sqlite_db", "stockhouse.db")
             if not os.path.exists(os.path.dirname(path)):
                 print(f"[INFO] Creo cartella per DB locale: {os.path.dirname(path)}")
@@ -31,10 +32,36 @@ class Config:
             print(f"[Config] Using Windows dev path: {path}")
             return path
 
-        # fallback generico Linux/macOS
-        else:
+        else:  # Linux/macOS/Home Assistant
             print("[Config] Using default Linux/macOS path: ./stockhouse.db")
             return "./stockhouse.db"
 
+    @staticmethod
+    #
+    def get_image_folder():
+        if platform.system() == "Windows":
+            return "C:/Users/Gebruiker/Projects/StockHouse/stockhouse_images"
+        else:
+            return "/config/www/stockhouse_images"
+
+
+    @staticmethod
+    # Funzione per ottenere l'URL dell'immagine
+    # in base alla piattaforma (Home Assistant o altro)
+    def get_image_url():
+        try:
+            with open("/data/options.json") as f:
+                config = json.load(f)
+                base_url = config.get("base_url")
+                if base_url:
+                    return f"{base_url}/local/stockhouse_images"
+        except Exception as e:
+            print(f"[ERROR] Impossibile leggere base_url da options.json: {e}")
+
+        if platform.system() == "Windows":
+            return "http://localhost:5000/images"
+
+        return "http://localhost:8123/local/stockhouse_images"
+        
     # Inizializzazione statica
     DATABASE_PATH = get_database_path.__func__()

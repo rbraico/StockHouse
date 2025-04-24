@@ -1,6 +1,6 @@
 name: stockhouse
 description: "Gestione dell'inventario con stockhouse per Home Assistant"
-version: "1.0.0"
+version: "1.0.1"
 slug: "stockhouse"
 url: "https://github.com/rbraico/stockhouse"
 init: false
@@ -19,3 +19,9 @@ environment:
 
 map:
   - config:rw
+
+options:
+  base_url: "https://rbrha.duckdns.org"
+
+schema:
+  base_url: str

@@ -315,7 +315,7 @@ def update_product_dim(id, name, brand, shop, category, item):
 def delete_product_from_db(id):
     print("delete_product: ", id)
     # Connessione al database
-    conn = sqlite3.connect('Config.DATABASE_PATH')
+    conn = sqlite3.connect(Config.DATABASE_PATH)
     cur = conn.cursor()
 
     # Query per eliminare il prodotto con il dato md5
@@ -450,7 +450,7 @@ def get_products_by_name(name):
 
 def search_unconsumed_products_db(query):
     # Connessione al database
-    conn = sqlite3.connect('Config.DATABASE_PATH')
+    conn = sqlite3.connect(Config.DATABASE_PATH)
     cur = conn.cursor()
 
     # Prepara il parametro per la ricerca LIKE
@@ -488,7 +488,7 @@ def search_unconsumed_products_db(query):
 def get_product_inventory():
  
     # Connessione al database
-    conn = sqlite3.connect('Config.DATABASE_PATH')
+    conn = sqlite3.connect(Config.DATABASE_PATH)
     cur = conn.cursor()
 
     # La query da eseguire
@@ -600,7 +600,7 @@ def get_product_inventory_by_barcode(barcode):
     print("get_product_inventory_by_barcode: ", barcode)
 
     # Connessione al database
-    conn = sqlite3.connect('Config.DATABASE_PATH')
+    conn = sqlite3.connect(Config.DATABASE_PATH)
     cur = conn.cursor()
 
     query = """
