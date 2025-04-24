@@ -57,7 +57,7 @@ def lookup():
            image_path = data.get("image", None)
         
            # Se l'immagine è salvata localmente, converti il path assoluto in uno relativo per il browser
-           if image_path and image_path.startswith("C:/Users/Gebruiker/Projects/StockHouse/stockhouse_images"):
+           if image_path and os.path.exists(image_path): 
                image_filename = os.path.basename(image_path)
                image_url = f"/images/{image_filename}"
            else:
@@ -167,7 +167,7 @@ def index():
             # INSERT in product_dim anche se il barcode e` null oppure non e`stato trovato online
             print ("index -> add_product_dim: ", barcode, name, brand, shop, category, item, image)      
         
-            # Prepara l'immagine per il DB
+            # Prepara l'immagine per il DB         
             if barcode:
                 # Ottieni l'URL base per le immagini
                 image_url = Config.get_image_url()
@@ -176,16 +176,23 @@ def index():
                 # Percorso assoluto dell'immagine sul filesystem
                 image_path = os.path.join(Config.get_image_folder(), image_filename)
 
+                print(f"[DEBUG] image_url: {image_url}")
+                print(f"[DEBUG] image_filename: {image_filename}")
+                print(f"[DEBUG] image_path: {image_path}")
+
                 if os.path.exists(image_path):
                     # Percorso per il browser (Home Assistant espone /config/www come /local)
                     image_browser_path = f"{image_url}/{image_filename}"
+                    print(f"[DEBUG] image_browser_path: {image_browser_path}")
                 else:
                     # Se l'immagine non esiste, nessun percorso per il browser
                     image_browser_path = None
+                    print("[WARNING] Immagine non trovata.")
             else:
                 # Nessun barcode, nessun percorso immagine
                 image_browser_path = None
-            
+                print("[INFO] Nessun barcode fornito.")
+
             print("index -> add_product_dim: ", image_path)
 
             # Il nome e`comunque quello impostato nel form! 

@@ -3,4 +3,4 @@ url: "https://github.com/rbraico/stockhouse"
 maintainer: rbraico
 slug: stockhouse
 description: "Repository di add-on personalizzati per Home Assistant"
-version: "1.0.1"
+version: "1.0.2"

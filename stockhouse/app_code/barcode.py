@@ -20,10 +20,12 @@ def lookup_barcode(barcode):
             # Cartella in cui salvare l'immagine
             image_folder = Config.get_image_folder()
             os.makedirs(image_folder, exist_ok=True)  # Creala se non esiste
-            
+            print (f" 1-lookup_barcode[DEBUG] Image folder: {image_folder}")
+
             # Nome del file immagine
             image_filename = f"{barcode}.jpg"
             save_path = os.path.join(image_folder, image_filename)
+            print (f" 2-lookup_barcode[DEBUG] save_path: {save_path}")
 
             # Se c'è un'immagine, scaricala
             if image_url:
@@ -34,6 +36,7 @@ def lookup_barcode(barcode):
                             f.write(img_response.content)
                         # Usare il path relativo per Home Assistant
                         relative_image_path = f"{image_folder}/{image_filename}"
+                        print (f" 3-lookup_barcode[DEBUG] relative_image_path: {relative_image_path}")
                     else:
                         relative_image_path = None  # Download fallito
                 except Exception as e:
@@ -43,7 +46,7 @@ def lookup_barcode(barcode):
                 relative_image_path = None  # Nessuna immagine disponibile
             
             # Restituisci i dati del prodotto
-            print("lookup_barcode: ", name, brand, relative_image_path)
+            print("lookup_barcode1: ", name, brand, relative_image_path)
             return {
                 "name": name,
                 "brand": brand,
