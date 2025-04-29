@@ -49,16 +49,17 @@
 <body>
 
     <div class="sidebar">
-        <h4>StockHouse</h4>
-        <br><br>
+        <img src="{{ url_for('static', filename='images/stockhouse_logo.png') }}" alt="StockHouse Logo" class="img-fluid mb-4">
         <div class="d-flex flex-column gap-2 p-3">       
-            <a href="{{ url_for('main.index') }}" class="btn btn-outline-primary w-100 my-2">🏠 Torna alla Home</a>     
+            <!-- Link alla nuova pagina di entry point -->
+            <a href="{{ url_for('main.home') }}" class="btn btn-outline-primary w-100 my-2">🏠 Torna alla Home</a>     
+            <!-- Link alla pagina di gestione dei prodotti -->
             <a href="{{ url_for('main.index') }}" class="btn btn-outline-warning text-start">➕ Prodotti</a>
             <a href="{{ url_for('main.list_inventory') }}" class="btn btn-outline-info text-start">📦 Inventario</a>
-            <a href="{{ url_for('main.index') }}" class="btn btn-outline-primary text-start">📅 In Scadenza</a>
-            <a href="{{ url_for('main.index') }}" class="btn btn-outline-success text-start">🛍️ Lista Spesa</a>
+            <a href="{{ url_for('main.expiring_products') }}" class="btn btn-outline-primary text-start">📅 In Scadenza</a>
+            <a href="{{ url_for('main.shopping_list', week=1) }}" class="btn btn-outline-primary text-start">🛍️ Lista Spesa</a>
         </div>
-
+    
         <div class="accordion" id="configAccordion">
             <div class="accordion-item border-0 bg-transparent">
                 <h2 class="accordion-header" id="configHeading">

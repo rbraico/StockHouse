@@ -113,11 +113,13 @@
                             <label for="item" class="form-label mb-0" style="color: #00008B" >Articolo</label>
                         </div>
                         <div class="col-5">
-                            <select class="form-select form-select-sm" id="item" name="item" value="{{ product.item }}" required style="background-color:  #e6f2ff;">
+                          <select class="form-select form-select-sm" id="item" name="item" value="{{ product.item }}" required style="background-color:  #e6f2ff;">
                             {% for cat in items %}
-                                <option value="{{ cat[1] }}">{{ cat[1] }}</option>
+                              <option value="{{ cat[1] }}" {% if cat[1] == product.item %}selected{% endif %}>
+                                {{ cat[1] }}
+                              </option>
                             {% endfor %}
-                            </select>
+                          </select>
                         </div>
                       </div>
 

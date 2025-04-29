@@ -1,7 +1,7 @@
 import sqlite3
-import datetime
-
+from datetime import datetime, timedelta
 from config import Config  # usa il path corretto se è diverso
+from stockhouse.utils import debug_print
 
 def init_db():
  
@@ -60,18 +60,16 @@ def init_db():
 
     conn.commit()   
 
-   # ✅ CREA TABELLA  TRANSAZIONI (fatti) #####################
+
+   # ✅ CREA TABELLA  CONSUMED (fatti) #####################
     c.execute("""
-        CREATE TABLE IF NOT EXISTS transaction_fact (
+         CREATE TABLE IF NOT EXISTS consumed_fact (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             product_key INTEGER,
             barcode TEXT,
-            price REAL,
-            quantity INTEGER,
             ins_date TEXT,
             consume_date TEXT,
             expiry_date TEXT,
-            status TEXT,
             FOREIGN KEY(product_key) REFERENCES product_dim(id)
         )
     """)
@@ -132,7 +130,7 @@ def lookup_products(barcode):
     """, (barcode,))
 
     prodotto = cursor.fetchone()  # Restituisce una tupla se esiste, altrimenti None
-    print("lookup_products: ", prodotto)
+    debug_print("lookup_products: ", prodotto)
     
     conn.close()
     
@@ -186,7 +184,7 @@ def lookup_products_by_name(name):
     prodotto = cursor.fetchone()
     conn.close()
   
-    print ("lookup_products_by_name: ", prodotto)
+    debug_print ("lookup_products_by_name: ", prodotto)
 
     if prodotto:
         return {
@@ -240,7 +238,7 @@ def lookup_products_by_name_ins_date(name, ins_date):
     prodotto = cursor.fetchone()
     conn.close()
   
-    print ("lookup_products_by_name: ", prodotto)
+    debug_print ("lookup_products_by_name: ", prodotto)
 
     if prodotto:
         return {
@@ -284,7 +282,7 @@ def lookup_category_by_item(item_name):
 
 def add_product_dim(barcode, name, brand, shop, category, item, image):
 
-    print(f"Risultato: Barcode={barcode}, Name={name}, Brand={brand}, Shop={shop}, Category={category}, Item={item}")
+    debug_print(f"Risultato: Barcode={barcode}, Name={name}, Brand={brand}, Shop={shop}, Category={category}, Item={item}")
 
     conn = sqlite3.connect(Config.DATABASE_PATH)
     c = conn.cursor()
@@ -300,7 +298,7 @@ def add_product_dim(barcode, name, brand, shop, category, item, image):
 def update_product_dim(id, name, brand, shop, category, item):
 
     category = category.get("category")
-    print ("update_product_dim: ", id, name, brand, shop, category, item)
+    debug_print ("update_product_dim: ", id, name, brand, shop, category, item)
 
     conn = sqlite3.connect(Config.DATABASE_PATH)
     c = conn.cursor()
@@ -313,7 +311,7 @@ def update_product_dim(id, name, brand, shop, category, item):
     conn.close()
 
 def delete_product_from_db(id):
-    print("delete_product: ", id)
+    debug_print("delete_product: ", id)
     # Connessione al database
     conn = sqlite3.connect(Config.DATABASE_PATH)
     cur = conn.cursor()
@@ -420,7 +418,7 @@ def get_products_by_name(name):
     prodotti = cursor.fetchall()  # Usa fetchall per ottenere più prodotti
     conn.close()
 
-    print("lookup_products_by_name: ", prodotti)
+    debug_print("lookup_products_by_name: ", prodotti)
 
     if prodotti:
         result = []
@@ -477,7 +475,7 @@ def search_unconsumed_products_db(query):
     results = cur.fetchall()
     cur.close()
 
-    print("Models - unconsumed products:", results)
+    debug_print("Models - unconsumed products:", results)
 
     # Restituisce i risultati come lista di dizionari
     return [{
@@ -494,15 +492,20 @@ def get_product_inventory():
     # La query da eseguire
     query = """
         WITH latest_transactions AS (
+            -- Prendo tutte le transazioni e gli associo il barcode
             SELECT 
                 tf.*,
+                p.barcode,
                 ROW_NUMBER() OVER (
-                    PARTITION BY tf.product_key
+                    PARTITION BY p.barcode   -- Attenzione: adesso partiziono per BARCODE, non per product_key!
                     ORDER BY tf.ins_date DESC
                 ) AS rn
             FROM transaction_fact tf
+            LEFT JOIN product_dim p ON tf.product_key = p.id
         ),
+
         ranked_products AS (
+            -- Ora costruisco la lista di prodotti prendendo solo l'ultima transazione per ogni barcode
             SELECT 
                 p.id,
                 p.name,
@@ -521,9 +524,10 @@ def get_product_inventory():
             FROM product_dim p
             LEFT JOIN item_list i ON p.item = i.name
             LEFT JOIN category_list c ON i.category_id = c.id
-            LEFT JOIN latest_transactions tf ON p.id = tf.product_key
+            LEFT JOIN latest_transactions tf ON p.barcode = tf.barcode
             WHERE tf.rn = 1
         )
+
         SELECT 
             p.barcode,
             p.name,
@@ -535,11 +539,16 @@ def get_product_inventory():
             p.consume_date,
             p.expiry_date,
             p.status,
+            
+            -- Modificato: ora sommo la quantità reale a magazzino, non conto le righe!
             (
-                SELECT COUNT(*) 
+                SELECT COALESCE(SUM(tf2.quantity), 0)
                 FROM transaction_fact tf2
-                WHERE tf2.product_key = p.id AND tf2.consume_date IS NULL
+                LEFT JOIN product_dim pd2 ON tf2.product_key = pd2.id
+                WHERE pd2.barcode = p.barcode
+                AND tf2.consume_date IS NULL
             ) AS quantity_in_inventory,
+            
             p.image,
 
             -- Parametri inventory dalla tabella 'inventory'
@@ -553,7 +562,8 @@ def get_product_inventory():
 
         FROM ranked_products p
         LEFT JOIN inventory s ON s.barcode = p.barcode
-        ORDER BY p.barcode
+        ORDER BY p.barcode;
+
     """
     # Esegui la query
     cur.execute(query)
@@ -563,7 +573,7 @@ def get_product_inventory():
 
     # Mostrare i record
     for row in rows:
-        print(row)
+        debug_print(row)
 
     # Chiudere la connessione
     conn.close()
@@ -597,7 +607,7 @@ def get_product_inventory():
     return products  # 🔥 Ora restituisce una lista di dizionari! 
 
 def get_product_inventory_by_barcode(barcode):
-    print("get_product_inventory_by_barcode: ", barcode)
+    debug_print("get_product_inventory_by_barcode: ", barcode)
 
     # Connessione al database
     conn = sqlite3.connect(Config.DATABASE_PATH)
@@ -724,7 +734,7 @@ def upsert_inventory(data):
             data['reorder_point'], data['mean_usage_time'], data['reorder_frequency'], 
             data['user_override'], data['barcode']
         ))
-        print(f"Record con barcode {data['barcode']} aggiornato.")
+        debug_print(f"Record con barcode {data['barcode']} aggiornato.")
     else:
         # Se il record non esiste, esegui l'INSERT
         cur.execute("""
@@ -735,7 +745,7 @@ def upsert_inventory(data):
             data['barcode'], data['min_quantity'], data['max_quantity'], data['security_quantity'], 
             data['reorder_point'], data['mean_usage_time'], data['reorder_frequency'], data['user_override']
         ))
-        print(f"Nuovo record con barcode {data['barcode']} inserito.")
+        debug_print(f"Nuovo record con barcode {data['barcode']} inserito.")
 
     conn.commit()
     conn.close()
@@ -751,7 +761,7 @@ def add_shop(name, note=""):
 
 # ✅ OTTIENI TUTTI I NEGOZI
 def get_all_shops():
-    print("get_all_shops", {Config.DATABASE_PATH})
+    debug_print("get_all_shops", {Config.DATABASE_PATH})
     conn = sqlite3.connect(Config.DATABASE_PATH)
     c = conn.cursor()
     c.execute("SELECT id, name, note FROM shop_list")
@@ -814,7 +824,7 @@ def add_item(name, note):
     conn.close()
 
 def update_item(item_id, name, note, category_id):
-    print("update_item: ",item_id, name, note, category_id )
+    debug_print("update_item: ",item_id, name, note, category_id )
     conn = sqlite3.connect(Config.DATABASE_PATH)
     c = conn.cursor()
     c.execute("UPDATE item_list SET name = ?, note = ? , category_id = ? WHERE id = ?", (name, note, category_id, item_id,))
@@ -845,7 +855,7 @@ def get_all_items():
 
 def add_transaction_fact(product_key, barcode, price, quantity, ins_date, consume_date, expiry_date, status):
 
-    print("add_transaction_fact: ", product_key ,barcode, price, quantity, ins_date, consume_date, expiry_date, status)
+    debug_print("add_transaction_fact: ", product_key ,barcode, price, quantity, ins_date, consume_date, expiry_date, status)
 
     conn = sqlite3.connect(Config.DATABASE_PATH)
     c = conn.cursor()
@@ -859,7 +869,7 @@ def add_transaction_fact(product_key, barcode, price, quantity, ins_date, consum
 
 def update_transaction_fact(id, price, quantity, expiry_date, ins_date):
 
-    print ("update_transaction_fact: ", price, quantity, expiry_date)
+    debug_print ("update_transaction_fact: ", price, quantity, expiry_date)
 
     conn = sqlite3.connect(Config.DATABASE_PATH)
     c = conn.cursor()
@@ -873,7 +883,7 @@ def update_transaction_fact(id, price, quantity, expiry_date, ins_date):
 
   
 def update_transaction_fact_consumed(id, quantity, ins_date, expiry_date, consume_date, status):
-    print("update_transaction_fact_consumed:", id, quantity, ins_date, expiry_date, consume_date, status)
+    debug_print("update_transaction_fact_consumed:", id, quantity, ins_date, expiry_date, consume_date, status)
 
     conn = sqlite3.connect(Config.DATABASE_PATH)
     c = conn.cursor()
@@ -887,3 +897,177 @@ def update_transaction_fact_consumed(id, quantity, ins_date, expiry_date, consum
     conn.commit()
     conn.close()
 
+def insert_consumed_fact (id, barcode, ins_date, consume_date, expiry_date):
+    debug_print("insert_consumed_fact:", id, barcode, ins_date, consume_date, expiry_date)
+
+    conn = sqlite3.connect(Config.DATABASE_PATH)
+    c = conn.cursor()
+    c.execute("""
+        INSERT INTO consumed_fact (product_key, barcode, ins_date, consume_date, expiry_date)
+        VALUES (?, ?, ?, ?, ?)
+    """, (id, barcode, ins_date, consume_date, expiry_date
+          ))
+
+    conn.commit()
+    conn.close()   
+
+
+def get_expiring_products(months):
+    # Calcola la data limite in base ai mesi forniti
+    today = datetime.today()
+    expiry_limit = today + timedelta(days=30 * months)
+    debug_print(f"Data limite per la scadenza: {expiry_limit}")
+    conn = sqlite3.connect(Config.DATABASE_PATH)
+    c = conn.cursor()
+
+    # Query per recuperare i prodotti in scadenza entro la data limite
+    c.execute("""
+        SELECT 
+            trs.id, 
+            dim.barcode,
+            dim.name, 
+            dim.brand, 
+            dim.shop, 
+            trs.price, 
+            cat.name AS category, 
+            itl.name AS item,
+            trs.quantity,
+            trs.ins_date, 
+            trs.consume_date, 
+            trs.expiry_date, 
+            trs.status,  
+            dim.image
+        FROM transaction_fact trs
+        INNER JOIN product_dim dim ON dim.id = trs.product_key
+        LEFT JOIN item_list itl ON dim.item = itl.name
+        LEFT JOIN category_list cat ON itl.category_id = cat.id
+        WHERE trs.expiry_date IS NOT NULL AND trs.expiry_date <= ?
+        ORDER BY trs.expiry_date ASC
+    """, (expiry_limit,))
+
+    rows = c.fetchall()
+
+    conn.close()
+
+    # Convertiamo le tuple in una lista di dizionari
+    products = [
+        {
+            "id": row[0],
+            "barcode": row[1],
+            "name": row[2],
+            "brand": row[3],
+            "shop": row[4],
+            "price": row[5],
+            "category": row[6],
+            "item": row[7],
+            "quantity": row[8],
+            "ins_date": row[9],
+            "consume_date": row[10],
+            "expiry_date": row[11],
+            "status": row[12],
+            "image": row[13]
+        }
+        for row in rows
+    ]
+
+    return products
+
+def get_shopping_list_data(week_number):
+    conn = sqlite3.connect(Config.DATABASE_PATH)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+
+    query = """
+        SELECT 
+            i.product_key, 
+            i.barcode, 
+            tf.quantity,
+            i.min_quantity, 
+            i.max_quantity, 
+            i.security_quantity, 
+            i.reorder_point, 
+            i.mean_usage_time, 
+            i.reorder_frequency,
+            pd.name,
+            pd.shop,
+            tf.price
+        FROM 
+            inventory i
+        JOIN 
+            transaction_fact tf ON i.barcode = tf.barcode
+        JOIN
+            product_dim pd ON i.barcode = pd.barcode
+        WHERE 
+            (i.reorder_frequency >= 30 
+            OR tf.quantity < i.security_quantity 
+            OR tf.quantity < i.reorder_point 
+            OR i.mean_usage_time > 15)
+    """
+    
+    cursor.execute(query)
+    rows = cursor.fetchall()
+    conn.close()
+
+    items = []
+    shop_totals = {}
+
+    for row in rows:
+        quantity_to_buy = max(row['max_quantity'] - row['quantity'], 1)
+
+        motivo = "Riordino programmato"
+        if row['quantity'] is not None and row['security_quantity'] is not None and row['quantity'] < row['security_quantity']:
+            motivo = "Sotto scorta"
+        elif row['quantity'] is not None and row['reorder_point'] is not None and row['quantity'] < row['reorder_point']:
+            motivo = "Vicino al punto di riordino"
+        elif row['mean_usage_time'] is not None and row['mean_usage_time'] > 15:
+            motivo = "Consumo rapido"
+
+        item = {
+            "product_name": row['name'],
+            "quantity_to_buy": quantity_to_buy,
+            "store_name": row['shop'],
+            "motivo": motivo,
+            "price": row['price'] or 0  # se price è NULL
+        }
+        items.append(item)
+
+        # Calcolo totale spesa per negozio
+        if item["store_name"]:
+            if item["store_name"] not in shop_totals:
+                shop_totals[item["store_name"]] = 0
+            shop_totals[item["store_name"]] += quantity_to_buy * item["price"]
+
+    return items, shop_totals
+
+# Mainpage, calcola il numero dei prodotti che scadono nel mese corrente
+def get_number_expiring_products():
+    import datetime
+    conn = sqlite3.connect(Config.DATABASE_PATH)
+    cursor = conn.cursor()
+
+    # Calcola il primo e l'ultimo giorno del mese corrente
+    current_date = datetime.datetime.now()
+    first_day_of_month = current_date.replace(day=1)  # Primo giorno del mese
+    last_day_of_month = (first_day_of_month + datetime.timedelta(days=32)).replace(day=1) - datetime.timedelta(days=1)  # Ultimo giorno del mese
+
+    # Formatta le date in formato 'YYYY-MM-DD'
+    first_day_str = first_day_of_month.strftime('%Y-%m-%d')
+    last_day_str = last_day_of_month.strftime('%Y-%m-%d')
+
+    # Debug: stampa le date calcolate
+    print(f"Intervallo di date: {first_day_str} - {last_day_str}")
+
+    # Query per contare i prodotti in scadenza nel mese corrente
+    query = """
+        SELECT COUNT(*)
+        FROM transaction_fact
+        WHERE expiry_date BETWEEN ? AND ?
+    """
+    cursor.execute(query, (first_day_str, last_day_str))
+    count = cursor.fetchone()[0]
+
+    # Debug: stampa il risultato della query
+    print(f"Numero di prodotti trovati: {count}")
+
+    conn.close()
+    return count

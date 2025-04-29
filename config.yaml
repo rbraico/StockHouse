@@ -13,15 +13,13 @@ arch:
 startup: services
 ports:
   "9192/tcp": 9192
-  
 environment:
   DB_PATH: "/config/sqlite_db/stockhouse.db"
-
 map:
   - config:rw
-
 options:
   base_url: "https://rbrha.duckdns.org:8123"
-
+  debug_mode: True  # Nuova opzione per abilitare/disabilitare il debug
 schema:
   base_url: str
+  debug_mode: bool  # Aggiungi la definizione del tipo di dato

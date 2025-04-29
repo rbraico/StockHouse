@@ -3,6 +3,7 @@ from stockhouse.app_code.routes import main as main_blueprint  # Importa il blue
 from stockhouse.app_code.models import init_db, save_product, get_all_products, get_all_shop_list, get_all_categories
 from stockhouse.app_code.barcode import lookup_barcode
 from config import Config
+import os
 
 app = Flask(__name__)
 app.config.from_object(Config)  # Carica la configurazione dalla classe Config
@@ -14,4 +15,5 @@ app.register_blueprint(main_blueprint, url_prefix='/')  # Usa url_prefix per ass
 init_db()
 
 if __name__ == "__main__":
-    app.run(debug=True)   
+    debug_mode = os.environ.get('DEBUG_MODE', 'false').lower() == 'true'
+    app.run(debug=debug_mode)

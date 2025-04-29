@@ -1,0 +1,80 @@
+{% extends 'layout.html' %}
+{% block title %}Expiring Products{% endblock %}
+
+{% block content %}
+<h2>📅 Expiring Products</h2>
+<br>
+
+<!-- Mostra il messaggio se esiste -->
+{% if message %}
+<div class="alert alert-info" role="alert">
+  <i class="bi bi-info-circle"></i> {{ message }}
+</div>
+{% endif %}
+
+<!-- Filtro per selezionare i mesi -->
+<div class="row mb-3">
+  <div class="col-md-4">
+    <label for="filterMonths" class="form-label">Select months:</label>
+    <select class="form-select" id="filterMonths" onchange="filterProducts()">
+      <option value="1" {% if request.args.get('months', '1') == '1' %}selected{% endif %}>1 month</option>
+      <option value="2" {% if request.args.get('months') == '2' %}selected{% endif %}>2 months</option>
+      <option value="3" {% if request.args.get('months') == '3' %}selected{% endif %}>3 months</option>
+      <option value="6" {% if request.args.get('months') == '6' %}selected{% endif %}>6 months</option>
+      <option value="12" {% if request.args.get('months') == '12' %}selected{% endif %}>12 months</option>
+    </select>
+  </div>
+</div>
+
+<!-- Tabella per visualizzare i prodotti in scadenza -->
+{% if products %}
+<div class="table-container" style="max-height: 600px; overflow-y: auto; border: 1px solid #dee2e6;">
+  <table class="table table-striped custom-table">
+    <thead style="position: sticky; top: 0; background-color: #f8f9fa; z-index: 1;">
+      <tr>
+        <th>Image</th>
+        <th>Name</th>
+        <th>Shop</th>
+        <th>Price</th>
+        <th>Quantity</th>
+        <th>Category</th>
+        <th>Item</th>
+        <th>Inserted On</th>
+        <th>Expiry Date</th>
+      </tr>
+    </thead>
+    <tbody id="productsTableBody">
+      {% for product in products %}
+      <tr>
+        <td>
+          {% if product.image %}
+            <img src="{{ product.image }}" alt="Product Image" width="50">
+          {% else %}
+            N/A
+          {% endif %}
+        </td>
+        <td>{{ product.name }}</td>
+        <td>{{ product.shop }}</td>
+        <td>{{ product.price }} €</td>
+        <td>{{ product.quantity }}</td>
+        <td>{{ product.category }}</td>
+        <td>{{ product.item }}</td>
+        <td>{{ product.ins_date }}</td>
+        <td>{{ product.expiry_date if product.expiry_date else 'N/A' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<p>No products found for the selected expiry period.</p>
+{% endif %}
+
+<script>
+  function filterProducts() {
+    const months = document.getElementById("filterMonths").value;
+    window.location.href = `/expiring_products?months=${months}`;
+  }
+</script>
+
+{% endblock %}

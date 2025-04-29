@@ -187,50 +187,52 @@
   
   </div>
 
-  <!-- Seconda tab: Modifica/Rimuovi Prodotto -->
-  <div class="tab-pane fade" id="manage" role="tabpanel">
+<!-- Seconda tab: Modifica/Rimuovi Prodotto -->
+<div class="tab-pane fade" id="manage" role="tabpanel">
+  <div class="table-container" style="max-height: 600px; overflow-y: auto; border: 1px solid #dee2e6;">
     <table class="table table-striped custom-table">
-        <thead>
-            <tr>
-                <th>Immagine</th>
-                <th>Nome</th>
-                <th>Negozio</th>
-                <th>Prezzo</th>
-                <th>Quantita</th>
-                <th>Categoria</th>
-                <th>Articolo</th>
-                <th>Inserito il</th>
-                <th>Scadenza</th>      
-                <th>Azioni</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for product in products %}
-            <tr>
-                <td>
-                  {% if product.image %}
-                      <img src="{{ product.image }}" alt="Immagine prodotto" width="50">
-                  {% else %}
-                      N/A
-                  {% endif %}
-                </td>
-                <td>{{ product.name }}</td>
-                <td>{{ product.shop }}</td>
-                <td>{{ product.price }} €</td>
-                <td>{{ product.quantity }}</td>
-                <td>{{ product.category }}</td>
-                <td>{{ product.item }}</td>
-                <td>{{ product.ins_date }}</td>
-                <td>{{ product.expiry_date if product.expiry_date else 'N/A' }}</td>
-                <td>
-                  <a href="{{ url_for('main.edit_product', name=product.name, ins_date=product.ins_date) }}" class="btn btn-sm btn-warning">✏️ Modifica</a>
-                  <a href="{{ url_for('main.delete_product', id=product.id) }}" class="btn btn-sm btn-danger" onclick="return confirm('Sei sicuro di voler eliminare questo negozio?');">❌ Elimina</a>
-                </td>            
-             </tr>
-            {% endfor %}
-        </tbody>
+      <thead style="position: sticky; top: 0; background-color: #f8f9fa; z-index: 1;">
+        <tr>
+          <th>Immagine</th>
+          <th>Nome</th>
+          <th>Negozio</th>
+          <th>Prezzo</th>
+          <th>Quantita</th>
+          <th>Categoria</th>
+          <th>Articolo</th>
+          <th>Inserito il</th>
+          <th>Scadenza</th>
+          <th>Azioni</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for product in products %}
+        <tr>
+          <td>
+            {% if product.image %}
+              <img src="{{ product.image }}" alt="Immagine prodotto" width="50">
+            {% else %}
+              N/A
+            {% endif %}
+          </td>
+          <td>{{ product.name }}</td>
+          <td>{{ product.shop }}</td>
+          <td>{{ product.price }} €</td>
+          <td>{{ product.quantity }}</td>
+          <td>{{ product.category }}</td>
+          <td>{{ product.item }}</td>
+          <td>{{ product.ins_date }}</td>
+          <td>{{ product.expiry_date if product.expiry_date else 'N/A' }}</td>
+          <td>
+            <a href="{{ url_for('main.edit_product', name=product.name, ins_date=product.ins_date) }}" class="btn btn-sm btn-warning">✏️ Modifica</a>
+            <a href="{{ url_for('main.delete_product', id=product.id) }}" class="btn btn-sm btn-danger" onclick="return confirm('Sei sicuro di voler eliminare questo negozio?');">❌ Elimina</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
     </table>
   </div>
+</div>
 
 
   <!-- Terza tab: Prodotto Consumato -->
@@ -525,7 +527,7 @@
         console.log('Bottone "Consumato" cliccato per il prodotto: ', item.name);
         console.error('TAB3 6');
         // Costruisci l'URL della route per aggiornare il prodotto
-        const url = `/consumed_product?id=${item.id}&ins_date=${item.inserito}&expiry_date=${item.scadenza}&quantity=${item.quantity}`;
+        const url = `/consumed_product?id=${item.id}&barcode=${item.barcode}&ins_date=${item.inserito}&expiry_date=${item.scadenza}&quantity=${item.quantity}`;
 
         // Chiamata API per aggiornare lo stato del prodotto nel database
         fetch(url)

@@ -1,0 +1,132 @@
+{% extends 'layout.html' %}
+{% block title %}Home{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+  <!-- Intestazione -->
+  <div class="text-center mb-4">
+    <h1>Benvenuto in StockHouse</h1>
+    <p class="lead">Gestisci i tuoi prodotti, il magazzino e molto altro con facilità.</p>
+  </div>
+
+  <!-- Logo -->
+  <div class="text-center mb-4">
+    <img src="{{ url_for('static', filename='images/stockhouse_logo.png') }}" alt="StockHouse Logo" class="logo-img">
+  </div>
+
+  <!-- Prima riga di informazioni -->
+  <div class="row text-center mb-4">
+    <div class="col-md-4">
+        <div class="info-box">
+          <h5>Prodotti in Scadenza</h5>
+          <p class="text-muted">
+            Numero prodotti in scadenza nel mese corrente: 
+            <strong id="expiring-count" class="highlighted-number">0</strong>
+          </p>
+        </div>
+    </div>
+    <div class="col-md-4">
+      <div class="info-box">
+        <h5>Prodotti Esauriti</h5>
+        <p class="text-muted">Controlla i prodotti esauriti in magazzino.</p>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="info-box">
+        <h5>Prodotti con Scorte Critiche</h5>
+        <p class="text-muted">Numero di prodotti: <strong>{{ critical_stock_count }}</strong></p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Seconda riga di informazioni -->
+  <div class="row text-center">
+    <div class="col-md-4">
+      <div class="info-box">
+        <h5>Statistiche di Consumo</h5>
+        <p class="text-muted">Prodotti consumati: <strong>{{ total_consumed }}</strong></p>
+        <p class="text-muted">Prodotto più consumato: <strong>{{ most_consumed_product }}</strong></p>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="info-box">
+        <h5>Prodotti da Riordinare</h5>
+        <p class="text-muted">Scopri quali prodotti necessitano di riordino.</p>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="info-box">
+        <h5>Spesa Prevista</h5>
+        <p class="text-muted">Visualizza la spesa prevista per il mese corrente.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  /* Sfondo celeste molto tenue */
+  body {
+    background-color: #e6f7ff; /* Celeste molto tenue */
+  }
+
+  /* Stile per il logo */
+  .logo-img {
+    max-width: 150px; /* Dimensione massima del logo */
+    height: auto;
+    margin: 0 auto;
+  }
+
+  /* Stile per le aree quadrate */
+  .info-box {
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    padding: 20px;
+    background-color: #f8f9fa;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    height: 150px; /* Altezza uniforme per tutte le aree */
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+  }
+
+  .info-box h5 {
+    margin-top: 10px;
+    font-weight: bold;
+    color: #0056b3;
+  }
+
+  .info-box p {
+    font-size: 0.9rem;
+    color: #6c757d;
+  }
+
+  /* Stile per l'intestazione */
+  h1 {
+    font-size: 2.5rem;
+    font-weight: bold;
+    color: #333;
+  }
+
+  .lead {
+    font-size: 1.2rem;
+    color: #666;
+  }
+
+  /* Stile per il numero evidenziato */
+  .highlighted-number {
+    font-size: 2rem; /* Dimensione del testo più grande */
+     color: #0056b3; /* Colore blu */
+  }
+</style>
+
+<script>
+    fetch('/expiring_products_count')
+      .then(response => response.json())
+      .then(data => {
+        document.getElementById('expiring-count').textContent = data.expiring_products_count;
+      })
+      .catch(error => console.error('Errore nel recupero dei dati:', error));
+</script>
+
+{% endblock %}
