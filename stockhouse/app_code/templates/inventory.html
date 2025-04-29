@@ -9,28 +9,37 @@
     thead th {
       background-color: #0050b9 !important;
       color: white !important;
+      position: sticky;
+      top: 0;
+      z-index: 2;
     }
-  
+
     /* Alternanza righe */
     table.custom-table tbody tr:nth-child(odd) td {
       background-color: #ffffff !important;
     }
-  
+
     table.custom-table tbody tr:nth-child(even) td {
       background-color: #e7f1ff !important;
     }
-  
+
     /* Rende i bordi della tabella grigio chiaro */
     .table-bordered td,
     .table-bordered th {
       border: 1px solid #dee2e6; /* colore grigio chiaro (come Bootstrap usa di default) */
     }
-  
+
     table.custom-table tr:hover td.shop-id {
       color: #555;
     }
-</style>
 
+    /* Scroll per il corpo della tabella */
+    .table-container {
+      max-height: 600px; /* Altezza massima della tabella */
+      overflow-y: auto;
+      border: 1px solid #dee2e6;
+    }
+</style>
 
 <br>  
 <!-- Nav tabs -->
@@ -52,52 +61,54 @@
 
   <!-- 📋 Lista tab -->
   <div class="tab-pane fade show active" id="list" role="tabpanel" aria-labelledby="list-tab">
-    <table class="table table-bordered custom-table">
-      <thead class="table-dark">
-        <tr>
-          <th title="Immagine del prodotto">Prodotto</th>
-          <th title="Nome del prodotto">Nome</th>
-          <th title="Categoria del prodotto">Categoria</th>
-          <th title="Prezzo per unità del prodotto">Prezzo</th>
-          <th title="Quantità attuale in magazzino">Quantita` Attuale</th>
-          <th title="Quantità minima per il prodotto">Scorta Minima</th>
-          <th title="Quantità massima per il prodotto">Scorta Massima</th>
-          <th title="Quantità di sicurezza per evitare rotture di stock">Scorta Sicurezza</th>
-          <th title="Punto in cui bisogna riordinare il prodotto">Punto di Riordino</th>
-          <th title="Tempo medio di consumo del prodotto (giorni)">Tempo Consumo Medio</th>
-          <th title="Frequenza con cui riordinare il prodotto (giorni)">Frequenza Riordino</th>
-          <th title="Parametri aggiornati automaticamente">Aggiornamento Automatico</th>
-          <th title="Azioni che puoi eseguire sul prodotto">Azioni</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for product in products %}
-        <tr>
-          <td>
-            {% if product.image %}
-              <img src="{{ product.image }}" alt="Immagine prodotto" style="max-width: 80px; height: auto;">
-            {% else %}
-              <span class="text-muted">Nessuna immagine</span>
-            {% endif %}
-          </td>
-          <td>{{ product.name }}</td>
-          <td>{{ product.category or "-" }}</td>
-          <td>€{{ product.price or "0.00" }}</td>
-          <td>{{ product.quantity_in_inventory or "-" }}</td>
-          <td>{{ product.min_quantity or "-" }}</td>
-          <td>{{ product.max_quantity or "-" }}</td>
-          <td>{{ product.security_quantity or "-" }}</td>
-          <td>{{ product.reorder_point or "-" }}</td>
-          <td>{{ product.mean_usage_time or "-" }}</td>
-          <td>{{ product.reorder_frequency or "-" }}</td>
-          <td>{{ 'Sì' if product.user_override == 1 else 'No' }}</td>
-          <td>
-            <a href="{{ url_for('main.edit_inventory', barcode=product.barcode) }}" class="btn btn-sm btn-warning">✏️ Modifica</a>
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+    <div class="table-container">
+      <table class="table table-bordered custom-table">
+        <thead class="table-dark">
+          <tr>
+            <th title="Immagine del prodotto">Prodotto</th>
+            <th title="Nome del prodotto">Nome</th>
+            <th title="Categoria del prodotto">Categoria</th>
+            <th title="Prezzo per unità del prodotto">Prezzo</th>
+            <th title="Quantità attuale in magazzino">Quantita` Attuale</th>
+            <th title="Quantità minima per il prodotto">Scorta Minima</th>
+            <th title="Quantità massima per il prodotto">Scorta Massima</th>
+            <th title="Quantità di sicurezza per evitare rotture di stock">Scorta Sicurezza</th>
+            <th title="Punto in cui bisogna riordinare il prodotto">Punto di Riordino</th>
+            <th title="Tempo medio di consumo del prodotto (giorni)">Tempo Consumo Medio</th>
+            <th title="Frequenza con cui riordinare il prodotto (giorni)">Frequenza Riordino</th>
+            <th title="Parametri aggiornati automaticamente">Aggiornamento Automatico</th>
+            <th title="Azioni che puoi eseguire sul prodotto">Azioni</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for product in products %}
+          <tr>
+            <td>
+              {% if product.image %}
+                <img src="{{ product.image }}" alt="Immagine prodotto" style="max-width: 80px; height: auto;">
+              {% else %}
+                <span class="text-muted">Nessuna immagine</span>
+              {% endif %}
+            </td>
+            <td>{{ product.name }}</td>
+            <td>{{ product.category or "-" }}</td>
+            <td>€{{ product.price or "0.00" }}</td>
+            <td>{{ product.quantity_in_inventory or "-" }}</td>
+            <td>{{ product.min_quantity or "-" }}</td>
+            <td>{{ product.max_quantity or "-" }}</td>
+            <td>{{ product.security_quantity or "-" }}</td>
+            <td>{{ product.reorder_point or "-" }}</td>
+            <td>{{ product.mean_usage_time or "-" }}</td>
+            <td>{{ product.reorder_frequency or "-" }}</td>
+            <td>{{ 'Sì' if product.user_override == 1 else 'No' }}</td>
+            <td>
+              <a href="{{ url_for('main.edit_inventory', barcode=product.barcode) }}" class="btn btn-sm btn-warning">✏️ Modifica</a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
   </div>
 
   <!-- ➕ Aggiungi prodotto -->

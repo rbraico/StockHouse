@@ -2,8 +2,9 @@ from flask import Blueprint, render_template, request, redirect, flash, url_for,
 from stockhouse.app_code.barcode import lookup_barcode
 from stockhouse.app_code.models import add_product_dim, add_transaction_fact, delete_product_from_db,  lookup_products, get_all_products, get_all_shops, get_all_categories, get_all_items, lookup_products_by_name,\
                        lookup_products_by_name_ins_date, update_product_dim, get_product_inventory, get_product_inventory_by_barcode, upsert_inventory, search_unconsumed_products_db, \
-                       lookup_category_by_item, update_transaction_fact, update_transaction_fact_consumed, get_products_by_name
-from stockhouse.app_code.models import add_shop, update_shop, delete_shop  # Assicurati che queste funzioni esistano in models.py
+                       lookup_category_by_item, update_transaction_fact, update_transaction_fact_consumed, get_products_by_name, get_expiring_products, get_shopping_list_data, insert_consumed_fact, \
+                       get_number_expiring_products
+from stockhouse.app_code.models import add_shop, update_shop, delete_shop  
 from stockhouse.app_code.models import add_category, get_all_categories, update_category, delete_category, add_item, get_all_items, update_item, delete_item
 import sqlite3
 import hashlib
@@ -12,7 +13,7 @@ from config import Config  # usa il path corretto se è diverso
 from flask import send_from_directory
 import os
 from config import Config
-
+from stockhouse.utils import debug_print
 
 main = Blueprint('main', __name__)
 
@@ -28,6 +29,11 @@ def serve_image(filename):
     image_folder = Config.get_image_folder()
     return send_from_directory(image_folder, filename)
 
+# Visualizza l'Home page
+@main.route('/')
+def home():
+    return render_template('home.html')
+
 #Chiamata dallo script in index.html
 @main.route("/lookup", methods=["GET"])
 def lookup():
@@ -38,21 +44,21 @@ def lookup():
     if barcode:
         prodotto_esistente = lookup_products(barcode=barcode)
         if prodotto_esistente["found"]:
-            print("lookup barcode: ", prodotto_esistente)
+            debug_print("lookup barcode: ", prodotto_esistente)
             return jsonify(prodotto_esistente)
 
     # 2️⃣ Se non trovato o non c'è barcode, ma c'è il nome, cerca localmente per nome
     if name:
         prodotto_per_nome = lookup_products_by_name(name)
         if prodotto_per_nome["found"]:
-            print("lookup per nome: ", prodotto_per_nome)
+            debug_print("lookup per nome: ", prodotto_per_nome)
             return jsonify(prodotto_per_nome)
 
 
     # 3️⃣ Se c'è barcode e non abbiamo ancora trovato nulla, cerca online
     if barcode:
        data = lookup_barcode(barcode)
-       print("lookup online: ", data)
+       debug_print("lookup online: ", data)
        if "error" not in data:
            image_path = data.get("image", None)
         
@@ -101,10 +107,11 @@ def generate_md5(barcode, ins_date, index):
 
 # E`la route della pagina principale dedicata all'inserimento di prodotti
 # Serve anche per popolare la seconda tab
-@main.route('/', methods=["GET", "POST"])
+@main.route('/index', methods=["GET", "POST"])
 def index():
-    print("⚡ Routes: Funzione index() chiamata!")  # 🔍 Controllo se la funzione viene eseguita
-    print(f" Routes: Metodo richiesta: {request.method}")  # 🔍 Controllo se arriva POST o GET
+    
+    debug_print("⚡ Routes: Funzione index() chiamata!")  # 🔍 Controllo se la funzione viene eseguita
+    debug_print(f" Routes: Metodo richiesta: {request.method}")  # 🔍 Controllo se arriva POST o GET
 
     if request.method == "POST":
        
@@ -120,7 +127,7 @@ def index():
         expiry_date = request.form.get("expiry_date")
         image = request.form.get("image") or None
 
-        print("index -> POST", barcode,name,brand,shop,price,quantity,category,item,expiry_date )
+        debug_print("index -> POST", barcode,name,brand,shop,price,quantity,category,item,expiry_date )
 
         # Ottieni la data odierna e formatta come yyyy-mm-dd
         ins_date     = datetime.datetime.now().strftime('%Y-%m-%d')
@@ -131,7 +138,7 @@ def index():
         # Verifica se il prodotto e` presente in product_dim usando name, poiche barcode puo anche essere null
         prodotto_esistente = lookup_products_by_name(name)
 
-        print(f"Risultato lookup DB: {prodotto_esistente}")
+        debug_print(f"Risultato lookup DB: {prodotto_esistente}")
 
         if prodotto_esistente and prodotto_esistente["found"]:
             product_key = prodotto_esistente["id"]  
@@ -141,31 +148,31 @@ def index():
             category    = prodotto_esistente["category"]
             item        = prodotto_esistente["item"]
             image       = prodotto_esistente["image"]
-            print("index -> POST 2", barcode,name,brand,shop,price,quantity,category,item )
+            debug_print("index -> POST 2", barcode,name,brand,shop,price,quantity,category,item )
         else:
             # Il prodotto non e` presente in product_dim, cerca online con il barcode
             data = lookup_barcode(barcode)
-            print("index -> POST 3", barcode,name,brand,shop,price,quantity,category,item )
+            debug_print("index -> POST 3", barcode,name,brand,shop,price,quantity,category,item )
             if "error" not in data:
                 name = data["name"]
                 brand = data["brand"]
                 quantity = quantity if quantity else data["quantity"]  # ✅ Mantiene il valore inserito, a meno che non sia vuoto
                 image = data.get("image", None)
-                print("index -> POST 4", barcode,name,brand,shop,price,quantity,category,item )
+                debug_print("index -> POST 4", barcode,name,brand,shop,price,quantity,category,item )
 
             # INSERT in product_dim anche se il barcode e` null oppure non e`stato trovato online
-            print ("index -> add_product_dim: ", barcode, name, brand, shop, category, item, image)      
+            debug_print ("index -> add_product_dim: ", barcode, name, brand, shop, category, item, image)      
             result = lookup_category_by_item(item)
 
             # Associare il risultato alla variabile 'category' se trovato
             if result["found"]:
                 category = result["category"]
-                print(f"La categoria dell'item '{item}' è: {category}")
+                debug_print(f"La categoria dell'item '{item}' è: {category}")
             else:
-                print(f"Item '{item}' non trovato.")
+                debug_print(f"Item '{item}' non trovato.")
 
             # INSERT in product_dim anche se il barcode e` null oppure non e`stato trovato online
-            print ("index -> add_product_dim: ", barcode, name, brand, shop, category, item, image)      
+            debug_print ("index -> add_product_dim: ", barcode, name, brand, shop, category, item, image)      
         
             # Prepara l'immagine per il DB         
             if barcode:
@@ -176,24 +183,24 @@ def index():
                 # Percorso assoluto dell'immagine sul filesystem
                 image_path = os.path.join(Config.get_image_folder(), image_filename)
 
-                print(f"[DEBUG] image_url: {image_url}")
-                print(f"[DEBUG] image_filename: {image_filename}")
-                print(f"[DEBUG] image_path: {image_path}")
+                debug_print(f"[DEBUG] image_url: {image_url}")
+                debug_print(f"[DEBUG] image_filename: {image_filename}")
+                debug_print(f"[DEBUG] image_path: {image_path}")
 
                 if os.path.exists(image_path):
                     # Percorso per il browser (Home Assistant espone /config/www come /local)
                     image_browser_path = f"{image_url}/{image_filename}"
-                    print(f"[DEBUG] image_browser_path: {image_browser_path}")
+                    debug_print(f"[DEBUG] image_browser_path: {image_browser_path}")
                 else:
                     # Se l'immagine non esiste, nessun percorso per il browser
                     image_browser_path = None
-                    print("[WARNING] Immagine non trovata.")
+                    debug_print("[WARNING] Immagine non trovata.")
             else:
                 # Nessun barcode, nessun percorso immagine
                 image_browser_path = None
-                print("[INFO] Nessun barcode fornito.")
+                debug_print("[INFO] Nessun barcode fornito.")
 
-            print("index -> add_product_dim: ", image_path)
+            debug_print("index -> add_product_dim: ", image_path)
 
             # Il nome e`comunque quello impostato nel form! 
             name = request.form["name"]
@@ -211,7 +218,7 @@ def index():
     # 💡 Se la richiesta è GET, semplicemente carichiamo la pagina
     products      = get_all_products()
     shops         = get_all_shops()
-    #print("ALL SHOPS: ", shops)
+    #debug_print("ALL SHOPS: ", shops)
     categories    = get_all_categories()
     items = get_all_items()
 
@@ -219,7 +226,7 @@ def index():
 
 @main.route('/delete_product/<int:id>')
 def delete_product(id):
-    print("delete_product: " , id)
+    debug_print("delete_product: " , id)
 
     delete_product_from_db(id)
 
@@ -232,7 +239,7 @@ def delete_product(id):
 @main.route('/inventory')
 def list_inventory():
     products = get_product_inventory()
-    print ("Show_Product in inventory: ", products)
+    debug_print ("Show_Product in inventory: ", products)
 
     return render_template("inventory.html", products=products)
 
@@ -242,7 +249,7 @@ def list_inventory():
 def edit_inventory(barcode):
     # Recupera i dettagli del prodotto dal database
     product = get_product_inventory_by_barcode(barcode)
-    print("edith_inventory: ", product)
+    debug_print("edith_inventory: ", product)
     return render_template("edit_inventory.html", product=product)
 
 
@@ -250,24 +257,23 @@ def edit_inventory(barcode):
 # Questa procedura viene chamtaa dal metodo POST dopo aver cliccato sul pulsante Modifica Parametri di Magazzino
 # Per inserire oppure modificare un record esistente nella tabella inventory
 def update_inventory():
-    print("update_inventory Request Form Data: ", request.form)
+    debug_print("update_inventory Request Form Data: ", request.form)
 
-    data = {
-        "barcode": request.form["barcode"],
-        "min_quantity": int(request.form["min_quantity"]),
-        "max_quantity": int(request.form["max_quantity"]),
-        "security_quantity": int(request.form["security_quantity"]),
-        "reorder_point": int(request.form["reorder_point"]),
-        "mean_usage_time": int(request.form["mean_usage_time"]),
-        "reorder_frequency": request.form["reorder_frequency"],
-        "user_override": int(request.form["user_override"])
-    }
-    print("update_inventory: ", data)
+    int_fields = ["min_quantity", "max_quantity", "security_quantity", "reorder_point", "mean_usage_time", "user_override"]
+
+    data = {"barcode": request.form.get("barcode")}
+
+    for field in int_fields:
+        value = request.form.get(field)
+        data[field] = int(value) if value and value.isdigit() else None
+
+    data["reorder_frequency"] = request.form.get("reorder_frequency")
+
+    debug_print("update_inventory: ", data)
     upsert_inventory(data)
 
-    flash("inventory aggiornato con successo!")
+    flash("Inventory aggiornato con successo!")
     return redirect(url_for("main.edit_inventory", barcode=data["barcode"]))
-
 
 @main.route("/edit/<name>/<ins_date>", methods=["GET", "POST"])
 #La procedura viene chiamata da Prodotti--> Modifica/Rimuovi Prodotta al momento del click sul pulsaante Modifica
@@ -275,15 +281,15 @@ def update_inventory():
 # Il metodo POST serve per attivare la modifica nel Database
 def edit_product(name, ins_date):
     # Recupera i dettagli del prodotto dal database per il form di modifica
-    print("edith_product: ", name, ins_date)
-    print("requested method: ", request.method)
+    debug_print("edith_product: ", name, ins_date)
+    debug_print("requested method: ", request.method)
 
     product    = lookup_products_by_name_ins_date(name,ins_date)
     id = product["id"]
     shop_list  = get_all_shops()
     items = get_all_items()
-    print("requested method: ", product)
-    print("edit product intero record: ", product)
+    debug_print("requested method: ", product)
+    debug_print("edit product intero record: ", product)
 
     if request.method == "POST":
         # Modifica i dati del prodotto
@@ -299,7 +305,7 @@ def edit_product(name, ins_date):
 
         
         # Salva il prodotto modificato nel database
-        print ("update_product: ", barcode, name, brand, shop, item, ins_date)
+        debug_print ("update_product: ", barcode, name, brand, shop, item, ins_date)
         category = lookup_category_by_item(item)
         update_product_dim(id, name, brand, shop, category, item)
         update_transaction_fact(id, price, quantity,  expiry_date, ins_date)
@@ -313,23 +319,24 @@ def edit_product(name, ins_date):
 @main.route('/consumed/search')
 def search_unconsumed_products():
     query = request.args.get('q', '')
-    print("Route - unconsumed products1: ", query)
+    debug_print("Route - unconsumed products1: ", query)
     
     # Chiamata alla funzione nel modello
     results = search_unconsumed_products_db(query)
     
-    print("Route - unconsumed products2: ", results)
+    debug_print("Route - unconsumed products2: ", results)
     return jsonify(results)
 
 
 @main.route('/consumed_product', methods=['GET', 'POST'])
 def consumed_product():
     id = request.args.get('id')
+    barcode = request.args.get('barcode')
     ins_date = request.args.get('ins_date')
     expiry_date = request.args.get('expiry_date')
     quantity = int(request.args.get('quantity'))
 
-    print("Route: /consumed_product/", id, quantity, ins_date, expiry_date)
+    debug_print("Route: /consumed_product/", id, barcode, quantity, ins_date, expiry_date)
 
     if quantity > 1:
         new_quantity = quantity - 1
@@ -340,10 +347,13 @@ def consumed_product():
         new_status = "out of stock"
         consume_date = datetime.datetime.now().strftime("%Y-%m-%d")
 
-    print("Route 1: /consumed_product/",id, new_quantity, ins_date, expiry_date, consume_date, new_status)    
+    debug_print("Route 1: /consumed_product/",id, new_quantity, ins_date, expiry_date, consume_date, new_status)    
 
     update_transaction_fact_consumed(id, new_quantity, ins_date, expiry_date, consume_date, new_status)
 
+    #Registra il consumo in consume_fact
+    insert_consumed_fact (id, barcode, ins_date, consume_date, expiry_date)
+    
     return jsonify(success=True, quantita=new_quantity, status=new_status, consumo=consume_date)
 
 
@@ -352,12 +362,12 @@ def get_records():
 
  
     name = request.args.get('nome')
-    print("get_records: ",name)
+    debug_print("get_records: ",name)
     if not name:
         return jsonify({"error": "Parametro 'nome' mancante"}), 400
 
     prodotto = get_products_by_name(name)
-    print("get_records: ", prodotto)
+    debug_print("get_records: ", prodotto)
     if not prodotto:
         return jsonify({"error": f"Prodotto '{name}' non trovato"}), 404
 
@@ -518,10 +528,10 @@ def edit_item(item_id):
     # Recupera le categorie
     c.execute("SELECT id, name FROM category_list")
     categories = c.fetchall()
-    print("edit_item: ", request.method)
+    debug_print("edit_item: ", request.method)
 
     if request.method == 'POST':
-        print("edit_item: ", request.form['name'], request.form['note'], request.form['category'])
+        debug_print("edit_item: ", request.form['name'], request.form['note'], request.form['category'])
         name     = request.form['name']
         category_id = request.form['category']
         note     = request.form['note']
@@ -537,7 +547,7 @@ def edit_item(item_id):
 
     
     item = c.fetchone()
-    print("item: ", item)
+    debug_print("item: ", item)
     conn.close()
     return render_template('edit_item.html', categories=categories, item=item)
 
@@ -547,3 +557,44 @@ def delete_item_route(item_id):  # 🔁 Cambia nome alla funzione route per evit
     delete_item(item_id)  # ✅ Questa è la funzione del modello
     flash('🗑️ Sub Categoria eliminata con successo!', 'success')
     return redirect(url_for('main.items'))
+
+#questa route serve per visualizzare i prodotti in via di scadenza 
+@main.route('/expiring_products')
+def expiring_products():
+    # Ottieni il parametro "months" dalla query string (default: 1 mese)
+    months = int(request.args.get('months', 1))
+    debug_print(f"Filtro mesi: {months}")
+
+    # Recupera i prodotti in scadenza entro il numero di mesi specificato
+    products = get_expiring_products(months)
+
+    # Messaggio da mostrare se non ci sono risultati
+    message = None
+    if not products:
+        message = f"Nessun prodotto in scadenza trovato entro {months} mese/i."
+
+    # Renderizza la pagina HTML con i prodotti filtrati e il messaggio
+    return render_template('expiring_products.html', products=products, message=message)
+
+#Crea la lista della spesa
+@main.route('/shopping_list', methods=["GET"])
+def shopping_list():
+    week_number = request.args.get('week', 1, type=int)
+
+    items, shop_totals = get_shopping_list_data(week_number)
+
+    if not items:
+        return jsonify({"error": f"Nessun prodotto trovato per la settimana {week_number}"}), 404
+
+    return render_template('shopping_list.html', items=items, shop_totals=shop_totals)
+
+#Mainpage - Calcola il numero dei prodotti in scadenza
+@main.route('/expiring_products_count')
+def expiring_products_count():
+
+    # Chiama la funzione per contare i prodotti in scadenza
+    count = get_number_expiring_products()
+    debug_print("expiring_products_count: ", count)
+
+    # Restituisci il conteggio come JSON
+    return jsonify({"expiring_products_count": count})
