@@ -28,13 +28,19 @@
     <div class="col-md-4">
       <div class="info-box">
         <h5>Prodotti Esauriti</h5>
-        <p class="text-muted">Controlla i prodotti esauriti in magazzino.</p>
+        <p class="text-muted">
+          Numero prodotti esauriti: 
+          <strong id="out-of-stock-count" class="highlighted-number">0</strong>
+        </p>
       </div>
     </div>
     <div class="col-md-4">
       <div class="info-box">
         <h5>Prodotti con Scorte Critiche</h5>
-        <p class="text-muted">Numero di prodotti: <strong>{{ critical_stock_count }}</strong></p>
+        <p class="text-muted">
+          Numero di prodotti: 
+          <strong id="critical-stock-count" class="highlighted-number">0</strong>
+        </p>
       </div>
     </div>
   </div>
@@ -42,22 +48,30 @@
   <!-- Seconda riga di informazioni -->
   <div class="row text-center">
     <div class="col-md-4">
-      <div class="info-box">
-        <h5>Statistiche di Consumo</h5>
-        <p class="text-muted">Prodotti consumati: <strong>{{ total_consumed }}</strong></p>
-        <p class="text-muted">Prodotto più consumato: <strong>{{ most_consumed_product }}</strong></p>
-      </div>
+       <div class="info-box">
+         <h5>Statistiche di Consumo</h5>
+         <p class="text-muted">
+           Prodotti consumati questo mese: 
+           <strong id="monthly-consumed-count" class="highlighted-number">0</strong>
+         </p>
+        </div>
     </div>
     <div class="col-md-4">
       <div class="info-box">
         <h5>Prodotti da Riordinare</h5>
-        <p class="text-muted">Scopri quali prodotti necessitano di riordino.</p>
+        <p class="text-muted">
+          Numero prodotti da riordinare: 
+          <strong id="reorder-count" class="highlighted-number">0</strong>
+        </p>
       </div>
     </div>
     <div class="col-md-4">
       <div class="info-box">
         <h5>Spesa Prevista</h5>
-        <p class="text-muted">Visualizza la spesa prevista per il mese corrente.</p>
+        <p class="text-muted">
+          Totale spesa: 
+          <strong id="reorder-total-cost" class="highlighted-number">0.00 €</strong>
+        </p>
       </div>
     </div>
   </div>
@@ -127,6 +141,51 @@
         document.getElementById('expiring-count').textContent = data.expiring_products_count;
       })
       .catch(error => console.error('Errore nel recupero dei dati:', error));
+</script>
+
+<script>
+  fetch('/out_of_stock_count')
+    .then(response => response.json())
+    .then(data => {
+      document.getElementById('out-of-stock-count').textContent = data.out_of_stock_count;
+    })
+    .catch(error => console.error('Errore nel recupero dei dati:', error));
+</script>
+
+<script>
+  fetch('/critical_stock_count')
+    .then(response => response.json())
+    .then(data => {
+      document.getElementById('critical-stock-count').textContent = data.critical_stock_count;
+    })
+    .catch(error => console.error('Errore nel recupero dei dati:', error));
+</script>
+
+<script>
+  fetch('/monthly_consumed_count')
+    .then(response => response.json())
+    .then(data => {
+      document.getElementById('monthly-consumed-count').textContent = data.monthly_consumed_count;
+    })
+    .catch(error => console.error('Errore nel recupero dei dati:', error));
+</script>
+
+<script>
+  fetch('/reorder_count')
+    .then(response => response.json())
+    .then(data => {
+      document.getElementById('reorder-count').textContent = data.reorder_count;
+    })
+    .catch(error => console.error('Errore nel recupero dei dati:', error));
+</script>
+
+<script>
+  fetch('/reorder_total_cost')
+    .then(response => response.json())
+    .then(data => {
+      document.getElementById('reorder-total-cost').textContent = `${data.reorder_total_cost} €`;
+    })
+    .catch(error => console.error('Errore nel recupero dei dati:', error));
 </script>
 
 {% endblock %}
