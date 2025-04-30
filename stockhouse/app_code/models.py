@@ -2,6 +2,7 @@ import sqlite3
 from datetime import datetime, timedelta
 from config import Config  # usa il path corretto se è diverso
 from stockhouse.utils import debug_print
+from calendar import monthrange
 
 def init_db():
  
@@ -460,7 +461,7 @@ def search_unconsumed_products_db(query):
             FROM product_dim pd
             JOIN transaction_fact tf ON pd.id = tf.product_key
             WHERE pd.barcode LIKE ? AND tf.consume_date IS NULL
-            GROUP BY pd.barcode
+            GROUP BY pd.barcode, ins_date
         """, (query_param,))
     else:  # Se la query è un nome prodotto
         cur.execute("""
@@ -468,7 +469,7 @@ def search_unconsumed_products_db(query):
             FROM product_dim pd
             JOIN transaction_fact tf ON pd.id = tf.product_key
             WHERE LOWER(pd.name) LIKE ? AND tf.consume_date IS NULL
-            GROUP BY pd.name
+            GROUP BY pd.name, ins_date
         """, (query_param,))
 
     # Recupera i risultati
@@ -897,7 +898,9 @@ def update_transaction_fact_consumed(id, quantity, ins_date, expiry_date, consum
     conn.commit()
     conn.close()
 
-def insert_consumed_fact (id, barcode, ins_date, consume_date, expiry_date):
+def insert_consumed_fact (id, barcode, ins_date, expiry_date):
+
+    consume_date = datetime.datetime.now().strftime("%Y-%m-%d")
     debug_print("insert_consumed_fact:", id, barcode, ins_date, consume_date, expiry_date)
 
     conn = sqlite3.connect(Config.DATABASE_PATH)
@@ -941,7 +944,7 @@ def get_expiring_products(months):
         INNER JOIN product_dim dim ON dim.id = trs.product_key
         LEFT JOIN item_list itl ON dim.item = itl.name
         LEFT JOIN category_list cat ON itl.category_id = cat.id
-        WHERE trs.expiry_date IS NOT NULL AND trs.expiry_date <= ?
+        WHERE trs.expiry_date IS NOT NULL AND trs.expiry_date != '' AND trs.expiry_date <= ?
         ORDER BY trs.expiry_date ASC
     """, (expiry_limit,))
 
@@ -972,38 +975,94 @@ def get_expiring_products(months):
 
     return products
 
+
+# Calcola il numero della settimana corrente
+def get_current_week():
+    today = datetime.today()
+    first_day_of_month = today.replace(day=1)
+    week_number = (today - first_day_of_month).days // 7 + 1
+    debug_print(f"Numero settimana corrente: {week_number}")
+    return week_number
+
+# Calcola l'intervallo di date per la settimana corrente
+def get_week_date_range(week_number):
+    # Ottieni il primo giorno del mese corrente
+    today = datetime.today()
+    first_day_of_month = today.replace(day=1)
+
+    # Calcola il lunedì della settimana corrente
+    first_monday = first_day_of_month - timedelta(days=first_day_of_month.weekday())
+
+    # Calcola l'inizio e la fine della settimana
+    start_date = first_monday + timedelta(weeks=week_number - 1)
+    end_date = start_date + timedelta(days=6)
+
+    # Debug: stampa i valori calcolati
+    debug_print(f"Week {week_number}: Start Date = {start_date}, End Date = {end_date}")
+
+    return start_date, end_date
+
+# Mainpage, calcola la lista della spesa
 def get_shopping_list_data(week_number):
     conn = sqlite3.connect(Config.DATABASE_PATH)
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
 
-    query = """
-        SELECT 
-            i.product_key, 
-            i.barcode, 
-            tf.quantity,
-            i.min_quantity, 
-            i.max_quantity, 
-            i.security_quantity, 
-            i.reorder_point, 
-            i.mean_usage_time, 
-            i.reorder_frequency,
-            pd.name,
-            pd.shop,
-            tf.price
-        FROM 
-            inventory i
-        JOIN 
-            transaction_fact tf ON i.barcode = tf.barcode
-        JOIN
-            product_dim pd ON i.barcode = pd.barcode
-        WHERE 
-            (i.reorder_frequency >= 30 
-            OR tf.quantity < i.security_quantity 
-            OR tf.quantity < i.reorder_point 
-            OR i.mean_usage_time > 15)
-    """
-    
+    # Debug: stampa il numero della settimana
+    debug_print(f"get_shopping_list_data - Numero settimana corrente: {week_number}")
+
+
+    # Query per la settimana 1: Ripristino delle scorte pesanti
+    if week_number == 1:
+        query = """
+            SELECT 
+                i.product_key, 
+                i.barcode, 
+                tf.quantity,
+                i.min_quantity, 
+                i.max_quantity, 
+                i.security_quantity, 
+                i.reorder_point, 
+                i.mean_usage_time, 
+                i.reorder_frequency,
+                pd.name,
+                pd.shop,
+                tf.price
+            FROM 
+                inventory i
+            JOIN 
+                transaction_fact tf ON i.barcode = tf.barcode
+            JOIN
+                product_dim pd ON i.barcode = pd.barcode
+            WHERE 
+                (i.reorder_frequency >= 30 
+                OR tf.quantity < i.security_quantity 
+                OR tf.quantity < i.reorder_point 
+                OR i.mean_usage_time > 15)
+        """
+    else:
+        # Query per le settimane 2, 3 e 4: Prodotti esauriti o sotto quantità minima
+        query = """
+            SELECT 
+                i.product_key, 
+                i.barcode, 
+                tf.quantity,
+                i.min_quantity, 
+                i.max_quantity, 
+                pd.name,
+                pd.shop,
+                tf.price
+            FROM 
+                inventory i
+            JOIN 
+                transaction_fact tf ON i.barcode = tf.barcode
+            JOIN
+                product_dim pd ON i.barcode = pd.barcode
+            WHERE 
+                tf.quantity = 0 
+                OR tf.quantity < i.min_quantity
+        """
+
     cursor.execute(query)
     rows = cursor.fetchall()
     conn.close()
@@ -1012,16 +1071,22 @@ def get_shopping_list_data(week_number):
     shop_totals = {}
 
     for row in rows:
+        # Calcola la quantità da acquistare
         quantity_to_buy = max(row['max_quantity'] - row['quantity'], 1)
 
+        # Calcola il motivo
         motivo = "Riordino programmato"
-        if row['quantity'] is not None and row['security_quantity'] is not None and row['quantity'] < row['security_quantity']:
-            motivo = "Sotto scorta"
-        elif row['quantity'] is not None and row['reorder_point'] is not None and row['quantity'] < row['reorder_point']:
-            motivo = "Vicino al punto di riordino"
-        elif row['mean_usage_time'] is not None and row['mean_usage_time'] > 15:
-            motivo = "Consumo rapido"
+        if week_number == 1:
+            if row['quantity'] is not None and row['security_quantity'] is not None and row['quantity'] < row['security_quantity']:
+                motivo = "Sotto scorta"
+            elif row['quantity'] is not None and row['reorder_point'] is not None and row['quantity'] < row['reorder_point']:
+                motivo = "Vicino al punto di riordino"
+            elif row['mean_usage_time'] is not None and row['mean_usage_time'] > 15:
+                motivo = "Consumo rapido"
+        else:
+            motivo = "Esaurito" if row['quantity'] == 0 else "Sotto quantità minima"
 
+        # Crea l'oggetto prodotto
         item = {
             "product_name": row['name'],
             "quantity_to_buy": quantity_to_buy,
@@ -1071,3 +1136,74 @@ def get_number_expiring_products():
 
     conn.close()
     return count
+
+# Mainpage, calcola il numero dei prodotti che sono esauriti
+def get_out_of_stock_count():
+    conn = sqlite3.connect(Config.DATABASE_PATH)
+    cursor = conn.cursor()
+
+    # Query per contare i prodotti con quantità pari a 0
+    query = """
+        SELECT COUNT(*)
+        FROM transaction_fact
+        WHERE quantity = 0
+    """
+    cursor.execute(query)
+    count = cursor.fetchone()[0]
+    debug_print("get_out_of_stock_count: ", count)
+
+    conn.close()
+    return count
+
+# Mainpage, calcola il numero dei prodotti che sono in scorte critiche
+def get_critical_stock_count():
+    conn = sqlite3.connect(Config.DATABASE_PATH)
+    cursor = conn.cursor()
+
+    # Query per contare i prodotti con scorte critiche
+    query = """
+        SELECT COUNT(*)
+        FROM transaction_fact tf
+        JOIN inventory i ON tf.barcode = i.barcode
+        WHERE tf.quantity < i.security_quantity
+    """
+    cursor.execute(query)
+    count = cursor.fetchone()[0]
+
+    conn.close()
+    return count
+
+# Mainpage, calcola il numero dei prodotti che sono stati consumati nel mese corrente
+def get_monthly_consumed_count():
+    conn = sqlite3.connect(Config.DATABASE_PATH)
+    cursor = conn.cursor()
+
+    # Ottieni il primo giorno del mese corrente
+    query = """
+        SELECT COUNT(*)
+        FROM consumed_fact
+        WHERE strftime('%Y-%m', consume_date) = strftime('%Y-%m', 'now')
+    """
+    cursor.execute(query)
+    count = cursor.fetchone()[0]
+
+    conn.close()
+    return count
+
+# Mainpage, calcola il numero dei prodotti che sono da riordinare
+def get_reorder_count_from_shopping_list():
+    # Usa la funzione esistente per ottenere i dati della lista della spesa
+    items, _ = get_shopping_list_data(week_number=1)  # Considera la prima settimana del mese
+    return len(items)  # Restituisce il numero totale di prodotti
+
+# Mainpage, calcola il costo totale dei prodotti da riordinare
+def get_reorder_total_cost():
+    # Usa la funzione esistente per ottenere i dati della lista della spesa
+    items, _ = get_shopping_list_data(week_number=1)  # Considera la prima settimana del mese
+    total_cost = 0
+
+    # Calcola il costo totale
+    for item in items:
+        total_cost += item["quantity_to_buy"] * item["price"]  # Prezzo totale per il prodotto
+
+    return round(total_cost, 2)  # Arrotonda a due decimali

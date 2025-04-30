@@ -3,7 +3,8 @@ from stockhouse.app_code.barcode import lookup_barcode
 from stockhouse.app_code.models import add_product_dim, add_transaction_fact, delete_product_from_db,  lookup_products, get_all_products, get_all_shops, get_all_categories, get_all_items, lookup_products_by_name,\
                        lookup_products_by_name_ins_date, update_product_dim, get_product_inventory, get_product_inventory_by_barcode, upsert_inventory, search_unconsumed_products_db, \
                        lookup_category_by_item, update_transaction_fact, update_transaction_fact_consumed, get_products_by_name, get_expiring_products, get_shopping_list_data, insert_consumed_fact, \
-                       get_number_expiring_products
+                       get_number_expiring_products, get_out_of_stock_count, get_critical_stock_count, get_monthly_consumed_count, get_reorder_count_from_shopping_list, get_reorder_total_cost, \
+                       get_current_week, get_week_date_range
 from stockhouse.app_code.models import add_shop, update_shop, delete_shop  
 from stockhouse.app_code.models import add_category, get_all_categories, update_category, delete_category, add_item, get_all_items, update_item, delete_item
 import sqlite3
@@ -352,7 +353,7 @@ def consumed_product():
     update_transaction_fact_consumed(id, new_quantity, ins_date, expiry_date, consume_date, new_status)
 
     #Registra il consumo in consume_fact
-    insert_consumed_fact (id, barcode, ins_date, consume_date, expiry_date)
+    insert_consumed_fact (id, barcode, ins_date, expiry_date)
     
     return jsonify(success=True, quantita=new_quantity, status=new_status, consumo=consume_date)
 
@@ -576,17 +577,39 @@ def expiring_products():
     # Renderizza la pagina HTML con i prodotti filtrati e il messaggio
     return render_template('expiring_products.html', products=products, message=message)
 
-#Crea la lista della spesa
-@main.route('/shopping_list', methods=["GET"])
-def shopping_list():
-    week_number = request.args.get('week', 1, type=int)
 
+# Questa route serve per visualizzare la lista della spesa
+@main.route('/shopping_list')
+def shopping_list():
+    # Calcola la settimana corrente o usa il parametro passato
+    #week_number = request.args.get('week', get_current_week(), type=int)
+    week_number = get_current_week()
     items, shop_totals = get_shopping_list_data(week_number)
 
-    if not items:
-        return jsonify({"error": f"Nessun prodotto trovato per la settimana {week_number}"}), 404
+    # Calcola l'intervallo di date per la settimana
+    start_date, end_date = get_week_date_range(week_number)
 
-    return render_template('shopping_list.html', items=items, shop_totals=shop_totals)
+    if start_date is None or end_date is None:
+        return render_template(
+            'shopping_list.html',
+            items=[],
+            shop_totals={},
+            week_number=week_number,
+            start_date="Settimana non valida",
+            end_date=""
+        )
+
+    print(f"Week: {week_number}, Items: {items}, Shop Totals: {shop_totals}")
+    return render_template(
+        'shopping_list.html',
+        items=items,
+        shop_totals=shop_totals,
+        week_number=week_number,
+        start_date=start_date.strftime('%A %d %B %Y'),
+        end_date=end_date.strftime('%A %d %B %Y')
+    )
+
+
 
 #Mainpage - Calcola il numero dei prodotti in scadenza
 @main.route('/expiring_products_count')
@@ -598,3 +621,46 @@ def expiring_products_count():
 
     # Restituisci il conteggio come JSON
     return jsonify({"expiring_products_count": count})
+
+@main.route('/out_of_stock_count')
+def out_of_stock_count():
+    print("[DEBUG] Route /out_of_stock_count chiamata")
+    # Chiama una funzione per contare i prodotti esauriti
+    count = get_out_of_stock_count()
+    debug_print("out_of_stock_count: ", count)
+
+    # Restituisci il conteggio come JSON
+    return jsonify({"out_of_stock_count": count})
+
+#Mainpage - Calcola il numero dei prodotti con quantity<security_quantity
+@main.route('/critical_stock_count')
+def critical_stock_count():
+    print("[DEBUG] Route /critical_stock_count chiamata")
+    count = get_critical_stock_count()
+    debug_print("critical_stock_count: ", count)
+    return jsonify({"critical_stock_count": count})
+
+#Mainpage - Calcola il numero dei prodotti consumati nel mese
+@main.route('/monthly_consumed_count')
+def monthly_consumed_count():
+    print("[DEBUG] Route /monthly_consumed_count chiamata")
+    count = get_monthly_consumed_count()
+    debug_print("monthly_consumed_count: ", count)
+    return jsonify({"monthly_consumed_count": count})
+
+
+#Mainpage - Calcola il numero dei prodotti da riordinare
+@main.route('/reorder_count')
+def reorder_count():
+    print("[DEBUG] Route /reorder_count chiamata")
+    count = get_reorder_count_from_shopping_list()
+    debug_print("reorder_count: ", count)
+    return jsonify({"reorder_count": count})
+
+#Mainpage - Calcola il costo totale dei prodotti da riordinare
+@main.route('/reorder_total_cost')
+def reorder_total_cost():
+    print("[DEBUG] Route /reorder_total_cost chiamata")
+    total_cost = get_reorder_total_cost()
+    debug_print("reorder_total_cost: ", total_cost)
+    return jsonify({"reorder_total_cost": total_cost})
