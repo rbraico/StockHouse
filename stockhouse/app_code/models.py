@@ -445,7 +445,54 @@ def get_products_by_name(name):
     else:
         return []  # Nessun risultato
 
+def get_product_by_name_and_dates(name, ins_date, expiry_date=None):
+    """
+    Recupera un prodotto dal database utilizzando nome, data di inserimento e (opzionalmente) data di scadenza.
+    """
+    debug_print("get_product_by_name_and_dates - Nome: ", name)
+    debug_print("get_product_by_name_and_dates - Data di inserimento: ", ins_date)
+    debug_print("get_product_by_name_and_dates - Data di scadenza: ", expiry_date)
 
+    conn = sqlite3.connect(Config.DATABASE_PATH)
+    cur = conn.cursor()
+
+    if expiry_date:  # Se la data di scadenza è fornita
+        query = """
+            SELECT tf.id, pd.name, tf.barcode, tf.quantity, tf.ins_date, tf.expiry_date, tf.consume_date, tf.status
+            FROM transaction_fact tf
+            JOIN product_dim pd ON tf.product_key = pd.id
+            WHERE pd.name = ? AND tf.ins_date = ? AND tf.expiry_date = ?
+        """
+        params = (name, ins_date, expiry_date)
+    else:  # Se la data di scadenza non è fornita
+        query = """
+            SELECT tf.id, pd.name, tf.barcode, tf.quantity, tf.ins_date, tf.expiry_date, tf.consume_date, tf.status
+            FROM transaction_fact tf
+            JOIN product_dim pd ON tf.product_key = pd.id
+            WHERE pd.name = ? AND tf.ins_date = ? AND tf.expiry_date IS NULL
+        """
+        params = (name, ins_date)
+
+    debug_print("get_product_by_name_and_dates - Query: ", query)
+    debug_print("get_product_by_name_and_dates - Parametri: ", params)
+
+    cur.execute(query, params)
+    records = cur.fetchall()
+    conn.close()
+
+    debug_print("get_product_by_name_and_dates - Risultati: ", records)
+
+    # Formatta i risultati in un dizionario
+    return [{
+        "id": row[0],
+        "name": row[1],
+        "barcode": row[2],
+        "quantity": row[3],
+        "inserito": row[4],
+        "scadenza": row[5],
+        "consumo": row[6],
+        "stato": row[7]
+    } for row in records]
 
 def search_unconsumed_products_db(query):
     # Connessione al database
@@ -484,6 +531,7 @@ def search_unconsumed_products_db(query):
         "inserito": row[4], "scadenza": row[5], "consumo": row[6], "stato": row[7]
     } for row in results]
 
+# Funzione per ottenere l'inventario dei prodotti
 def get_product_inventory():
  
     # Connessione al database
@@ -892,7 +940,7 @@ def update_transaction_fact_consumed(id, quantity, ins_date, expiry_date, consum
     c.execute("""
         UPDATE transaction_fact
         SET quantity=?, consume_date=?, status=?
-        WHERE product_key=? AND ins_date=? AND expiry_date=?
+        WHERE id=? AND ins_date=? AND expiry_date=?
     """, (quantity, consume_date, status, id, ins_date, expiry_date))
 
     conn.commit()
@@ -900,7 +948,7 @@ def update_transaction_fact_consumed(id, quantity, ins_date, expiry_date, consum
 
 def insert_consumed_fact (id, barcode, ins_date, expiry_date):
 
-    consume_date = datetime.datetime.now().strftime("%Y-%m-%d")
+    consume_date = datetime.now().strftime("%Y-%m-%d")
     debug_print("insert_consumed_fact:", id, barcode, ins_date, consume_date, expiry_date)
 
     conn = sqlite3.connect(Config.DATABASE_PATH)
@@ -978,11 +1026,22 @@ def get_expiring_products(months):
 
 # Calcola il numero della settimana corrente
 def get_current_week():
-    today = datetime.today()
+    today = datetime.today().date()
     first_day_of_month = today.replace(day=1)
-    week_number = (today - first_day_of_month).days // 7 + 1
-    debug_print(f"Numero settimana corrente: {week_number}")
+
+    # Trova il lunedì della settimana che contiene il primo giorno del mese
+    start_of_first_week = first_day_of_month - timedelta(days=first_day_of_month.weekday())
+
+    # Calcola la distanza in giorni tra oggi e l'inizio della prima settimana
+    days_difference = (today - start_of_first_week).days
+
+    # Settimana reale = ogni 7 giorni da quel primo lunedì
+    week_number = days_difference // 7 + 1
+
+    debug_print(f"Numero settimana corrente: {week_number}, Giorno corrente: {today.day}, Primo giorno del mese: {first_day_of_month.day}")
     return week_number
+
+
 
 # Calcola l'intervallo di date per la settimana corrente
 def get_week_date_range(week_number):
@@ -1035,6 +1094,7 @@ def get_shopping_list_data(week_number):
             JOIN
                 product_dim pd ON i.barcode = pd.barcode
             WHERE 
+                (i.reorder_point IS NOT NULL AND i.reorder_point > 0) AND
                 (i.reorder_frequency >= 30 
                 OR tf.quantity < i.security_quantity 
                 OR tf.quantity < i.reorder_point 
