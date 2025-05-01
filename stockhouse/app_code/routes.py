@@ -4,7 +4,7 @@ from stockhouse.app_code.models import add_product_dim, add_transaction_fact, de
                        lookup_products_by_name_ins_date, update_product_dim, get_product_inventory, get_product_inventory_by_barcode, upsert_inventory, search_unconsumed_products_db, \
                        lookup_category_by_item, update_transaction_fact, update_transaction_fact_consumed, get_products_by_name, get_expiring_products, get_shopping_list_data, insert_consumed_fact, \
                        get_number_expiring_products, get_out_of_stock_count, get_critical_stock_count, get_monthly_consumed_count, get_reorder_count_from_shopping_list, get_reorder_total_cost, \
-                       get_current_week, get_week_date_range
+                       get_current_week, get_week_date_range, get_product_by_name_and_dates
 from stockhouse.app_code.models import add_shop, update_shop, delete_shop  
 from stockhouse.app_code.models import add_category, get_all_categories, update_category, delete_category, add_item, get_all_items, update_item, delete_item
 import sqlite3
@@ -357,24 +357,35 @@ def consumed_product():
     
     return jsonify(success=True, quantita=new_quantity, status=new_status, consumo=consume_date)
 
-
 @main.route('/consumed/get_records', methods=["GET"])
 def get_records():
-
- 
+    # Ottieni i parametri dalla richiesta
     name = request.args.get('nome')
-    debug_print("get_records: ",name)
+    ins_date = request.args.get('ins_date')  # Data di inserimento
+    expiry_date = request.args.get('expiry_date')  # Data di scadenza (può essere NULL)
+
+    debug_print("get_records - Nome: ", name)
+    debug_print("get_records - Data di inserimento: ", ins_date)
+    debug_print("get_records - Data di scadenza: ", expiry_date)
+
+    # Verifica che il parametro 'nome' sia presente
     if not name:
         return jsonify({"error": "Parametro 'nome' mancante"}), 400
 
-    prodotto = get_products_by_name(name)
-    debug_print("get_records: ", prodotto)
-    if not prodotto:
-        return jsonify({"error": f"Prodotto '{name}' non trovato"}), 404
+    # Verifica che la data di inserimento sia presente
+    if not ins_date:
+        return jsonify({"error": "Parametro 'ins_date' mancante"}), 400
 
-    return jsonify({"success": True, "data": prodotto})
+    # Chiamata alla funzione nel modello
+    result = get_product_by_name_and_dates(name, ins_date, expiry_date)
 
+    # Se non ci sono risultati, restituisci un errore
+    if not result:
+        return jsonify({"error": f"Nessun prodotto trovato per '{name}' con ins_date '{ins_date}' e expiry_date '{expiry_date}'"}), 404
 
+    debug_print("get_records - Risultati trovati: ", result)
+
+    return jsonify({"success": True, "data": result})
 
 @main.route('/configuration', methods=["GET", "POST"])
 def configuration():
@@ -584,6 +595,7 @@ def shopping_list():
     # Calcola la settimana corrente o usa il parametro passato
     #week_number = request.args.get('week', get_current_week(), type=int)
     week_number = get_current_week()
+    debug_print("shopping_list week_number: ", week_number)
     items, shop_totals = get_shopping_list_data(week_number)
 
     # Calcola l'intervallo di date per la settimana

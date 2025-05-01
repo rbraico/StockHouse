@@ -397,13 +397,13 @@
 
 <!-- Riempie la terza tab -->
 <script>
-  const input = document.getElementById('productSearch');
-  const suggestions = document.getElementById('suggestions'); // Dropdown dei suggerimenti
-  const selectedTableBody = document.getElementById('selectedProductsBody'); // Tabella prodotti selezionati
+const input = document.getElementById('productSearch');
+const suggestions = document.getElementById('suggestions'); // Dropdown dei suggerimenti
+const selectedTableBody = document.getElementById('selectedProductsBody'); // Tabella prodotti selezionati
 
-  let selectedProducts = [];
+let selectedProducts = [];
 
-  input.addEventListener('input', function () {
+input.addEventListener('input', function () {
   const query = this.value.trim();
 
   if (query.length < 2) {
@@ -426,37 +426,38 @@
 
       results.forEach(item => {
         const li = document.createElement('li');
-        li.textContent = `${item.name} (${item.barcode})`;
+        li.innerHTML = `
+          <strong>${item.name}</strong> (${item.barcode})<br>
+          <small>Inserito il: ${item.inserito || 'N/D'}</small><br>
+          <small>Scadenza: ${item.scadenza || 'N/D'}</small>
+        `;
         li.style.padding = '8px';
         li.style.cursor = 'pointer';
+        li.style.borderBottom = '1px solid #ccc';
 
         li.addEventListener('click', () => {
-          // Recupera tutti i record per il prodotto selezionato
-          fetch(`/consumed/get_records?nome=${encodeURIComponent(item.name)}`)
-            .then(response => response.json())
-            .then(data => {
-              // Controlla se la risposta è positiva e se c'è la chiave 'data' che è un array
-              if (data.success && Array.isArray(data.data)) {
-                // Aggiungi i record alla tabella
-                data.data.forEach(record => {
-                  selectedProducts.push(record); // Aggiungi alla lista dei prodotti selezionati
+            // Recupera tutti i record per il prodotto selezionato, includendo la data di inserimento e scadenza
+            fetch(`/consumed/get_records?nome=${encodeURIComponent(item.name)}&ins_date=${encodeURIComponent(item.inserito)}&expiry_date=${encodeURIComponent(item.scadenza || '')}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && Array.isArray(data.data)) {
+                        data.data.forEach(record => {
+                            selectedProducts.push(record); // Aggiungi alla lista dei prodotti selezionati
+                        });
+
+                        updateSelectedTable();
+
+                        // Pulisce il campo di input e i suggerimenti
+                        input.value = '';
+                        suggestions.innerHTML = '';
+                        suggestions.style.display = 'none';
+                    } else {
+                        console.error("Nessun record trovato o errore nella risposta.");
+                    }
+                })
+                .catch(err => {
+                    console.error('Errore nel recupero dei record:', err);
                 });
-
-                // Aggiorna la tabella con i nuovi record
-               
-                updateSelectedTable();
-
-                // Pulisce il campo di input e i suggerimenti
-                input.value = '';
-                suggestions.innerHTML = '';
-                suggestions.style.display = 'none';
-              } else {
-                console.error("Nessun record trovato o errore nella risposta.");
-              }
-            })
-            .catch(err => {
-              console.error('Errore nel recupero dei record:', err);
-            });
         });
 
         suggestions.appendChild(li);
@@ -467,148 +468,125 @@
     });
 });
 
-  function updateSelectedTable() {
-    selectedTableBody.innerHTML = '';
-    console.error('TAB3 4');
-    selectedProducts.forEach(item => {
-      console.log("Script updateSelectedTable: ", item)
-      const tr = document.createElement('tr');
-      console.error('TAB3 5');
-      const tdName = document.createElement('td');
-      tdName.textContent = item.name;
-      tdName.style.textAlign = 'center'; // Centra il testo
-      tr.appendChild(tdName);
-      console.log("Script tdname: ", tdName.textContent)
+function updateSelectedTable() {
+  selectedTableBody.innerHTML = '';
+  selectedProducts.forEach(item => {
+    const tr = document.createElement('tr');
 
-      const tdBarcode = document.createElement('td');
-      tdBarcode.textContent = item.barcode;
-      tdBarcode.style.textAlign = 'center'; 
-      tr.appendChild(tdBarcode);
-      console.log("Script Barcode: ", tdBarcode.textContent)
+    const tdName = document.createElement('td');
+    tdName.textContent = item.name;
+    tdName.style.textAlign = 'center';
+    tr.appendChild(tdName);
 
-      const tdQuantity = document.createElement('td');
-      tdQuantity.textContent = item.quantity || 'N/D';
-      tdQuantity.style.textAlign = 'center'; 
-      tr.appendChild(tdQuantity);
+    const tdBarcode = document.createElement('td');
+    tdBarcode.textContent = item.barcode;
+    tdBarcode.style.textAlign = 'center';
+    tr.appendChild(tdBarcode);
 
-      const tdInsDte = document.createElement('td');
-      tdInsDte.textContent = item.inserito || 'N/D';
-      tdInsDte.style.textAlign = 'center'; 
-      tr.appendChild(tdInsDte);
+    const tdQuantity = document.createElement('td');
+    tdQuantity.textContent = item.quantity || 'N/D';
+    tdQuantity.style.textAlign = 'center';
+    tr.appendChild(tdQuantity);
 
-      const tdExpiry = document.createElement('td');
-      tdExpiry.textContent = item.scadenza || 'N/D';
-      tdExpiry.style.textAlign = 'center'; 
-      tr.appendChild(tdExpiry);
+    const tdInsDte = document.createElement('td');
+    tdInsDte.textContent = item.inserito || 'N/D';
+    tdInsDte.style.textAlign = 'center';
+    tr.appendChild(tdInsDte);
 
-      const tdConsume = document.createElement('td');
-      tdConsume.textContent = item.consumo || 'N/D';
-      tdConsume.style.textAlign = 'center'; 
-      tr.appendChild(tdConsume);
+    const tdExpiry = document.createElement('td');
+    tdExpiry.textContent = item.scadenza || 'N/D';
+    tdExpiry.style.textAlign = 'center';
+    tr.appendChild(tdExpiry);
 
+    const tdConsume = document.createElement('td');
+    tdConsume.textContent = item.consumo || 'N/D';
+    tdConsume.style.textAlign = 'center';
+    tr.appendChild(tdConsume);
 
-      const tdStato = document.createElement('td');
-      tdStato.textContent = item.stato || 'N/D';
-      tdStato.style.textAlign = 'center'; 
-      tr.appendChild(tdStato);
+    const tdStato = document.createElement('td');
+    tdStato.textContent = item.stato || 'N/D';
+    tdStato.style.textAlign = 'center';
+    tr.appendChild(tdStato);
 
+    const tdAction = document.createElement('td');
+    const button = document.createElement('button');
+    button.textContent = '🍽️ Consumato';
+    button.disabled = false;
 
-      const tdAction = document.createElement('td');
-      const button = document.createElement('button');
-      button.textContent = '🍽️ Consumato';
-      button.disabled = false;
+    button.style.backgroundColor = 'orange';
+    button.style.color = 'white';
 
-      // Cambia il colore di sfondo e del testo del bottone
-      button.style.backgroundColor = 'orange'; // Colore di sfondo
-      button.style.color = 'white'; // Colore del testo
+    button.addEventListener('click', () => {
+      console.log('Bottone "Consumato" cliccato per il prodotto: ', item.name);
 
-      // Aggiungi l'evento di click
-      button.addEventListener('click', () => {
-        console.log('Bottone "Consumato" cliccato per il prodotto: ', item.name);
-        console.error('TAB3 6');
-        // Costruisci l'URL della route per aggiornare il prodotto
-        const url = `/consumed_product?id=${item.id}&barcode=${item.barcode}&ins_date=${item.inserito}&expiry_date=${item.scadenza}&quantity=${item.quantity}`;
+      const url = `/consumed_product?id=${item.id}&barcode=${item.barcode}&ins_date=${item.inserito}&expiry_date=${item.scadenza}&quantity=${item.quantity}`;
 
-        // Chiamata API per aggiornare lo stato del prodotto nel database
-        fetch(url)
-          .then(response => response.json())
-          .then(data => {
-            console.log('Risposta API:', data);  
-            if (data.success) {
-              console.log('Prodotto aggiornato nel database.');
-              console.error('TAB3 7', data);
-              // Aggiorna la riga nella tabella con i nuovi valori
-              updateTableRow(item.id, data.consumo, data.quantita, data.status);
+      fetch(url)
+        .then(response => response.json())
+        .then(data => {
+          if (data.success) {
+            console.log('Prodotto aggiornato nel database.');
+            updateTableRow(item.id, data.consumo, data.quantita, data.status);
 
-              item.consumo = data.consumo;
-              item.quantity = data.quantita;
-              item.stato = data.status;
-              updateSelectedTable();
+            item.consumo = data.consumo;
+            item.quantity = data.quantita;
+            item.stato = data.status;
+            updateSelectedTable();
 
-              // Mostra un messaggio di conferma
-              showSuccessMessage();
-            } else {
-              console.log('Errore durante l\'aggiornamento del prodotto.');
-            }
-          })
-          .catch(error => {
-            console.error('Errore nella chiamata API:', error);
+            showSuccessMessage();
+          } else {
+            console.log('Errore durante l\'aggiornamento del prodotto.');
+          }
+        })
+        .catch(error => {
+          console.error('Errore nella chiamata API:', error);
         });
-      });
-
-      tdAction.appendChild(button);
-      tdAction.style.textAlign = 'center';
-      tr.appendChild(tdAction);
-
-      selectedTableBody.appendChild(tr);
     });
-  }
 
-// Funzione per aggiornare la riga della tabella con la data di consumo, quantità e stato
+    tdAction.appendChild(button);
+    tdAction.style.textAlign = 'center';
+    tr.appendChild(tdAction);
+
+    selectedTableBody.appendChild(tr);
+  });
+}
+
 function updateTableRow(productId, consumoData, nuovaQuantita, nuovoStato) {
   const rows = selectedTableBody.getElementsByTagName('tr');
   for (let row of rows) {
-    const barcodeCell = row.querySelectorAll('td')[1]; // Colonna barcode
-    const currentBarcode = barcodeCell.textContent;
+    const barcodeCell = row.querySelectorAll('td')[1];
     const matchedProduct = selectedProducts.find(p => p.id === productId);
 
     if (matchedProduct) {
-      // Aggiorna la cella "Consumo"
-      const tdConsume = row.querySelectorAll('td')[5]; // colonna consumo
-      tdConsume.textContent = consumoData || 'N/D';  // Se consumoData è nullo, mostra 'N/D'
+      const tdConsume = row.querySelectorAll('td')[5];
+      tdConsume.textContent = consumoData || 'N/D';
 
-      // Aggiorna la cella "Quantità"
-      const tdQuantity = row.querySelectorAll('td')[2]; // colonna quantità
-      tdQuantity.textContent = nuovaQuantita || 'N/D';  // Se nuovaQuantita è nullo, mostra 'N/D'
+      const tdQuantity = row.querySelectorAll('td')[2];
+      tdQuantity.textContent = nuovaQuantita || 'N/D';
 
-      // Aggiorna la cella "Stato"
-      const tdStatus = row.querySelectorAll('td')[6]; // colonna stato (se presente)
-      tdStatus.textContent = nuovoStato || 'N/D';  // Se nuovoStato è nullo, mostra 'N/D'
+      const tdStatus = row.querySelectorAll('td')[6];
+      tdStatus.textContent = nuovoStato || 'N/D';
 
-      row.style.backgroundColor = '#ADD8E6'; // Evidenzia la riga aggiornata
+      row.style.backgroundColor = '#ADD8E6';
       break;
     }
   }
 }
 
-  // Funzione per mostrare il messaggio di conferma
-  function showSuccessMessage() {
-    const successMessage = document.createElement('div');
-    successMessage.textContent = 'Prodotto consumato con successo!';
-    successMessage.style.backgroundColor = 'green';
-    successMessage.style.color = 'white';
-    successMessage.style.padding = '10px';
-    successMessage.style.marginBottom = '10px';
-    
-    document.body.insertBefore(successMessage, document.body.firstChild);
-    console.error('TAB3 10', document.body.firstChild);
+function showSuccessMessage() {
+  const successMessage = document.createElement('div');
+  successMessage.textContent = 'Prodotto consumato con successo!';
+  successMessage.style.backgroundColor = 'green';
+  successMessage.style.color = 'white';
+  successMessage.style.padding = '10px';
+  successMessage.style.marginBottom = '10px';
 
-    // Rimuove il messaggio dopo 3 secondi
-    setTimeout(() => {
-        successMessage.remove();
-    }, 3000);
-  }
+  document.body.insertBefore(successMessage, document.body.firstChild);
 
+  setTimeout(() => {
+    successMessage.remove();
+  }, 3000);
+}
 </script>
 
 {% endblock %}
