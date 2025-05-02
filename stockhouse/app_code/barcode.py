@@ -1,6 +1,8 @@
 import requests
 import os
 from config import Config
+from stockhouse.utils import debug_print
+
 
 def lookup_barcode(barcode):
     url = f"https://world.openfoodfacts.org/api/v0/product/{barcode}.json"

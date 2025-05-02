@@ -4,7 +4,7 @@ from stockhouse.app_code.models import add_product_dim, add_transaction_fact, de
                        lookup_products_by_name_ins_date, update_product_dim, get_product_inventory, get_product_inventory_by_barcode, upsert_inventory, search_unconsumed_products_db, \
                        lookup_category_by_item, update_transaction_fact, update_transaction_fact_consumed, get_products_by_name, get_expiring_products, get_shopping_list_data, insert_consumed_fact, \
                        get_number_expiring_products, get_out_of_stock_count, get_critical_stock_count, get_monthly_consumed_count, get_reorder_count_from_shopping_list, get_reorder_total_cost, \
-                       get_current_week, get_week_date_range, get_product_by_name_and_dates
+                       get_current_week, get_week_date_range, get_product_by_name_and_dates, get_expiring_products_for_home, get_out_of_stock_products, get_critical_stock, get_monthly_consumed_statistics
 from stockhouse.app_code.models import add_shop, update_shop, delete_shop  
 from stockhouse.app_code.models import add_category, get_all_categories, update_category, delete_category, add_item, get_all_items, update_item, delete_item
 import sqlite3
@@ -111,9 +111,10 @@ def generate_md5(barcode, ins_date, index):
 @main.route('/index', methods=["GET", "POST"])
 def index():
     
+    
     debug_print("⚡ Routes: Funzione index() chiamata!")  # 🔍 Controllo se la funzione viene eseguita
     debug_print(f" Routes: Metodo richiesta: {request.method}")  # 🔍 Controllo se arriva POST o GET
-
+    new_product = None
     if request.method == "POST":
        
         # Ottiene i valori dei campi salvati nel form di inserimento
@@ -216,6 +217,19 @@ def index():
         add_transaction_fact(product_key, barcode, price, quantity, ins_date, consume_date, expiry_date, status)
         flash("Prodotto aggiunto o aggiornato!", "success")
 
+        # Prepara un dizionario con i dati del prodotto appena inserito
+        new_product = {
+            "barcode": barcode,
+            "name": name,
+            "brand": brand,
+            "shop": shop,
+            "price": price,
+            "quantity": quantity,
+            "category": category,
+            "item": item,
+            "expiry_date": expiry_date 
+            }
+
     # 💡 Se la richiesta è GET, semplicemente carichiamo la pagina
     products      = get_all_products()
     shops         = get_all_shops()
@@ -223,7 +237,12 @@ def index():
     categories    = get_all_categories()
     items = get_all_items()
 
-    return render_template("index.html", products=products, shops=shops, categories=categories, items=items)
+    return render_template("index.html",
+                        products=products,
+                        shops=shops,
+                        categories=categories,
+                        items=items,
+                        new_product=new_product)
 
 @main.route('/delete_product/<int:id>')
 def delete_product(id):
@@ -588,6 +607,51 @@ def expiring_products():
     # Renderizza la pagina HTML con i prodotti filtrati e il messaggio
     return render_template('expiring_products.html', products=products, message=message)
 
+#
+@main.route('/home_expiring_products', methods=['GET'])
+def home_expiring_products():
+    # Ottieni il parametro "months" dalla query string (default: 1 mese)
+    months = int(request.args.get('months', 1))
+    debug_print(f"home_expiring_products - Filtro mesi: {months}")
+
+    # Recupera i prodotti in scadenza entro il numero di mesi specificato
+    products = get_expiring_products_for_home(months)
+    debug_print("home_expiring_products - Prodotti in scadenza: ", products)
+
+    # Se non ci sono prodotti, restituisci un messaggio vuoto
+    if not products:
+        return jsonify({
+            "headers": ["Nome", "Barcode", "Data di Scadenza", "Quantità"],
+            "records": [],
+            "message": f"Nessun prodotto in scadenza trovato entro {months} mese/i."
+        })
+
+    # Restituisci i dati come JSON
+    return jsonify({
+        "headers": ["Nome", "Barcode", "Data di Scadenza", "Quantità"],
+        "records": [[p["name"], p["barcode"], p["expiry_date"], p["quantity"]] for p in products]
+    })
+
+# Questa route serve per visualizzare i prodotti esauriti
+@main.route('/home_out_of_stock_products', methods=['GET'])
+def home_out_of_stock_products():
+    # Recupera i prodotti esauriti
+    products = get_out_of_stock_products()
+    debug_print("home_out_of_stock_products - Prodotti esauriti: ", products)
+
+    # Se non ci sono prodotti, restituisci un messaggio vuoto
+    if not products:
+        return jsonify({
+            "headers": ["Nome", "Barcode", "Categoria"],
+            "records": [],
+            "message": "Nessun prodotto esaurito trovato."
+        })
+
+    # Restituisci i dati come JSON
+    return jsonify({
+        "headers": ["Nome", "Barcode", "Categoria"],
+        "records": [[p["name"], p["barcode"], p["category"]] for p in products]
+    })
 
 # Questa route serve per visualizzare la lista della spesa
 @main.route('/shopping_list')
@@ -634,6 +698,7 @@ def expiring_products_count():
     # Restituisci il conteggio come JSON
     return jsonify({"expiring_products_count": count})
 
+#Mainpage - Calcola il numero dei prodotti esauriti
 @main.route('/out_of_stock_count')
 def out_of_stock_count():
     print("[DEBUG] Route /out_of_stock_count chiamata")
@@ -652,6 +717,31 @@ def critical_stock_count():
     debug_print("critical_stock_count: ", count)
     return jsonify({"critical_stock_count": count})
 
+#Mainpage - Calcola il numero dei prodotti con quantity<security_quantity
+@main.route('/home_critical_stock')
+def home_critical_stock():
+    print("[DEBUG] Route /home_critical_stock chiamata")
+ 
+    # Recupera i prodotti con scorte critiche
+    products = get_critical_stock()
+    debug_print("home_out_of_stock_products - Prodotti esauriti: ", products)
+
+    # Se non ci sono prodotti, restituisci un messaggio vuoto
+    if not products:
+        return jsonify({
+            "headers": ["Nome", "Barcode", "Quantita", "Quantita Sicurezza"],
+            "records": [],
+            "message": "Nessun prodotto esaurito trovato."
+        })
+
+    # Restituisci i dati come JSON
+    return jsonify({
+        "headers": ["Nome", "Barcode", "Quantita", "Quantita Sicurezza"],
+        "records": [[p["name"], p["barcode"], p["quantity"], p["security_quantity"]] for p in products]
+    })
+
+
+
 #Mainpage - Calcola il numero dei prodotti consumati nel mese
 @main.route('/monthly_consumed_count')
 def monthly_consumed_count():
@@ -659,6 +749,31 @@ def monthly_consumed_count():
     count = get_monthly_consumed_count()
     debug_print("monthly_consumed_count: ", count)
     return jsonify({"monthly_consumed_count": count})
+
+#Mainpage - Calcola il numero dei prodotti consumati nel mese
+@main.route('/home_consume_statistics')
+def home_consume_statistics():
+    print("[DEBUG] Route /home_consume_statistics chiamata")
+      
+    # Recupera i prodotti per le statistiche sui consumi
+    products = get_monthly_consumed_statistics()
+    debug_print("home_consume_statistics - Prodotti consumati: ", products)
+ 
+    # Se non ci sono prodotti, restituisci un messaggio vuoto
+    if not products:
+        return jsonify({
+            "headers": ["Nome", "Inserimento", "Consumato", "Scadenza"],
+            "records": [],
+            "message": "Nessun prodotto esaurito trovato."
+        })
+
+    # Restituisci i dati come JSON
+    return jsonify({
+        "headers": ["Nome", "Inserimento", "Consumato", "Scadenza"],
+        "records": [[p["name"], p["ins_date"], p["consume_date"], p["expiry_date"]] for p in products]
+    })
+
+
 
 
 #Mainpage - Calcola il numero dei prodotti da riordinare
