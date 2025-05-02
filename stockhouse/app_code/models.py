@@ -469,7 +469,7 @@ def get_product_by_name_and_dates(name, ins_date, expiry_date=None):
             SELECT tf.id, pd.name, tf.barcode, tf.quantity, tf.ins_date, tf.expiry_date, tf.consume_date, tf.status
             FROM transaction_fact tf
             JOIN product_dim pd ON tf.product_key = pd.id
-            WHERE pd.name = ? AND tf.ins_date = ? AND tf.expiry_date IS NULL
+            WHERE pd.name = ? AND tf.ins_date = ? AND (tf.expiry_date IS NULL OR tf.expiry_date='')
         """
         params = (name, ins_date)
 
@@ -1023,6 +1023,49 @@ def get_expiring_products(months):
 
     return products
 
+# Funzione per ottenere i prodotti in scadenza per la home page
+def get_expiring_products_for_home(months):
+    # Calcola la data limite in base ai mesi forniti
+    today = datetime.today()
+    expiry_limit = today + timedelta(days=30 * months)
+    debug_print(f"Data limite per la scadenza (Home): {expiry_limit}")
+    
+    conn = sqlite3.connect(Config.DATABASE_PATH)
+    c = conn.cursor()
+
+    # Query ottimizzata per recuperare solo le colonne necessarie
+    c.execute("""
+        SELECT 
+            dim.name, 
+            dim.barcode,
+            trs.expiry_date, 
+            trs.quantity
+        FROM transaction_fact trs
+        INNER JOIN product_dim dim ON dim.id = trs.product_key
+        WHERE trs.expiry_date IS NOT NULL 
+          AND trs.expiry_date != '' 
+          AND trs.expiry_date <= ?
+        ORDER BY trs.expiry_date ASC
+    """, (expiry_limit,))
+
+    rows = c.fetchall()
+    conn.close()
+
+    # Convertiamo le tuple in una lista di dizionari
+    debug_print("get_expiring_products_for_home - Rows: ", rows)
+    products = [
+        {
+            "name": row[0],
+            "barcode": row[1],
+            "expiry_date": row[2],
+            "quantity": row[3]
+        }
+        for row in rows
+    ]
+
+    return products
+
+
 
 # Calcola il numero della settimana corrente
 def get_current_week():
@@ -1197,19 +1240,67 @@ def get_number_expiring_products():
     conn.close()
     return count
 
+#Mainpage, Funzione per ottenere i prodotti esauriti
+def get_out_of_stock_products():
+    conn = sqlite3.connect(Config.DATABASE_PATH)
+    c = conn.cursor()
+
+    # Calcola il primo e l'ultimo giorno del mese corrente
+    today = datetime.today()
+    first_day = today.replace(day=1)
+    last_day = (first_day + timedelta(days=32)).replace(day=1) - timedelta(days=1)
+    debug_print(f"Primo giorno del mese: {first_day}, Ultimo giorno del mese: {last_day}")
+
+    # Query per recuperare i prodotti esauriti nel mese corrente
+    c.execute("""
+        SELECT 
+            dim.name, 
+            dim.barcode, 
+            dim.category
+        FROM transaction_fact trs
+        INNER JOIN product_dim dim ON dim.id = trs.product_key
+        WHERE trs.quantity = 0
+          AND trs.consume_date BETWEEN ? AND ?
+        ORDER BY dim.name ASC
+    """, (first_day, last_day))
+
+    rows = c.fetchall()
+    conn.close()
+
+    # Converti i risultati in una lista di dizionari
+    products = [
+        {
+            "name": row[0],
+            "barcode": row[1],
+            "category": row[2]
+        }
+        for row in rows
+    ]
+
+    return products
+
 # Mainpage, calcola il numero dei prodotti che sono esauriti
 def get_out_of_stock_count():
     conn = sqlite3.connect(Config.DATABASE_PATH)
     cursor = conn.cursor()
 
-    # Query per contare i prodotti con quantità pari a 0
+    # Calcola il primo e l'ultimo giorno del mese corrente
+    today = datetime.today()
+    first_day = today.replace(day=1)
+    last_day = (first_day + timedelta(days=32)).replace(day=1) - timedelta(days=1)
+    debug_print(f"Primo giorno del mese: {first_day}, Ultimo giorno del mese: {last_day}")
+
+    # Query per contare i prodotti esauriti nel mese corrente
     query = """
         SELECT COUNT(*)
-        FROM transaction_fact
-        WHERE quantity = 0
+        FROM transaction_fact trs
+        INNER JOIN product_dim dim ON dim.id = trs.product_key
+        WHERE trs.quantity = 0
+          AND trs.consume_date BETWEEN ? AND ?
     """
-    cursor.execute(query)
+    cursor.execute(query, (first_day, last_day))
     count = cursor.fetchone()[0]
+
     debug_print("get_out_of_stock_count: ", count)
 
     conn.close()
@@ -1233,6 +1324,48 @@ def get_critical_stock_count():
     conn.close()
     return count
 
+# Mainpage, seleziona i prodotti che sono in scorte critiche
+def get_critical_stock():
+
+    # Calcola la data limite in base ai mesi forniti
+    today = datetime.today()
+    expiry_limit = today + timedelta(days=30 * 1)  # 1 mesi
+    debug_print(f"get_critical_stock - Data limite per la scadenza (Home): {expiry_limit}")
+    
+    conn = sqlite3.connect(Config.DATABASE_PATH)
+    c = conn.cursor()
+
+    # Query ottimizzata per recuperare solo le colonne necessarie
+    c.execute("""
+        SELECT 
+            dim.name, 
+            dim.barcode,
+            trs.quantity,
+            inv.security_quantity
+        FROM transaction_fact trs
+        INNER JOIN inventory inv ON trs.barcode = inv.barcode
+        INNER JOIN product_dim dim ON dim.id = trs.product_key
+        WHERE trs.quantity < inv.security_quantity
+        ORDER BY dim.name ASC
+    """)
+
+    rows = c.fetchall()
+    conn.close()
+
+    # Convertiamo le tuple in una lista di dizionari
+    debug_print("get_expiring_products_for_home - Rows: ", rows)
+    products = [
+        {
+            "name": row[0],
+            "barcode": row[1],
+            "quantity": row[2],
+            "security_quantity": row[3]
+        }
+        for row in rows
+    ]
+
+    return products
+
 # Mainpage, calcola il numero dei prodotti che sono stati consumati nel mese corrente
 def get_monthly_consumed_count():
     conn = sqlite3.connect(Config.DATABASE_PATH)
@@ -1249,6 +1382,41 @@ def get_monthly_consumed_count():
 
     conn.close()
     return count
+
+# Mainpage, calcola il numero dei prodotti che sono stati consumati nel mese corrente
+def get_monthly_consumed_statistics():
+    conn = sqlite3.connect(Config.DATABASE_PATH)
+    cursor = conn.cursor()
+
+    # Ottieni il primo giorno del mese corrente
+    query = """
+        SELECT dim.name,
+               cons.ins_date,
+               cons.consume_date,
+               cons.expiry_date
+        FROM consumed_fact cons
+        INNER JOIN product_dim dim ON dim.id = cons.product_key
+        WHERE cons.consume_date BETWEEN date('now', 'start of month') AND date('now')
+    """
+    cursor.execute(query)
+    rows = cursor.fetchall()
+    conn.close()
+
+    # Convertiamo le tuple in una lista di dizionari
+    debug_print("get_monthly_consumed_statistics - Rows: ", rows)
+    products = [
+        {
+            "name": row[0],
+            "ins_date": row[1],
+            "consume_date": row[2],
+            "expiry_date": row[3]
+        }
+        for row in rows
+    ]
+
+    return products
+
+
 
 # Mainpage, calcola il numero dei prodotti che sono da riordinare
 def get_reorder_count_from_shopping_list():

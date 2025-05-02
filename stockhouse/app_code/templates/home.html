@@ -9,37 +9,29 @@
     <p class="lead">Gestisci i tuoi prodotti, il magazzino e molto altro con facilità.</p>
   </div>
 
-  <!-- Logo -->
-  <div class="text-center mb-4">
-    <img src="{{ url_for('static', filename='images/stockhouse_logo.png') }}" alt="StockHouse Logo" class="logo-img">
-  </div>
-
   <!-- Prima riga di informazioni -->
   <div class="row text-center mb-4">
     <div class="col-md-4">
-        <div class="info-box">
-          <h5>Prodotti in Scadenza</h5>
-          <p class="text-muted">
-            Numero prodotti in scadenza nel mese corrente: 
-            <strong id="expiring-count" class="highlighted-number">0</strong>
-          </p>
-        </div>
-    </div>
-    <div class="col-md-4">
-      <div class="info-box">
-        <h5>Prodotti Esauriti</h5>
+      <div class="info-box" onclick="showRecords('/home_expiring_products')">
+        <h5>Prodotti in Scadenza</h5>
         <p class="text-muted">
-          Numero prodotti esauriti: 
-          <strong id="out-of-stock-count" class="highlighted-number">0</strong>
+          <strong id="expiring-count" class="highlighted-number">0</strong>
         </p>
       </div>
     </div>
     <div class="col-md-4">
-      <div class="info-box">
+      <div class="info-box" onclick="showRecords('/home_out_of_stock_products')">
+        <h5>Prodotti Esauriti</h5>
+        <p class="text-muted">
+           <strong id="out-of-stock-count" class="highlighted-number">0</strong>
+        </p>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="info-box" onclick="showRecords('/home_critical_stock')">
         <h5>Prodotti con Scorte Critiche</h5>
         <p class="text-muted">
-          Numero di prodotti: 
-          <strong id="critical-stock-count" class="highlighted-number">0</strong>
+           <strong id="critical-stock-count" class="highlighted-number">0</strong>
         </p>
       </div>
     </div>
@@ -48,14 +40,13 @@
   <!-- Seconda riga di informazioni -->
   <div class="row text-center">
     <div class="col-md-4">
-       <div class="info-box">
-         <h5>Statistiche di Consumo</h5>
-         <p class="text-muted">
-           Prodotti consumati questo mese: 
-           <strong id="monthly-consumed-count" class="highlighted-number">0</strong>
-         </p>
-        </div>
-    </div>
+      <div class="info-box" onclick="showRecords('/home_consume_statistics')">
+        <h5>Statistiche di Consumo</h5>
+        <p class="text-muted">
+          <strong id="monthly-consumed-count" class="highlighted-number">0</strong>
+        </p>
+       </div>
+   </div>
     <div class="col-md-4">
       <div class="info-box">
         <h5>Prodotti da Riordinare</h5>
@@ -77,17 +68,27 @@
   </div>
 </div>
 
+<!-- Tabella nascosta per mostrare i dati -->
+<div id="records-table-container" style="display: none; margin-top: 20px;">
+  <h3 id="table-title"></h3>
+  <div style="overflow-y: auto; max-height: 400px;">
+    <table class="table table-striped">
+      <thead>
+        <tr id="table-headers">
+          <!-- Intestazioni della tabella -->
+        </tr>
+      </thead>
+      <tbody id="table-body">
+        <!-- Dati della tabella -->
+      </tbody>
+    </table>
+  </div>
+</div>
+
 <style>
   /* Sfondo celeste molto tenue */
   body {
     background-color: #e6f7ff; /* Celeste molto tenue */
-  }
-
-  /* Stile per il logo */
-  .logo-img {
-    max-width: 150px; /* Dimensione massima del logo */
-    height: auto;
-    margin: 0 auto;
   }
 
   /* Stile per le aree quadrate */
@@ -102,6 +103,11 @@
     flex-direction: column;
     justify-content: center;
     align-items: center;
+    cursor: pointer; /* Aggiunto per indicare che è cliccabile */
+  }
+
+  .info-box:hover {
+    background-color: #e2e6ea; /* Cambia colore al passaggio del mouse */
   }
 
   .info-box h5 {
@@ -115,24 +121,85 @@
     color: #6c757d;
   }
 
-  /* Stile per l'intestazione */
-  h1 {
-    font-size: 2.5rem;
-    font-weight: bold;
-    color: #333;
-  }
-
-  .lead {
-    font-size: 1.2rem;
-    color: #666;
-  }
-
   /* Stile per il numero evidenziato */
   .highlighted-number {
     font-size: 2rem; /* Dimensione del testo più grande */
-     color: #0056b3; /* Colore blu */
+    color: #0056b3; /* Colore blu */
+  }
+
+</style>
+
+<style>
+  /* Contenitore della tabella */
+  #records-table-container {
+    margin: 20px auto; /* Centra la tabella */
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid #ddd;
+    background-color: #f9f9f9;
+    max-width: 1000px; /* Limita la larghezza massima */
+  }
+
+  /* Tabella */
+  #records-table-container .table {
+    width: 100%;
+    table-layout: fixed; /* Colonne a larghezza fissa */
+    border-collapse: collapse;
+    background-color: #fff;
+  }
+
+  /* Intestazioni della tabella */
+  #records-table-container .table thead {
+    display: table;
+    width: 100%;
+    table-layout: fixed;
+  }
+
+  #records-table-container .table thead th {
+    background-color: #f1f1f1;
+    border: 1px solid #ddd;
+    padding: 10px;
+    text-align: left;
+    font-weight: bold;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* Corpo della tabella */
+  #records-table-container .table tbody {
+    display: block;
+    max-height: 200px;
+    overflow-y: auto;
+    width: 100%;
+  }
+
+  #records-table-container .table tbody tr {
+    display: table;
+    table-layout: fixed;
+    width: 100%;
+  }
+
+  #records-table-container .table tbody td {
+    border: 1px solid #ddd;
+    padding: 8px;
+    text-align: left;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* Riga alternata */
+  #records-table-container .table tbody tr:nth-child(even) {
+    background-color: #f9f9f9;
+  }
+
+  /* Hover */
+  #records-table-container .table tbody tr:hover {
+    background-color: #e6f7ff;
   }
 </style>
+
 
 <script>
     fetch('/expiring_products_count')
@@ -186,6 +253,46 @@
       document.getElementById('reorder-total-cost').textContent = `${data.reorder_total_cost} €`;
     })
     .catch(error => console.error('Errore nel recupero dei dati:', error));
+</script>
+
+<script>
+function showRecords(endpoint, title) {
+  fetch(endpoint)
+    .then(response => response.json())
+    .then(data => {
+      // Mostra la tabella e popola i dati
+      const tableContainer = document.getElementById('records-table-container');
+      tableContainer.style.display = 'block';
+
+      const tableTitle = document.getElementById('table-title');
+      tableTitle.textContent = title;
+
+      const tableHeaders = document.getElementById('table-headers');
+      tableHeaders.innerHTML = '';
+      if (data.headers) {
+        data.headers.forEach(header => {
+          const th = document.createElement('th');
+          th.textContent = header;
+          tableHeaders.appendChild(th);
+        });
+      }
+
+      const tableBody = document.getElementById('table-body');
+      tableBody.innerHTML = '';
+      if (data.records) {
+        data.records.forEach(record => {
+          const tr = document.createElement('tr');
+          record.forEach(cell => {
+            const td = document.createElement('td');
+            td.textContent = cell;
+            tr.appendChild(td);
+          });
+          tableBody.appendChild(tr);
+        });
+      }
+    })
+    .catch(error => console.error('Errore nel recupero dei dati:', error));
+}
 </script>
 
 {% endblock %}
