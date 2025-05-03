@@ -1,9 +1,7 @@
-ARG BUILD_FROM
-
 FROM python:3.11-slim
 
 # Imposta la directory di lavoro nel container
-WORKDIR /stockhouse
+WORKDIR /StockHouse
 
 # Copia tutto il codice dell'app nel container
 COPY . .
