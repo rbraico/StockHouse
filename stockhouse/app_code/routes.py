@@ -351,12 +351,13 @@ def search_unconsumed_products():
 @main.route('/consumed_product', methods=['GET', 'POST'])
 def consumed_product():
     id = request.args.get('id')
+    product_key = request.args.get('product_key')
     barcode = request.args.get('barcode')
     ins_date = request.args.get('ins_date')
     expiry_date = request.args.get('expiry_date')
     quantity = int(request.args.get('quantity'))
 
-    debug_print("Route: /consumed_product/", id, barcode, quantity, ins_date, expiry_date)
+    debug_print("Route: /consumed_product/", id, product_key, barcode, quantity, ins_date, expiry_date)
 
     if quantity > 1:
         new_quantity = quantity - 1
@@ -372,7 +373,7 @@ def consumed_product():
     update_transaction_fact_consumed(id, new_quantity, ins_date, expiry_date, consume_date, new_status)
 
     #Registra il consumo in consume_fact
-    insert_consumed_fact (id, barcode, ins_date, expiry_date)
+    insert_consumed_fact (product_key, barcode, ins_date, expiry_date)
     
     return jsonify(success=True, quantita=new_quantity, status=new_status, consumo=consume_date)
 
@@ -783,6 +784,31 @@ def reorder_count():
     count = get_reorder_count_from_shopping_list()
     debug_print("reorder_count: ", count)
     return jsonify({"reorder_count": count})
+
+#Mainpage - Calcola il numero dei prodotti consumati nel mese
+@main.route('/home_reorder_products')
+def home_reorder_products():
+    print("[DEBUG] Route /home_reorder_products chiamata")
+      
+    # Recupera i prodotti da riordinare
+    items, shop_totals = get_shopping_list_data(get_current_week())
+    debug_print("home_reorder_producs - Prodotti coda riordinare: ", items)
+ 
+    # Se non ci sono prodotti, restituisci un messaggio vuoto
+    if not items:
+        return jsonify({
+            "headers": ["Nome", "Quantita`", "Negozio", "Motivo"],
+            "records": [],
+            "message": "Nessun prodotto esaurito trovato."
+        })
+
+    # Restituisci i dati come JSON
+    return jsonify({
+        "headers": ["Nome", "Quantita`", "Negozio", "Motivo"],
+        "records": [[p["product_name"], p["quantity_to_buy"], p["store_name"], p["motivo"]] for p in items]
+    })
+
+
 
 #Mainpage - Calcola il costo totale dei prodotti da riordinare
 @main.route('/reorder_total_cost')

@@ -531,7 +531,7 @@ function updateSelectedTable() {
       console.log('Bottone "Consumato" cliccato per il prodotto: ', item.name);
 
       const url = `/consumed_product?id=${item.id}&barcode=${item.barcode}&ins_date=${item.inserito}&expiry_date=${item.scadenza}&quantity=${item.quantity}`;
-
+      console.log('URL per la chiamata API:', url);
       fetch(url)
         .then(response => response.json())
         .then(data => {
