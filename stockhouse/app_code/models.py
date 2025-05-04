@@ -953,11 +953,11 @@ def insert_consumed_fact (id, barcode, ins_date, expiry_date):
 
     conn = sqlite3.connect(Config.DATABASE_PATH)
     c = conn.cursor()
+    # Verifica se il prodotto esiste nella tabella product_dim
     c.execute("""
-        INSERT INTO consumed_fact (product_key, barcode, ins_date, consume_date, expiry_date)
-        VALUES (?, ?, ?, ?, ?)
-    """, (id, barcode, ins_date, consume_date, expiry_date
-          ))
+         INSERT INTO consumed_fact (product_key, barcode, ins_date, consume_date, expiry_date)
+            VALUES ((SELECT id FROM product_dim WHERE barcode = ?), ?, ?, ?, ?)
+    """, (barcode, barcode, ins_date, consume_date, expiry_date))
 
     conn.commit()
     conn.close()   
@@ -1117,31 +1117,36 @@ def get_shopping_list_data(week_number):
     # Query per la settimana 1: Ripristino delle scorte pesanti
     if week_number == 1:
         query = """
-            SELECT 
-                i.product_key, 
-                i.barcode, 
-                tf.quantity,
-                i.min_quantity, 
-                i.max_quantity, 
-                i.security_quantity, 
-                i.reorder_point, 
-                i.mean_usage_time, 
-                i.reorder_frequency,
-                pd.name,
-                pd.shop,
-                tf.price
-            FROM 
-                inventory i
-            JOIN 
-                transaction_fact tf ON i.barcode = tf.barcode
-            JOIN
-                product_dim pd ON i.barcode = pd.barcode
-            WHERE 
-                (i.reorder_point IS NOT NULL AND i.reorder_point > 0) AND
-                (i.reorder_frequency >= 30 
-                OR tf.quantity < i.security_quantity 
-                OR tf.quantity < i.reorder_point 
-                OR i.mean_usage_time > 15)
+                SELECT 
+                    i.product_key, 
+                    i.barcode, 
+                    tf.quantity,
+                    i.min_quantity, 
+                    i.max_quantity, 
+                    i.security_quantity, 
+                    i.reorder_point, 
+                    i.mean_usage_time, 
+                    i.reorder_frequency,
+                    pd.name,
+                    pd.shop,
+                    tf.price,
+                    totals.tot
+                FROM inventory i
+                JOIN product_dim pd ON i.barcode = pd.barcode
+                JOIN transaction_fact tf ON i.barcode = tf.barcode
+                JOIN (
+                    SELECT barcode, SUM(quantity) AS tot
+                    FROM transaction_fact
+                    GROUP BY barcode
+                ) AS totals ON i.barcode = totals.barcode
+                WHERE  
+                    (i.reorder_point IS NOT NULL AND i.reorder_point > 0)
+                    AND (
+                        i.reorder_frequency >= 30 
+                        OR totals.tot < i.security_quantity 
+                        OR totals.tot < i.reorder_point 
+                        OR i.mean_usage_time > 15
+                    ) GROUP BY i.barcode
         """
     else:
         # Query per le settimane 2, 3 e 4: Prodotti esauriti o sotto quantità minima
@@ -1313,10 +1318,14 @@ def get_critical_stock_count():
 
     # Query per contare i prodotti con scorte critiche
     query = """
-        SELECT COUNT(*)
-        FROM transaction_fact tf
-        JOIN inventory i ON tf.barcode = i.barcode
-        WHERE tf.quantity < i.security_quantity
+        SELECT COUNT(*) 
+        FROM (
+                SELECT tf.barcode, SUM(quantity) as tot
+                FROM transaction_fact tf
+                JOIN inventory i ON tf.barcode = i.barcode
+                GROUP BY tf.barcode
+                HAVING tot < i.security_quantity
+             )
     """
     cursor.execute(query)
     count = cursor.fetchone()[0]
@@ -1337,15 +1346,16 @@ def get_critical_stock():
 
     # Query ottimizzata per recuperare solo le colonne necessarie
     c.execute("""
-        SELECT 
-            dim.name, 
-            dim.barcode,
-            trs.quantity,
-            inv.security_quantity
-        FROM transaction_fact trs
-        INNER JOIN inventory inv ON trs.barcode = inv.barcode
-        INNER JOIN product_dim dim ON dim.id = trs.product_key
-        WHERE trs.quantity < inv.security_quantity
+        SELECT dim.name, 
+                dim.barcode,
+                tf.quantity,
+                inv.security_quantity, 
+                SUM(quantity) as tot
+        FROM transaction_fact tf
+        JOIN product_dim dim ON tf.barcode = dim.barcode
+        JOIN inventory inv ON tf.barcode = inv.barcode
+        GROUP BY tf.barcode
+        HAVING tot < inv.security_quantity  
         ORDER BY dim.name ASC
     """)
 
