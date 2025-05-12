@@ -178,20 +178,25 @@
 
     {% if new_product %}
     <h3>Prodotto appena inserito</h3>
-    <table border="1">
-      <tr>
-        <th>Nome</th><th>Marca</th><th>Negozio</th><th>Prezzo</th><th>Quantità</th><th>Categoria</th><th>Item</th><th>Data Scadenza</th>
-      </tr>
-      <tr>
-        <td>{{ new_product.name }}</td>
-        <td>{{ new_product.brand }}</td>
-        <td>{{ new_product.shop }}</td>
-        <td>{{ new_product.price }}</td>
-        <td>{{ new_product.quantity }}</td>
-        <td>{{ new_product.category }}</td>
-        <td>{{ new_product.item }}</td>
-        <td>{{ new_product.expiry_date }}</td>
-      </tr>
+    <table class="table table-bordered mt-3 text-center">
+      <thead>
+        <tr>
+          <th>Nome</th><th>Marca</th><th>Negozio</th><th>Prezzo</th>
+          <th>Quantità</th><th>Categoria</th><th>Item</th><th>Data Scadenza</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>{{ new_product.name }}</td>
+          <td>{{ new_product.brand }}</td>
+          <td>{{ new_product.shop }}</td>
+          <td>{{ new_product.price }}</td>
+          <td>{{ new_product.quantity }}</td>
+          <td>{{ new_product.category }}</td>
+          <td>{{ new_product.item }}</td>
+          <td>{{ new_product.expiry_date }}</td>
+        </tr>
+      </tbody>
     </table>
     {% endif %}
 

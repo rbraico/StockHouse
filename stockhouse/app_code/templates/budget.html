@@ -1,0 +1,53 @@
+{% extends 'layout.html' %}
+
+{% block content %}
+<h2>€ Budget</h2>
+<br><br>
+
+<!-- ✅ Stile per tabella con righe alternate -->
+<style>
+  thead th {
+    background-color: #0050b9 !important;
+    color: white !important;
+  }
+
+  table.custom-table tbody tr:nth-child(odd) td {
+    background-color: #ffffff !important;
+  }
+
+  table.custom-table tbody tr:nth-child(even) td {
+    background-color: #e7f1ff !important;
+  }
+
+  td.budget-id {
+    color: transparent;
+    transition: color 0.3s;
+  }
+
+  table.custom-table tr:hover td.budget-id {
+    color: #555;
+  }
+</style>
+
+<!-- Tab content -->
+<div class="tab-content mt-3">
+  <!-- ➕ Aggiungi tab -->
+  <div class="tab-pane fade show active" id="add" role="tabpanel">
+    <form method="POST" action="{{ url_for('main.budget') }}">
+      <div class="mb-3">
+        <label for="budget" class="form-label">Budget mensile</label>
+        <input type="text" class="form-control" id="budget" name="budget" required
+               value="{{ budget_record['budget'] if budget_record else '' }}">
+      </div>
+      <div class="mb-3">
+        <label for="note" class="form-label">Note (opzionale)</label>
+        <input type="text" class="form-control" id="note" name="note"
+               value="{{ budget_record['note'] if budget_record else '' }}">
+      </div>
+      <button type="submit" class="btn btn-primary">Salva</button>
+    </form>
+  
+  </div>
+
+
+{% endblock %}

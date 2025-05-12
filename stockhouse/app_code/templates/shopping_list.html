@@ -2,12 +2,46 @@
 
 {% block content %}
 <h2 class="text-center">🛍️ Lista della Spesa</h2>
-<p class="text-center text-muted">
-    Intervallo: {{ start_date }} - {{ end_date }}
-</p>
+<br>
+<!-- Filtro settimana -->
+<form method="get" class="mb-3 text-center">
+    <label for="weekSelect" class="form-label fw-bold me-2">Seleziona Settimana:</label>
+    <select name="week" id="weekSelect" class="form-select d-inline-block w-auto">
+        {% for number, label in weeks %}
+            <option value="{{ number }}" {% if number == selected_week %}selected{% endif %}>
+                {{ label }}
+            </option>
+        {% endfor %}
+    </select>
+    <button type="submit" class="btn btn-primary ms-2">Filtra</button>
+</form>
 <br>
 <div class="row">
+
     <!-- Colonna sinistra -->
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                Totale Spesa per Negozio
+            </div>
+            <ul class="list-group list-group-flush">
+                {% for store, total in shop_totals.items() %}
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    {{ store }}
+                    <span>€ {{ '%.2f'|format(total) }}</span>
+                </li>
+                {% else %}
+                <li class="list-group-item text-center text-muted">
+                    Nessun negozio selezionato.
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+
+
+
+    <!-- Colonna destra -->
     <div class="col-md-8">
         <div class="table-responsive" style="max-height: 500px; overflow-y: auto; border: 1px solid #dee2e6; border-radius: 8px;">
             <table class="table table-hover table-bordered mb-0">
@@ -37,7 +71,7 @@
         </div>
     </div>
 
-    <!-- Colonna destra -->
+    <!-- Colonna sotto -->
     <div class="col-md-4">
         <div class="card">
             <div class="card-header bg-primary text-white">
@@ -56,7 +90,8 @@
                 {% endfor %}
             </ul>
         </div>
-    </div>
+    </div>    
+
 </div>
 
 {% endblock %}

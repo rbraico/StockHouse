@@ -55,7 +55,7 @@
             <a href="{{ url_for('main.index') }}" class="btn btn-outline-warning my-2 w-100">➕ Prodotti</a>
             <a href="{{ url_for('main.list_inventory') }}" class="btn btn-outline-info my-2 w-100">📦 Inventario</a>
             <a href="{{ url_for('main.expiring_products') }}" class="btn btn-outline-primary my-2 w-100">📅 In Scadenza</a>
-            <a href="{{ url_for('main.shopping_list', week=1) }}" class="btn btn-outline-primary my-2 w-100">🛍️ Lista Spesa</a>
+            <a href="{{ url_for('main.shopping_list') }}" class="btn btn-outline-primary my-2 w-100">🛍️ Lista Spesa</a>
         </div>
     
         <div class="accordion" id="configAccordion">
@@ -67,9 +67,10 @@
                 </h2>
                 <div id="configCollapse" class="accordion-collapse collapse" aria-labelledby="configHeading" data-bs-parent="#configAccordion">
                     <div class="accordion-body py-1">
-                        <a href="{{ url_for('main.configuration') }}" class="d-block mb-1 ms-3">🏬 Negozi</a>
+                        <a href="{{ url_for('main.shops') }}" class="d-block mb-1 ms-3">🏬 Negozi</a>
                         <a href="{{ url_for('main.categories') }}" class="d-block ms-3">🏷️ Categorie</a>
                         <a href="{{ url_for('main.items') }}" class="d-block ms-3">🔽 Articoli</a>
+                        <a href="{{ url_for('main.budget') }}" class="d-block ms-3">&#8194;€&#8194;Budget</a>
                     </div>
                 </div>
             </div>
