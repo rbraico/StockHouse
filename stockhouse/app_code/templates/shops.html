@@ -1,8 +1,8 @@
 {% extends 'layout.html' %}
 
 {% block content %}
-<h2>⚙️ Configurazione</h2>
-
+<h2>🏬 Negozi</h2>
+<br><br> <!-- Aggiungi qui linee vuote -->
 <!-- ✅ Stile per tabella con righe alternate -->
 <style>
   /* Intestazione tabella */
@@ -45,7 +45,7 @@
 <div class="tab-content mt-3">
   <!-- ➕ Aggiungi tab -->
   <div class="tab-pane fade show active" id="add" role="tabpanel">
-    <form method="POST" action="{{ url_for('main.configuration') }}">
+    <form method="POST" action="{{ url_for('main.shops') }}">
       <div class="mb-3">
         <label for="nome" class="form-label">Nome negozio</label>
         <input type="text" class="form-control" id="nome" name="nome" required>

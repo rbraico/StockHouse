@@ -4,12 +4,13 @@ from stockhouse.app_code.models import add_product_dim, add_transaction_fact, de
                        lookup_products_by_name_ins_date, update_product_dim, get_product_inventory, get_product_inventory_by_barcode, upsert_inventory, search_unconsumed_products_db, \
                        lookup_category_by_item, update_transaction_fact, update_transaction_fact_consumed, get_products_by_name, get_expiring_products, get_shopping_list_data, insert_consumed_fact, \
                        get_number_expiring_products, get_out_of_stock_count, get_critical_stock_count, get_monthly_consumed_count, get_reorder_count_from_shopping_list, get_reorder_total_cost, \
-                       get_current_week, get_week_date_range, get_product_by_name_and_dates, get_expiring_products_for_home, get_out_of_stock_products, get_critical_stock, get_monthly_consumed_statistics
+                       get_current_week, get_week_date_range, get_product_by_name_and_dates, get_expiring_products_for_home, get_out_of_stock_products, get_critical_stock, get_monthly_consumed_statistics, \
+                       upsert_budget, get_budget, update_inventory_parameters, get_inventory_advanced, update_inventory_advanced_options
 from stockhouse.app_code.models import add_shop, update_shop, delete_shop  
 from stockhouse.app_code.models import add_category, get_all_categories, update_category, delete_category, add_item, get_all_items, update_item, delete_item
 import sqlite3
 import hashlib
-import datetime
+from datetime import datetime, timedelta
 from config import Config  # usa il path corretto se è diverso
 from flask import send_from_directory
 import os
@@ -33,7 +34,30 @@ def serve_image(filename):
 # Visualizza l'Home page
 @main.route('/')
 def home():
-    return render_template('home.html')
+
+    week_number = get_current_week()
+    # Calcola l'intervallo di date per la settimana
+    start_date, end_date = get_week_date_range(week_number)
+
+    if start_date is None or end_date is None:
+        return render_template(
+            'home.html',
+            week_number=week_number,
+            start_date="Settimana non valida",
+            end_date=""
+        )
+
+    debug_print(f"Week: {week_number}, start_date, end_date: {start_date}, {end_date}")
+    return render_template(
+        'home.html',
+        week_number=week_number,
+        start_date=start_date.strftime('%A %d %B %Y'),
+        end_date=end_date.strftime('%A %d %B %Y')
+    )
+
+
+
+
 
 #Chiamata dallo script in index.html
 @main.route("/lookup", methods=["GET"])
@@ -132,7 +156,7 @@ def index():
         debug_print("index -> POST", barcode,name,brand,shop,price,quantity,category,item,expiry_date )
 
         # Ottieni la data odierna e formatta come yyyy-mm-dd
-        ins_date     = datetime.datetime.now().strftime('%Y-%m-%d')
+        ins_date     = datetime.now().strftime('%Y-%m-%d')
         consume_date = None
         status       = 'in stock'
         product_key  = None
@@ -258,8 +282,10 @@ def delete_product(id):
 # ✅ Nuova route per la lista prodotti nel magazzino
 @main.route('/inventory')
 def list_inventory():
+
+    update_inventory_parameters()
     products = get_product_inventory()
-    debug_print ("Show_Product in inventory: ", products)
+    #debug_print ("Show_Product in inventory: ", products)
 
     return render_template("inventory.html", products=products)
 
@@ -269,13 +295,12 @@ def list_inventory():
 def edit_inventory(barcode):
     # Recupera i dettagli del prodotto dal database
     product = get_product_inventory_by_barcode(barcode)
-    debug_print("edith_inventory: ", product)
+    #debug_print("edit_inventory: ", product)
     return render_template("edit_inventory.html", product=product)
 
-
-@main.route("/update_inventory", methods=["POST"])
-# Questa procedura viene chamtaa dal metodo POST dopo aver cliccato sul pulsante Modifica Parametri di Magazzino
+# Questa procedura viene chiamata dal metodo POST dopo aver cliccato sul pulsante Modifica Parametri di Magazzino
 # Per inserire oppure modificare un record esistente nella tabella inventory
+@main.route("/update_inventory", methods=["POST"])
 def update_inventory():
     debug_print("update_inventory Request Form Data: ", request.form)
 
@@ -407,8 +432,8 @@ def get_records():
 
     return jsonify({"success": True, "data": result})
 
-@main.route('/configuration', methods=["GET", "POST"])
-def configuration():
+@main.route('/shops', methods=["GET", "POST"])
+def shops():
     last_shop = None  # ← per salvare solo l'ultimo negozio inserito
 
     if request.method == "POST":
@@ -429,7 +454,7 @@ def configuration():
     # Sempre recupera la lista completa per la seconda tab
     shop_list = get_all_shops()
 
-    return render_template("configuration.html", shop_list=shop_list, last_shop=last_shop)
+    return render_template("shops.html", shop_list=shop_list, last_shop=last_shop)
 
 
 @main.route('/delete_shop/<int:shop_id>')
@@ -440,7 +465,7 @@ def delete_shop(shop_id):
     conn.commit()
     conn.close()
     flash("Negozio eliminato.", "success")
-    return redirect(url_for('main.configuration'))
+    return redirect(url_for('main.shops'))
 
 @main.route('/edit_shop/<int:shop_id>', methods=['GET', 'POST'])
 def edit_shop(shop_id):
@@ -453,7 +478,7 @@ def edit_shop(shop_id):
         update_shop(shop_id, name, notes)
         conn.close()
         flash('📝 Negozio aggiornato con successo!', 'success')
-        return redirect(url_for('main.configuration'))
+        return redirect(url_for('main.shops'))
     
     c.execute("SELECT id, name, note FROM shop_list WHERE id = ?", (shop_id,))
     shop = c.fetchone()
@@ -462,13 +487,13 @@ def edit_shop(shop_id):
         return render_template('edit_shop.html', shop=shop)
     else:
         flash('❌ Negozio non trovato.', 'danger')
-        return redirect(url_for('main.configuration'))
+        return redirect(url_for('main.shops'))
 
 @main.route('/delete_shop/<int:shop_id>', methods=['POST'])
 def delete_shop_route(shop_id):
     delete_shop(shop_id)
     flash('🗑️ Negozio eliminato con successo!', 'success')
-    return redirect(url_for('main.configuration'))
+    return redirect(url_for('main.shops'))
 
 @main.route('/categories', methods=["GET", "POST"])
 def categories():
@@ -657,13 +682,24 @@ def home_out_of_stock_products():
 # Questa route serve per visualizzare la lista della spesa
 @main.route('/shopping_list')
 def shopping_list():
-    # Calcola la settimana corrente o usa il parametro passato
-    #week_number = request.args.get('week', get_current_week(), type=int)
-    week_number = get_current_week()
+    # Legge il numero di settimana dal parametro GET, altrimenti usa quella corrente
+    #week_number = get_current_week()  
+
+    week_param = request.args.get('week')
+    debug_print("shopping_list week_param: ", week_param)
+
+    if week_param is None or not week_param.isdigit():  # Se non c'è o non è valido, prendi la settimana corrente
+        week_number = get_current_week()
+    else:  # Se c'è un parametro valido, usalo
+        week_number = int(week_param)
+
+
     debug_print("shopping_list week_number: ", week_number)
+
+    # Ottieni i dati filtrati per la settimana selezionata
     items, shop_totals = get_shopping_list_data(week_number)
 
-    # Calcola l'intervallo di date per la settimana
+    # Calcola intervallo di date
     start_date, end_date = get_week_date_range(week_number)
 
     if start_date is None or end_date is None:
@@ -671,19 +707,39 @@ def shopping_list():
             'shopping_list.html',
             items=[],
             shop_totals={},
-            week_number=week_number,
             start_date="Settimana non valida",
-            end_date=""
+            end_date="",
+            weeks=[],
+            selected_week=week_number
         )
 
-    print(f"Week: {week_number}, Items: {items}, Shop Totals: {shop_totals}")
+    # Genera tutte le settimane del mese per il dropdown
+    def generate_weeks_for_month():
+        today = datetime.today()
+        first_day = today.replace(day=1)
+        weeks = []
+        num = 1
+
+        while True:
+            s_date, e_date = get_week_date_range(num)
+            if s_date.month != first_day.month and s_date > first_day:
+                break
+            label = f"Settimana {num} ({s_date.strftime('%d/%m')} - {e_date.strftime('%d/%m')})"
+            weeks.append((num, label))
+            num += 1
+
+        return weeks
+
+    weeks = generate_weeks_for_month()
+
     return render_template(
         'shopping_list.html',
         items=items,
         shop_totals=shop_totals,
-        week_number=week_number,
         start_date=start_date.strftime('%A %d %B %Y'),
-        end_date=end_date.strftime('%A %d %B %Y')
+        end_date=end_date.strftime('%A %d %B %Y'),
+        weeks=weeks,
+        selected_week=week_number
     )
 
 
@@ -817,3 +873,75 @@ def reorder_total_cost():
     total_cost = get_reorder_total_cost()
     debug_print("reorder_total_cost: ", total_cost)
     return jsonify({"reorder_total_cost": total_cost})
+
+@main.route('/budget', methods=["GET", "POST"])
+def budget():
+ 
+     if request.method == "POST":
+        budget = request.form.get("budget", "").strip()
+        note = request.form.get("note", "").strip()
+        if budget:
+            upsert_budget(1, budget, note)
+            flash("budget salvato con successo!", "success")
+        else:
+            flash("Inserisci il budget", "error")
+
+     # Sempre recupera la lista completa per la seconda tab
+     budget_record = get_budget()
+
+     debug_print("budget_record: ", budget_record)
+
+     return render_template("budget.html", budget_record=budget_record)
+
+
+# Questa route serve per visualizzare i prodotti avanzati
+@main.route('/inventory/advanced/data')
+def inventory_advanced_data():
+    expense_products = get_inventory_advanced()
+    debug_print("inventory_advanced_data - Prodotti avanzati: ", expense_products)
+    return jsonify(expense_products)
+
+
+# Funzione per calcolare il livello di priorità in base alla stagione
+@main.route('/inventory/advanced')
+def inventory_advanced():
+    # Ottieni i prodotti avanzati tramite la funzione del modello
+    expense_products = get_inventory_advanced()
+
+    debug_print("inventory_advanced - Prodotti avanzati: ", expense_products)
+
+    # Renderizza la pagina e passa i prodotti alla template
+    return render_template("inventory.html", products=expense_products)
+
+@main.route('/inventory/advanced/update', methods=['POST'])
+def update_expense():
+    barcode = request.form.get('barcode')
+    product_type = request.form.get('product_type')
+    seasons = request.form.get('seasons')
+
+    debug_print("update_expense: ", barcode, product_type, seasons)
+
+    if barcode:
+        # Aggiorna o inserisci le opzioni di spesa
+        update_inventory_advanced_options(barcode, product_type, seasons)
+        flash("Impostazioni aggiornate con successo!", "success")
+    else:
+        flash("Errore: barcode mancante", "danger")
+
+    # Ricarica i prodotti aggiornati
+    products = get_inventory_advanced()  # Funzione che estrae i prodotti più recenti dal database
+
+    debug_print("update_expense - Prodotti aggiornati: ", products)
+
+    # Rende la pagina 'inventory_advanced.html' passando i dati più aggiornati
+    return render_template('inventory.html', products=products)
+
+@main.route("/products/advanced", methods=["GET"])
+def products_advanced():
+    debug_print("get_products_advanced - Chiamata API ricevuta")
+
+    inventory_advanced = get_inventory_advanced()
+   
+    #debug_print("get_expense_products - Prodotti: ", inventory_advanced)
+
+    return jsonify({"found": bool(inventory_advanced), "products": inventory_advanced})

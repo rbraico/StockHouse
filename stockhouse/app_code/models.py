@@ -56,9 +56,6 @@ def init_db():
         )
     ''')
 
-
-
-
     conn.commit()   
 
 
@@ -88,13 +85,39 @@ def init_db():
             security_quantity INTEGER,
             reorder_point INTEGER,
             mean_usage_time INTEGER,
-            reorder_frequency TEXT,
+            reorder_frequency INTEGER,
             user_override INTEGER DEFAULT 1,
             FOREIGN KEY(product_key) REFERENCES product_dim(id)
         )
     """)
     conn.commit()
  
+    # ✅ CREA TABELLA CONFIG che contiene 1 record con i parametri di configurazione
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS budget_config (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            budget INTEGER,  
+            note TEXT,
+            budget_ins_date TEXT
+            )
+    """)
+    conn.commit()
+
+
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS inventory_advanced_options (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            barcode TEXT UNIQUE REFERENCES inventory(barcode),
+            product_type TEXT, 
+            seasons TEXT, 
+            priority_level INTEGER -- Valore da 1 (alta priorita`) a 3 (bassa priorita`) viene settato in automatico, funzione di product_type e seasons
+            )
+    """)
+
+    conn.commit()
+
+
+
     conn.close()
 
 import sqlite3
@@ -538,6 +561,10 @@ def get_product_inventory():
     conn = sqlite3.connect(Config.DATABASE_PATH)
     cur = conn.cursor()
 
+    # Prima operazione: sincronizza inventory_fact con i prodotti
+    sync_inventory_fact_with_products()
+ 
+
     # La query da eseguire
     query = """
         WITH latest_transactions AS (
@@ -621,8 +648,8 @@ def get_product_inventory():
     rows = cur.fetchall()
 
     # Mostrare i record
-    for row in rows:
-        debug_print(row)
+    #for row in rows:
+    #    debug_print(row)
 
     # Chiudere la connessione
     conn.close()
@@ -762,12 +789,90 @@ def get_product_inventory_by_barcode(barcode):
     
     return product  # ⬅️ Restituisce direttamente il singolo prodotto
 
+# Funzione per aggiornare i parametri di inventario
+def update_inventory_parameters():
+    debug_print("update_inventory_parameters")
+
+    conn = sqlite3.connect(Config.DATABASE_PATH)
+    cur = conn.cursor()
+
+    # Calcola il mean_usage_time (media giorni di consumo) per ogni barcode
+    cur.execute("""
+        SELECT barcode, AVG(JULIANDAY(consume_date) - JULIANDAY(ins_date)) AS avg_days
+        FROM consumed_fact
+        WHERE consume_date IS NOT NULL
+        GROUP BY barcode
+    """)
+
+    avg_records = cur.fetchall()
+
+    for barcode, avg_days in avg_records:
+        mean_usage_time = int(avg_days) if avg_days is not None else None
+        debug_print(f"Updating barcode {barcode} with mean_usage_time: {mean_usage_time}")
+
+        if mean_usage_time is not None:
+            # Esegui l'UPDATE nel tuo inventario (sostituisci il nome della tabella e campo)
+            cur.execute("""
+                UPDATE inventory
+                SET mean_usage_time = ?
+                WHERE barcode = ? and user_override = 1
+            """, (mean_usage_time, barcode))
+
+    conn.commit()
+    conn.close()
+
+
+
+# Funzione per sincronizzare i prodotti in inventory_fact con product_dim
+def sync_inventory_fact_with_products():
+    debug_print("sync_inventory_fact_with_products")
+    conn = sqlite3.connect(Config.DATABASE_PATH)
+    cur = conn.cursor()
+
+    # Leggi tutti i barcode già presenti nella tabella inventory
+    cur.execute("SELECT barcode FROM inventory")
+    existing_barcodes = {row[0] for row in cur.fetchall()}
+    #debug_print("existing_barcodes: ", existing_barcodes)
+
+    # Leggi tutti i prodotti dalla tabella product_dim
+    cur.execute("SELECT id, barcode FROM product_dim")
+    all_products = cur.fetchall()
+
+    # Trova solo quelli i cui barcode NON sono già in inventory
+    missing_products = [
+        (id_, barcode)
+        for (id_, barcode) in all_products
+        if barcode not in existing_barcodes
+    ]
+    #debug_print("missing_products: ", missing_products)
+
+    # Inserisci i prodotti mancanti
+    for product_key, barcode in missing_products:
+        cur.execute("""
+            INSERT INTO inventory (
+                product_key, barcode
+            ) VALUES (?, ?)
+        """, (product_key, barcode))
+
+    if missing_products:
+        conn.commit()
+
+
+    conn.close()
+
+
+
 
 def upsert_inventory(data):
     conn = sqlite3.connect(Config.DATABASE_PATH)
     cur = conn.cursor()
 
     # Verifica se il record esiste
+    cur.execute("SELECT id FROM product_dim WHERE barcode = ?", (data['barcode'],))
+    product_key = cur.fetchone()
+    if product_key:
+       product_key = product_key[0]  # Prendi solo l’intero valore, non la tupla
+
     cur.execute("SELECT COUNT(*) FROM inventory WHERE barcode = ?", (data['barcode'],))
     record_exists = cur.fetchone()[0] > 0
 
@@ -787,10 +892,11 @@ def upsert_inventory(data):
     else:
         # Se il record non esiste, esegui l'INSERT
         cur.execute("""
-            INSERT INTO inventory (barcode, min_quantity, max_quantity, security_quantity, reorder_point,
+            INSERT INTO inventory (product_key, barcode, min_quantity, max_quantity, security_quantity, reorder_point,
                                     mean_usage_time, reorder_frequency, user_override)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
+            product_key,
             data['barcode'], data['min_quantity'], data['max_quantity'], data['security_quantity'], 
             data['reorder_point'], data['mean_usage_time'], data['reorder_frequency'], data['user_override']
         ))
@@ -1142,10 +1248,9 @@ def get_shopping_list_data(week_number):
                 WHERE  
                     (i.reorder_point IS NOT NULL AND i.reorder_point > 0)
                     AND (
-                        i.reorder_frequency >= 30 
+                        COALESCE(NULLIF(i.reorder_frequency, ''), i.mean_usage_time) >= 30 
                         OR totals.tot < i.security_quantity 
                         OR totals.tot < i.reorder_point 
-                        OR i.mean_usage_time > 15
                     ) GROUP BY i.barcode
         """
     else:
@@ -1169,6 +1274,7 @@ def get_shopping_list_data(week_number):
             WHERE 
                 tf.quantity = 0 
                 OR tf.quantity < i.min_quantity
+                OR COALESCE(NULLIF(i.reorder_frequency, ''), i.mean_usage_time) < 15
         """
 
     cursor.execute(query)
@@ -1180,7 +1286,11 @@ def get_shopping_list_data(week_number):
 
     for row in rows:
         # Calcola la quantità da acquistare
-        quantity_to_buy = max(row['max_quantity'] - row['quantity'], 1)
+    
+        if (row['quantity'] is not None and row['max_quantity'] is not None and row['max_quantity'] != ''):
+              quantity_to_buy = max(row['max_quantity'] - row['quantity'], 1)
+        else:
+              quantity_to_buy = 1
 
         # Calcola il motivo
         motivo = "Riordino programmato"
@@ -1431,13 +1541,13 @@ def get_monthly_consumed_statistics():
 # Mainpage, calcola il numero dei prodotti che sono da riordinare
 def get_reorder_count_from_shopping_list():
     # Usa la funzione esistente per ottenere i dati della lista della spesa
-    items, _ = get_shopping_list_data(week_number=1)  # Considera la prima settimana del mese
+    items, _ = get_shopping_list_data(get_current_week())  # Considera la prima settimana del mese
     return len(items)  # Restituisce il numero totale di prodotti
 
 # Mainpage, calcola il costo totale dei prodotti da riordinare
 def get_reorder_total_cost():
     # Usa la funzione esistente per ottenere i dati della lista della spesa
-    items, _ = get_shopping_list_data(week_number=1)  # Considera la prima settimana del mese
+    items, _ = get_shopping_list_data(get_current_week())  # Considera la prima settimana del mese
     total_cost = 0
 
     # Calcola il costo totale
@@ -1445,3 +1555,171 @@ def get_reorder_total_cost():
         total_cost += item["quantity_to_buy"] * item["price"]  # Prezzo totale per il prodotto
 
     return round(total_cost, 2)  # Arrotonda a due decimali
+
+# Budget - Setta il budget mensile. La tabella prevede un solo record
+def upsert_budget(id, budget, note):
+    
+    budget_insert_date = datetime.now().strftime("%Y-%m-%d")
+    debug_print("upsert_budget:", id, budget, note)
+
+    conn = sqlite3.connect(Config.DATABASE_PATH)
+    cur = conn.cursor()
+
+    # Verifica se il record esiste
+    cur.execute("SELECT * FROM budget_config WHERE id = ?", (id,))
+    row = cur.fetchone()
+    record_exists = row is not None and row[0] > 0
+ 
+    if record_exists:
+        # Se il record esiste, esegui l'UPDATE
+        debug_print("Record esistente, esegui l'UPDATE")
+        cur.execute("""
+            UPDATE budget_config
+            SET budget = ?, note = ?, budget_ins_date = CURRENT_DATE
+            WHERE id = ?
+        """, (budget, note, id)
+        )
+    else:
+        # Se il record non esiste, esegui l'INSERT
+        debug_print("Record non esistente, esegui l'INSERT")
+        cur.execute("""
+            INSERT INTO budget_config (id, budget, note, budget_ins_date)
+            VALUES (?, ?, ?, CURRENT_DATE)
+        """, (id, budget, note)
+        )
+ 
+    conn.commit()
+
+    conn.close()
+
+# Budget - Restituisce il record inserito
+def get_budget():
+    id = 1
+    debug_print("get_budget:", id)
+
+    conn = sqlite3.connect(Config.DATABASE_PATH)
+    cur = conn.cursor()
+
+    # Verifica se il record esiste
+    cur.execute("SELECT budget, note, budget_ins_date FROM budget_config WHERE id = ?", (id,))
+    row = cur.fetchone()
+
+    conn.close()
+
+    if row:
+        budget = {
+            "budget": row[0],
+            "note": row[1],
+            "budget_ins_date": row[2]
+        }
+    else:
+        budget = None  # oppure puoi restituire un dizionario vuoto
+
+    debug_print("get_budget - Budget: ", budget)
+    return budget
+
+
+
+
+# Funzione per calcolare il livello di priorità in base alla stagione
+def get_priority_level(product_type, product_seasons):
+    # 1. Mappa delle stagioni disposte "a croce"
+    seasons_circle = ['primavera', 'estate', 'autunno', 'invern']
+    debug_print("get_priority_level - product_type: ", product_type, "product_seasons: ", product_seasons)
+
+    # Fallback
+
+
+    if not product_type:
+        return 3
+
+    # 2. Se è un prodotto indispensabile → priorità 1 fissa
+    if product_type.lower() == 'indispensabile':
+        return 1
+    
+
+    if product_seasons.lower() == 'tutte':
+        if product_type.lower() == 'indispensabile':
+            return 1
+        elif product_type.lower() == 'opzionale':
+            return 2
+        else:
+            return 3
+
+    
+    # 3. Ottieni la stagione corrente
+    month = datetime.now().month
+    if month in [3, 4, 5]:
+        current_season = 'primavera'
+    elif month in [6, 7, 8]:
+        current_season = 'estate'
+    elif month in [9, 10, 11]:
+        current_season = 'autunno'
+    else:
+        current_season = 'inverno'
+
+    # 4. Parsing delle stagioni valide per il prodotto
+    product_seasons = [s.strip().lower() for s in product_seasons.split(',') if s.strip()]
+
+    # 5. Calcola distanza stagionale
+    curr_index = seasons_circle.index(current_season)
+    
+    # Trova la distanza minima tra la stagione attuale e le stagioni valide
+    distances = []
+    for season in product_seasons:
+        if season in seasons_circle:
+            season_index = seasons_circle.index(season)
+            # Distanza circolare
+            distance = min((season_index - curr_index) % 4, (curr_index - season_index) % 4)
+            # Mappa: distanza 0 → 1, distanza 1 → 2, distanza 2 → 3
+            if distance == 0:
+                distances.append(1)
+            elif distance == 1:
+                distances.append(2)
+            elif distance == 2:
+                distances.append(3)
+            else:
+                distances.append(3)  # caso estremo: opposta
+
+    # 6. Restituisci il livello minimo trovato, oppure 3 se nessuna stagione combacia
+    return min(distances) if distances else 3
+
+
+# Funzione per ottenere l'inventario avanzato
+def get_inventory_advanced():
+    conn = sqlite3.connect(Config.DATABASE_PATH)
+    conn.row_factory = sqlite3.Row
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT pd.image, pd.barcode, pd.name, eo.product_type, eo.seasons, eo.priority_level
+        FROM inventory i
+        JOIN product_dim pd ON i.barcode = pd.barcode
+        LEFT JOIN inventory_advanced_options eo ON i.barcode = eo.barcode
+    """)
+    rows = cur.fetchall()
+    conn.close()
+
+    # Costruisci la lista dei prodotti senza ricalcolare la priorità
+    inventory_advanced = [dict(row) for row in rows]
+
+    debug_print("get_inventory_advanced - Products: ", inventory_advanced)
+    return inventory_advanced
+
+# Funzione per cambiare le opzioni di spesa
+def update_inventory_advanced_options(barcode, product_type, seasons):
+    conn = sqlite3.connect(Config.DATABASE_PATH)
+    cur = conn.cursor()
+    priorituy_level = get_priority_level(product_type, seasons)
+    debug_print("update_inventory_advanced_options: ", barcode, product_type, seasons, priorituy_level)
+    cur.execute("""
+        INSERT INTO inventory_advanced_options (barcode, product_type, seasons, priority_level)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(barcode) DO UPDATE SET
+            product_type=excluded.product_type,
+            seasons=excluded.seasons,
+            priority_level=excluded.priority_level
+    """, (barcode, product_type, seasons, priorituy_level))
+
+    conn.commit()
+    conn.close()

@@ -8,7 +8,7 @@ def get_debug_mode():
         file_path = os.path.join(base_dir, 'config.yaml')
 
         # Debug: stampa il percorso del file
-        print(f"[DEBUG] Percorso del file YAML: {file_path}")
+        #print(f"[DEBUG] Percorso del file YAML: {file_path}")
 
         # Leggi il file YAML
         with open(file_path, 'r') as f:

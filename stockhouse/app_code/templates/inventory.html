@@ -1,45 +1,72 @@
 {% extends 'layout.html' %}
 
 {% block content %}
-<h2 class="mb-4">📦 Magazzino</h2>
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h2 class="mb-0">📦 Magazzino</h2>
+  <div id="advanced-settings-messages" class="ms-3" style="min-width: 300px; display: inline-block;"></div>
+</div>
 
-<!-- ✅ Stile per tabella con righe alternate -->
+<br>
+<!-- ✅ Stile migliorato per tabella con righe alternate, bordi definiti e header fisso -->
 <style>
-    /* Intestazione tabella */
-    thead th {
-      background-color: #0050b9 !important;
+  /* Intestazione tabella */
+  .custom-table thead {
+      background-color: #0050b9 !important; /* Blu uniforme */
       color: white !important;
       position: sticky;
       top: 0;
-      z-index: 2;
-    }
+      z-index: 10;
+  }
 
-    /* Alternanza righe */
-    table.custom-table tbody tr:nth-child(odd) td {
+  /* Definizione dei bordi su righe E colonne */
+  .custom-table th, .custom-table td {
+      border: 2px solid #dee2e6; /* Bordo visibile */
+      padding: 10px;
+      text-align: center;
+  }
+
+  .custom-table {
+    border-collapse: collapse !important;
+  }
+  
+  /* Alternanza righe */
+  .custom-table tbody tr:nth-child(odd) td {
       background-color: #ffffff !important;
-    }
+  }
 
-    table.custom-table tbody tr:nth-child(even) td {
+  .custom-table tbody tr:nth-child(even) td {
       background-color: #e7f1ff !important;
-    }
+  }
 
-    /* Rende i bordi della tabella grigio chiaro */
-    .table-bordered td,
-    .table-bordered th {
-      border: 1px solid #dee2e6; /* colore grigio chiaro (come Bootstrap usa di default) */
-    }
+  /* Rende l'header uniforme con la fascia blu */
+  .table-dark {
+      background-color: #0050b9 !important; 
+      color: white !important;
+  }
 
-    table.custom-table tr:hover td.shop-id {
-      color: #555;
-    }
-
-    /* Scroll per il corpo della tabella */
-    .table-container {
-      max-height: 600px; /* Altezza massima della tabella */
+  /* Scroll per il corpo della tabella */
+  .table-container {
+      max-height: 600px; /* Altezza massima */
       overflow-y: auto;
-      border: 1px solid #dee2e6;
-    }
+      border: 2px solid #dee2e6;
+      display: block;
+  }
+
+  /* Mantiene l'header fisso durante lo scroll */
+  .custom-table thead {
+      position: sticky;
+      top: 0;
+      background-color: #0050b9;
+      z-index: 10;
+  }
+
+  /* Evita sovrapposizione tra intestazione e contenuto */
+  .table-container .row.bg-primary {
+      background-color: transparent !important;
+  }
+
 </style>
+
 
 <br>  
 <!-- Nav tabs -->
@@ -56,10 +83,12 @@
   </li>
 </ul>
 
-<!-- Tab content -->
+
+
+<!-- Tab content  -->
 <div class="tab-content mt-3">
 
-  <!-- 📋 Lista tab -->
+  <!-- 📋 Prodotti in Magazzino-->
   <div class="tab-pane fade show active" id="list" role="tabpanel" aria-labelledby="list-tab">
     <div class="table-container">
       <table class="table table-bordered custom-table">
@@ -111,118 +140,95 @@
     </div>
   </div>
 
-  <!-- ➕ Aggiungi prodotto -->
+  <!-- ⚙️ Impostazioni avanzate ottimizzazione spesa -->
   <div class="tab-pane fade" id="add" role="tabpanel" aria-labelledby="add-tab">
-      <div class="row">
-        <div class="col-md-7">
-          <form method="POST" class="text-start" id="product-form">
-              <br> <!-- Aggiungi qui linee vuote -->
+    <div class="table-container">
+      
+   <table class="table table-bordered custom-table" id="advanced-table">
+    <thead class="table-dark">
+      <tr>
+        <th>Prodotto</th>
+        <th>Barcode</th>
+        <th>Nome</th>
+        <th>
+          <label for="filterTipoProdotto">Tipo Prodotto:</label>
+          <select id="filterTipoProdotto">
+            <option value="">Mostra Tutti</option>
+            <option value="Indispensabile">Indispensabile</option>
+            <option value="Opzionale">Opzionale</option>
+            <option value="Stagionale">Stagionale</option>
+          </select>
+        </th>
+        <th>
+          <label for="filterStagione">Stagione:</label>
+          <select id="filterStagione">
+            <option value="">Mostra Tutti</option>
+            <option value="Primavera">Primavera</option>
+            <option value="Estate">Estate</option>
+            <option value="Autunno">Autunno</option>
+            <option value="Inverno">Inverno</option>
+            <option value="Tutte">Tutte</option>
+          </select>
+        </th>
+        <th>Priorità</th>
+        <th>Azioni</th>
+      </tr>
+    </thead>
+        <tbody>
+          <tr>
+            <td>
+              <select class="tipo-prodotto">
+                <option value="Indispensabile">Indispensabile</option>
+                <option value="Opzionale">Opzionale</option>
+                <option value="Stagionale">Stagionale</option>
+              </select>
+            </td>
+            <td>
+              <select class="tipo-prodotto">
+                <option value="Indispensabile">Indispensabile</option>
+                <option value="Opzionale">Opzionale</option>
+                <option value="Stagionale">Stagionale</option>
+              </select>
+            </td>
 
-              <!-- Barcode -->
-              <div class="row mb-2 align-items-center">
-                  <div class="col-2">
-                    <label for="barcode" class="form-label mb-0" style="color: #00008B" >Barcode</label>
-                  </div>
-                  <div class="col-5">
-                    <input type="text" class="form-control form-control-sm" id="barcode" name="barcode" required maxlength="25" style="background-color:  #e6f2ff;" onchange="autoFillProduct()" onblur="autoFillProduct()">   
-                  </div>
-              </div>
+            <td>✏️ Modifica</td>
+          </tr>
+          <!-- Altre righe generate da JS -->
 
-              <!-- Nome -->
-              <div class="row mb-2 align-items-center">
-                <div class="col-2">
-                  <label for="name" class="form-label mb-0" style="color: #00008B" >Nome</label>
-                </div>
-                <div class="col-5">
-                  <input type="text" class="form-control form-control-sm" id="name" name="name" required maxlength="25" style="background-color:  #e6f2ff;">
-                </div>
-              </div>
-          
-              <!-- Marca -->
-              <div class="row mb-2 align-items-center">
-                <div class="col-2">
-                  <label for="brand" class="form-label mb-0" style="color: #00008B" >Marca</label>
-                </div>
-                <div class="col-5">
-                  <input type="text" class="form-control form-control-sm" id="brand" name="brand" required maxlength="25" style="background-color:  #e6f2ff;">
-                </div>
-              </div>
-          
-              <!-- Negozio -->
-              <div class="row mb-2 align-items-center">
-                <div class="col-2">
-                  <label for="shop" class="form-label mb-0" style="color: #00008B" >Negozio</label>
-                </div>
-                <div class="col-5">
-                  <select class="form-select form-select-sm" id="shop" name="shop" required style="background-color:  #e6f2ff;">
-                    <option value="">Seleziona un negozio</option>
-                    {% for shop in shop_list %}
-                      <option value="{{ shop[1] }}">{{ shop[1] }}</option>
-                    {% endfor %}
-                  </select>
-                </div>
-              </div>
-          
-              <!-- Prezzo -->
-              <div class="row mb-2 align-items-center">
-                <div class="col-2">
-                  <label for="price" class="form-label mb-0" style="color: #00008B" >Prezzo</label>
-                </div>
-                <div class="col-5">
-                  <input type="number" step="0.01" class="form-control form-control-sm" id="price" name="price" required style="background-color:  #e6f2ff;">
-                </div>
-              </div>
-          
-              <!-- Quantità Minima in dispensa-->
-              <div class="row mb-2 align-items-center">
-                <div class="col-2">
-                  <label for="quantity" class="form-label mb-0" style="color: #00008B" >Min Dispensa</label>
-                </div>
-                <div class="col-5">
-                  <input type="number" min="1" class="form-control form-control-sm" id="quantity" name="quantity" required style="background-color:  #e6f2ff;">
-                </div>
-              </div>
+                  <!-- Sarà riempito da JavaScript -->
 
-    
-              <!-- Categoria -->
-              <div class="row mb-2 align-items-center">
-                <div class="col-2">
-                  <label for="category" class="form-label mb-0" style="color: #00008B" >Categoria</label>
-                </div>
-                <div class="col-5">
-                  <select class="form-select form-select-sm" id="category" name="category" required style="background-color:  #e6f2ff;">
-                    <option value="">Seleziona una categoria</option>
-                    {% for cat in categories %}
-                      <option value="{{ cat[1] }}">{{ cat[1] }}</option>
-                    {% endfor %}
-                  </select>
-                </div>
-              </div>
-          
-              <!-- Scadenza -->
-              <div class="row mb-2 align-items-center">
-                <div class="col-2">
-                  <label for="expiry_date" class="form-label mb-0" style="color: #00008B" >Scadenza</label>
-                </div>
-                <div class="col-5">
-                  <input type="date" class="form-control form-control-sm" id="expiry_date" name="expiry_date" style="background-color:  #e6f2ff;">
-                </div>
-              </div>
+          <script>
+            document.getElementById("filterTipoProdotto").addEventListener("change", function() {
+                let filtro = this.value.toLowerCase();
+                let righe = document.querySelectorAll("#advanced-table tbody tr");
 
-              <!-- Submit -->
-              <button type="submit" class="btn btn-primary mt-2">Aggiungi Prodotto</button>
+                righe.forEach(riga => {
+                    let tipoSelect = riga.querySelector("td:nth-child(3) select"); // Trova il <select> dentro la colonna
+                    if (tipoSelect) {
+                        let valore = tipoSelect.value.toLowerCase(); // Prende il valore selezionato nel menu a tendina
+                        riga.style.display = (filtro === "" || valore === filtro) ? "" : "none";
+                    }
+                });
+            });
 
-          </form>
-        </div>
-        
-        <div class="product-image-frame">
-          <img id="productImage" src="" alt="Immagine prodotto" style="display: none; max-width: 100%;">
-          <p id="image-placeholder" class="text-muted">🔍 Inserisci un barcode per vedere l'immagine.</p>
-        </div>
+            document.getElementById("filterStagione").addEventListener("change", function() {
+                let filtro = this.value.toLowerCase();
+                let righe = document.querySelectorAll("#advanced-table tbody tr");
 
-      </div>
-    
+                righe.forEach(riga => {
+                    let stagioneSelect = riga.querySelector("td:nth-child(4) select"); // Trova il <select> nella colonna 'Stagione'
+                    if (stagioneSelect) {
+                        let valore = stagioneSelect.value.toLowerCase(); // Prende il valore selezionato nel menu a tendina
+                        riga.style.display = (filtro === "" || valore === filtro) ? "" : "none";
+                    }
+                });
+            });
+          </script>
+        </tbody>
+      </table>
     </div>
+  </div>
+
 </div>
 
 <script>
@@ -263,7 +269,93 @@
         console.error("Errore nella richiesta:", err);
       });
   }
-  </script>
+</script>
     
-  
+
+<script>
+function fetchAdvancedTable() {
+  fetch("/products/advanced")
+    .then(res => res.json())
+    .then(data => {
+      if (data.found) {
+        const tbody = document.querySelector("#advanced-table tbody");
+        tbody.innerHTML = ""; // Svuota eventuali righe precedenti
+        console.log("Dati ricevuti:", data.products); 
+
+        //Popola la tabella con i dati ricevuti. In particolare popola i menu a tendina
+        data.products.forEach(product => {
+          const row = document.createElement("tr");
+          row.innerHTML = `
+            <td>
+              ${product.image ? `<img src="${product.image}" alt="img" style="max-width: 60px;">` : '<span class="text-muted">Nessuna immagine</span>'}
+            </td>
+            <td>${product.barcode || "-"}</td>
+            <td>${product.name || "-"}</td>
+            <td>
+              <select class="tipo-prodotto">
+                <option value="" ${product.product_type === null ? "selected" : ""} disabled>-- Seleziona un'opzione --</option>
+                <option value="Indispensabile" ${product.product_type === "Indispensabile" ? "selected" : ""}>Indispensabile</option>
+                <option value="Opzionale" ${product.product_type === "Opzionale" ? "selected" : ""}>Opzionale</option>
+                <option value="Stagionale" ${product.product_type === "Stagionale" ? "selected" : ""}>Stagionale</option>
+              </select>
+            </td>
+            <td>
+              <select class="stagione">
+                <option value="" ${product.seasons === null ? "selected" : ""} disabled>-- Seleziona un'opzione --</option>
+                <option value="Primavera" ${product.seasons === "Primavera" ? "selected" : ""}>Primavera</option>
+                <option value="Estate" ${product.seasons === "Estate" ? "selected" : ""}>Estate</option>
+                <option value="Autunno" ${product.seasons === "Autunno" ? "selected" : ""}>Autunno</option>
+                <option value="Inverno" ${product.seasons === "Inverno" ? "selected" : ""}>Inverno</option>
+                <option value="Tutte" ${product.seasons === "Tutte" ? "selected" : ""}>Tutte</option>
+              </select>
+            </td>
+            <td>${product.priority || "-"}</td>
+            <td>
+              <button class="btn btn-sm btn-warning update-btn" data-barcode="${product.barcode}">✏️ Modifica</button>
+            </td>
+          `;
+          tbody.appendChild(row);
+        });
+
+        // Aggiungi evento al pulsante Modifica
+        document.querySelectorAll(".update-btn").forEach(button => {
+          button.addEventListener("click", function() {
+            let row = this.closest("tr");
+            let barcode = this.dataset.barcode;
+            let product_type  = row.querySelector(".tipo-prodotto").value;
+            let seasons = row.querySelector(".stagione").value;
+            console.log("id", barcode, "Tipo Prodotto:", product_type, "Stagione:", seasons);
+            fetch("/inventory/advanced/update", {
+              method: "POST",
+              headers: { "Content-Type": "application/x-www-form-urlencoded" },
+              body: new URLSearchParams({ barcode, product_type, seasons })
+            })
+            .then(response => response.json())
+            .then(data => alert("Aggiornamento riuscito!"))
+            .catch(error => console.error("Errore nell'aggiornamento:", error));
+          });
+        });
+
+      } else if (data.error) {
+        console.error("Errore:", data.error);
+
+      } else {
+        console.warn("Nessun prodotto avanzato trovato.");
+      }
+    })
+    .catch(err => console.error("Errore nel fetch della tabella avanzata:", err));
+}
+</script>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  const advancedTabButton = document.querySelector('#add-tab');
+
+  advancedTabButton.addEventListener('shown.bs.tab', function (event) {
+    fetchAdvancedTable(); // Chiama la funzione che popola la tabella
+  });
+});
+</script>
+
+
 {% endblock %}
