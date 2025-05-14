@@ -35,7 +35,23 @@
       border-radius: 8px;
   }
   
-  
+  .filter-container {
+      position: relative;
+  }
+  .filter-container select {
+      padding-right: 30px; /* Spazio per la freccetta */
+  }
+  .filter-container i {
+      position: absolute;
+      right: 10px;
+      top: 50%;
+      transform: translateY(-50%);
+      pointer-events: none;
+      transition: transform 0.3s ease; /* Transizione per la rotazione */
+  }
+  .filter-container.open i {
+      transform: translateY(-50%) rotate(180deg); /* Ruota quando il filtro è aperto */
+  }
 </style>
 
 <!-- Crea le 3 tab -->
@@ -210,18 +226,45 @@
       <thead style="position: sticky; top: 0; background-color: #f8f9fa; z-index: 1;">
         <tr>
           <th>Immagine</th>
-          <th>Nome</th>
+          <th>
+            Nome
+            <select id="filter-name" onchange="filterTable()">
+              <option value="">Tutti</option>
+              {% set names = products | map(attribute='name') | unique | sort %}
+              {% for name in names %}
+                <option value="{{ name }}">{{ name }}</option>
+              {% endfor %}
+            </select>
+          </th>
           <th>Negozio</th>
           <th>Prezzo</th>
           <th>Quantita</th>
-          <th>Categoria</th>
-          <th>Articolo</th>
+          <th>
+            Categoria
+            <select id="filter-category" onchange="filterTable()">
+              <option value="">Tutti</option>
+              {% set categories = products | map(attribute='category') | unique | sort %}
+              {% for category in categories %}
+                <option value="{{ category }}">{{ category }}</option>
+              {% endfor %}
+            </select>
+          </th>
+          <th>
+            Articolo
+            <select id="filter-item" onchange="filterTable()">
+              <option value="">Tutti</option>
+              {% set items = products | map(attribute='item') | unique | sort %}
+              {% for item in items %}
+                <option value="{{ item }}">{{ item }}</option>
+              {% endfor %}
+            </select>
+          </th>
           <th>Inserito il</th>
           <th>Scadenza</th>
           <th>Azioni</th>
         </tr>
       </thead>
-      <tbody>
+      <tbody id="product-table-body">
         {% for product in products %}
         <tr>
           <td>
@@ -250,8 +293,32 @@
   </div>
 </div>
 
+<script>
+  function filterTable() {
+    const nameFilter = document.getElementById("filter-name").value.toLowerCase();
+    const categoryFilter = document.getElementById("filter-category").value.toLowerCase();
+    const itemFilter = document.getElementById("filter-item").value.toLowerCase();
+    
+    const rows = document.querySelectorAll("#product-table-body tr");
+    
+    rows.forEach(row => {
+      const name = row.cells[1].textContent.toLowerCase();
+      const category = row.cells[5].textContent.toLowerCase();
+      const item = row.cells[6].textContent.toLowerCase();
+      
+      if ((nameFilter === "" || name.includes(nameFilter)) &&
+          (categoryFilter === "" || category.includes(categoryFilter)) &&
+          (itemFilter === "" || item.includes(itemFilter))) {
+        row.style.display = "";
+      } else {
+        row.style.display = "none";
+      }
+    });
+  }
+</script>
 
-  <!-- Terza tab: Prodotto Consumato -->
+
+<!-- Terza tab: Prodotto Consumato -->
   <div class="tab-pane fade" id="consumed" role="tabpanel">
     <div id="search-consumati" style="margin-top: 20px; width: 100%;">
       <div style="display: flex; align-items: center;">
@@ -335,8 +402,6 @@
 </div>
 
 
-
-
 <!-- questo script Riempie la prima TAB -->
 <script>
   function autoFillProduct() {
@@ -410,15 +475,38 @@
   }
 </script>
 
-
 <!-- Riempie la terza tab -->
 <script>
 const input = document.getElementById('productSearch');
-const suggestions = document.getElementById('suggestions'); // Dropdown dei suggerimenti
-const selectedTableBody = document.getElementById('selectedProductsBody'); // Tabella prodotti selezionati
-
+const dropdown = document.getElementById('productDropdown');
+const suggestions = document.getElementById('suggestions');
+const selectedTableBody = document.getElementById('selectedProductsBody');
 let selectedProducts = [];
 
+// ✅ Funzione comune per ottenere i record e popolare la tabella
+function fetchAndDisplayRecords(productName, inserito = '', scadenza = '') {
+  let url = `/consumed/get_records?nome=${encodeURIComponent(productName)}`;
+  if (inserito) url += `&ins_date=${encodeURIComponent(inserito)}`;
+  if (scadenza) url += `&expiry_date=${encodeURIComponent(scadenza)}`;
+
+  fetch(url)
+    .then(response => response.json())
+    .then(data => {
+      if (data.success && Array.isArray(data.data)) {
+        data.data.forEach(record => {
+          selectedProducts.push(record);
+        });
+        updateSelectedTable();
+      } else {
+        console.error("Nessun record trovato o errore nella risposta.");
+      }
+    })
+    .catch(err => {
+      console.error('Errore nel recupero dei record:', err);
+    });
+}
+
+// 🔍 Input testuale (barcode o nome prodotto)
 input.addEventListener('input', function () {
   const query = this.value.trim();
 
@@ -432,7 +520,6 @@ input.addEventListener('input', function () {
     .then(response => response.json())
     .then(results => {
       suggestions.innerHTML = '';
-
       if (results.length === 0) {
         suggestions.style.display = 'none';
         return;
@@ -452,28 +539,10 @@ input.addEventListener('input', function () {
         li.style.borderBottom = '1px solid #ccc';
 
         li.addEventListener('click', () => {
-            // Recupera tutti i record per il prodotto selezionato, includendo la data di inserimento e scadenza
-            fetch(`/consumed/get_records?nome=${encodeURIComponent(item.name)}&ins_date=${encodeURIComponent(item.inserito)}&expiry_date=${encodeURIComponent(item.scadenza || '')}`)
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success && Array.isArray(data.data)) {
-                        data.data.forEach(record => {
-                            selectedProducts.push(record); // Aggiungi alla lista dei prodotti selezionati
-                        });
-
-                        updateSelectedTable();
-
-                        // Pulisce il campo di input e i suggerimenti
-                        input.value = '';
-                        suggestions.innerHTML = '';
-                        suggestions.style.display = 'none';
-                    } else {
-                        console.error("Nessun record trovato o errore nella risposta.");
-                    }
-                })
-                .catch(err => {
-                    console.error('Errore nel recupero dei record:', err);
-                });
+          fetchAndDisplayRecords(item.name, item.inserito, item.scadenza);
+          input.value = '';
+          suggestions.innerHTML = '';
+          suggestions.style.display = 'none';
         });
 
         suggestions.appendChild(li);
@@ -484,6 +553,15 @@ input.addEventListener('input', function () {
     });
 });
 
+// 🟡 Dropdown a tendina (selezione nome prodotto)
+dropdown.addEventListener('change', function () {
+  const selectedName = this.value;
+  if (selectedName) {
+    fetchAndDisplayRecords(selectedName); // <-- solo nome, nessuna data
+  }
+});
+
+// ✅ Aggiorna la tabella con i prodotti selezionati
 function updateSelectedTable() {
   selectedTableBody.innerHTML = '';
   selectedProducts.forEach(item => {
@@ -528,27 +606,20 @@ function updateSelectedTable() {
     const button = document.createElement('button');
     button.textContent = '🍽️ Consumato';
     button.disabled = false;
-
     button.style.backgroundColor = 'orange';
     button.style.color = 'white';
 
     button.addEventListener('click', () => {
-      console.log('Bottone "Consumato" cliccato per il prodotto: ', item.name);
-
       const url = `/consumed_product?id=${item.id}&barcode=${item.barcode}&ins_date=${item.inserito}&expiry_date=${item.scadenza}&quantity=${item.quantity}`;
-      console.log('URL per la chiamata API:', url);
       fetch(url)
         .then(response => response.json())
         .then(data => {
           if (data.success) {
-            console.log('Prodotto aggiornato nel database.');
             updateTableRow(item.id, data.consumo, data.quantita, data.status);
-
             item.consumo = data.consumo;
             item.quantity = data.quantita;
             item.stato = data.status;
             updateSelectedTable();
-
             showSuccessMessage();
           } else {
             console.log('Errore durante l\'aggiornamento del prodotto.');
@@ -570,19 +641,11 @@ function updateSelectedTable() {
 function updateTableRow(productId, consumoData, nuovaQuantita, nuovoStato) {
   const rows = selectedTableBody.getElementsByTagName('tr');
   for (let row of rows) {
-    const barcodeCell = row.querySelectorAll('td')[1];
     const matchedProduct = selectedProducts.find(p => p.id === productId);
-
     if (matchedProduct) {
-      const tdConsume = row.querySelectorAll('td')[5];
-      tdConsume.textContent = consumoData || 'N/D';
-
-      const tdQuantity = row.querySelectorAll('td')[2];
-      tdQuantity.textContent = nuovaQuantita || 'N/D';
-
-      const tdStatus = row.querySelectorAll('td')[6];
-      tdStatus.textContent = nuovoStato || 'N/D';
-
+      row.querySelectorAll('td')[5].textContent = consumoData || 'N/D';
+      row.querySelectorAll('td')[2].textContent = nuovaQuantita || 'N/D';
+      row.querySelectorAll('td')[6].textContent = nuovoStato || 'N/D';
       row.style.backgroundColor = '#ADD8E6';
       break;
     }
@@ -596,13 +659,13 @@ function showSuccessMessage() {
   successMessage.style.color = 'white';
   successMessage.style.padding = '10px';
   successMessage.style.marginBottom = '10px';
-
   document.body.insertBefore(successMessage, document.body.firstChild);
-
   setTimeout(() => {
     successMessage.remove();
   }, 3000);
 }
 </script>
+
+
 
 {% endblock %}

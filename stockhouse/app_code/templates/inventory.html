@@ -142,91 +142,66 @@
 
   <!-- ⚙️ Impostazioni avanzate ottimizzazione spesa -->
   <div class="tab-pane fade" id="add" role="tabpanel" aria-labelledby="add-tab">
-    <div class="table-container">
+    <div id="inventory-container"> 
+     <div class="table-container">
       
-   <table class="table table-bordered custom-table" id="advanced-table">
-    <thead class="table-dark">
-      <tr>
-        <th>Prodotto</th>
-        <th>Barcode</th>
-        <th>Nome</th>
-        <th>
-          <label for="filterTipoProdotto">Tipo Prodotto:</label>
-          <select id="filterTipoProdotto">
-            <option value="">Mostra Tutti</option>
-            <option value="Indispensabile">Indispensabile</option>
-            <option value="Opzionale">Opzionale</option>
-            <option value="Stagionale">Stagionale</option>
-          </select>
-        </th>
-        <th>
-          <label for="filterStagione">Stagione:</label>
-          <select id="filterStagione">
-            <option value="">Mostra Tutti</option>
-            <option value="Primavera">Primavera</option>
-            <option value="Estate">Estate</option>
-            <option value="Autunno">Autunno</option>
-            <option value="Inverno">Inverno</option>
-            <option value="Tutte">Tutte</option>
-          </select>
-        </th>
-        <th>Priorità</th>
-        <th>Azioni</th>
-      </tr>
-    </thead>
-        <tbody>
+      <table class="table table-bordered custom-table" id="advanced-table">
+        <thead class="table-dark">
           <tr>
-            <td>
-              <select class="tipo-prodotto">
+            <th>Prodotto</th>
+            <th>Barcode</th>
+            <th>Nome</th>
+            <th>
+              <label for="filterTipoProdotto">Tipo:</label>
+              <select id="filterTipoProdotto">
+                <option value="">Mostra Tutti</option>
                 <option value="Indispensabile">Indispensabile</option>
                 <option value="Opzionale">Opzionale</option>
                 <option value="Stagionale">Stagionale</option>
               </select>
-            </td>
-            <td>
-              <select class="tipo-prodotto">
-                <option value="Indispensabile">Indispensabile</option>
-                <option value="Opzionale">Opzionale</option>
-                <option value="Stagionale">Stagionale</option>
+            </th>
+            <th>
+              <label for="filterStagione">Stagione:</label>
+              <select id="filterStagione">
+                <option value="">Mostra Tutti</option>
+                <option value="Primavera">Primavera</option>
+                <option value="Estate">Estate</option>
+                <option value="Autunno">Autunno</option>
+                <option value="Inverno">Inverno</option>
+                <option value="Tutte">Tutte</option>
               </select>
-            </td>
-
-            <td>✏️ Modifica</td>
+            </th>
+            <th>Priorità</th>
+            <th>Azioni</th>
           </tr>
-          <!-- Altre righe generate da JS -->
+        </thead>
+            <tbody>
+              <tr>
+                <td>
+                  <select class="tipo-prodotto">
+                    <option value="Indispensabile">Indispensabile</option>
+                    <option value="Opzionale">Opzionale</option>
+                    <option value="Stagionale">Stagionale</option>
+                  </select>
+                </td>
+                <td>
+                  <select class="tipo-prodotto">
+                    <option value="Indispensabile">Indispensabile</option>
+                    <option value="Opzionale">Opzionale</option>
+                    <option value="Stagionale">Stagionale</option>
+                  </select>
+                </td>
 
-                  <!-- Sarà riempito da JavaScript -->
+                <td>✏️ Modifica</td>
+              </tr>
+              <!-- Altre righe generate da JS -->
 
-          <script>
-            document.getElementById("filterTipoProdotto").addEventListener("change", function() {
-                let filtro = this.value.toLowerCase();
-                let righe = document.querySelectorAll("#advanced-table tbody tr");
+                      <!-- Sarà riempito da JavaScript -->
 
-                righe.forEach(riga => {
-                    let tipoSelect = riga.querySelector("td:nth-child(3) select"); // Trova il <select> dentro la colonna
-                    if (tipoSelect) {
-                        let valore = tipoSelect.value.toLowerCase(); // Prende il valore selezionato nel menu a tendina
-                        riga.style.display = (filtro === "" || valore === filtro) ? "" : "none";
-                    }
-                });
-            });
-
-            document.getElementById("filterStagione").addEventListener("change", function() {
-                let filtro = this.value.toLowerCase();
-                let righe = document.querySelectorAll("#advanced-table tbody tr");
-
-                righe.forEach(riga => {
-                    let stagioneSelect = riga.querySelector("td:nth-child(4) select"); // Trova il <select> nella colonna 'Stagione'
-                    if (stagioneSelect) {
-                        let valore = stagioneSelect.value.toLowerCase(); // Prende il valore selezionato nel menu a tendina
-                        riga.style.display = (filtro === "" || valore === filtro) ? "" : "none";
-                    }
-                });
-            });
-          </script>
-        </tbody>
-      </table>
-    </div>
+            </tbody>
+          </table>
+        </div>
+     </div>   
   </div>
 
 </div>
@@ -234,12 +209,8 @@
 <script>
   function autoFillProduct() {
     const value = document.getElementById('barcode').value.trim();
-  
     if (!value) return;
-  
-    // Se contiene solo cifre → è barcode, altrimenti è nome
     const isBarcode = /^\d+$/.test(value);
-  
     const url = isBarcode
       ? `/api/product-by-barcode?barcode=${encodeURIComponent(value)}`
       : `/api/product-by-name?name=${encodeURIComponent(value)}`;
@@ -255,7 +226,6 @@
           document.getElementById('category').value = data.category || '';
           document.getElementById('expiry_date').value = data.expiry_date || '';
           document.getElementById('quantity').value = data.quantity || '';
-  
           if (data.image) {
             document.getElementById('productImage').src = data.image;
             document.getElementById('productImage').style.display = 'block';
@@ -265,96 +235,299 @@
           console.log("Nessun prodotto trovato");
         }
       })
-      .catch(err => {
-        console.error("Errore nella richiesta:", err);
-      });
+      .catch(err => console.error("Errore nella richiesta:", err));
   }
 </script>
-    
 
 <script>
-function fetchAdvancedTable() {
-  fetch("/products/advanced")
-    .then(res => res.json())
-    .then(data => {
-      if (data.found) {
-        const tbody = document.querySelector("#advanced-table tbody");
-        tbody.innerHTML = ""; // Svuota eventuali righe precedenti
-        console.log("Dati ricevuti:", data.products); 
+  function setupAdvancedFilters() {
+    const tipoSelect = document.getElementById("filterTipoProdotto");
+    const stagioneSelect = document.getElementById("filterStagione");
 
-        //Popola la tabella con i dati ricevuti. In particolare popola i menu a tendina
-        data.products.forEach(product => {
-          const row = document.createElement("tr");
-          row.innerHTML = `
-            <td>
-              ${product.image ? `<img src="${product.image}" alt="img" style="max-width: 60px;">` : '<span class="text-muted">Nessuna immagine</span>'}
-            </td>
-            <td>${product.barcode || "-"}</td>
-            <td>${product.name || "-"}</td>
-            <td>
-              <select class="tipo-prodotto">
-                <option value="" ${product.product_type === null ? "selected" : ""} disabled>-- Seleziona un'opzione --</option>
-                <option value="Indispensabile" ${product.product_type === "Indispensabile" ? "selected" : ""}>Indispensabile</option>
-                <option value="Opzionale" ${product.product_type === "Opzionale" ? "selected" : ""}>Opzionale</option>
-                <option value="Stagionale" ${product.product_type === "Stagionale" ? "selected" : ""}>Stagionale</option>
-              </select>
-            </td>
-            <td>
-              <select class="stagione">
-                <option value="" ${product.seasons === null ? "selected" : ""} disabled>-- Seleziona un'opzione --</option>
-                <option value="Primavera" ${product.seasons === "Primavera" ? "selected" : ""}>Primavera</option>
-                <option value="Estate" ${product.seasons === "Estate" ? "selected" : ""}>Estate</option>
-                <option value="Autunno" ${product.seasons === "Autunno" ? "selected" : ""}>Autunno</option>
-                <option value="Inverno" ${product.seasons === "Inverno" ? "selected" : ""}>Inverno</option>
-                <option value="Tutte" ${product.seasons === "Tutte" ? "selected" : ""}>Tutte</option>
-              </select>
-            </td>
-            <td>${product.priority || "-"}</td>
-            <td>
-              <button class="btn btn-sm btn-warning update-btn" data-barcode="${product.barcode}">✏️ Modifica</button>
-            </td>
-          `;
-          tbody.appendChild(row);
+    if (tipoSelect) {
+      tipoSelect.addEventListener("change", function () {
+        let filtro = this.value.toLowerCase();
+        document.querySelectorAll("#advanced-table tbody tr").forEach(riga => {
+          let tipo = riga.querySelector("td:nth-child(4) select");
+          if (tipo) {
+            let valore = tipo.value.toLowerCase();
+            riga.style.display = (filtro === "" || valore === filtro) ? "" : "none";
+          }
         });
+      });
+    }
 
-        // Aggiungi evento al pulsante Modifica
-        document.querySelectorAll(".update-btn").forEach(button => {
-          button.addEventListener("click", function() {
-            let row = this.closest("tr");
-            let barcode = this.dataset.barcode;
-            let product_type  = row.querySelector(".tipo-prodotto").value;
-            let seasons = row.querySelector(".stagione").value;
-            console.log("id", barcode, "Tipo Prodotto:", product_type, "Stagione:", seasons);
-            fetch("/inventory/advanced/update", {
-              method: "POST",
-              headers: { "Content-Type": "application/x-www-form-urlencoded" },
-              body: new URLSearchParams({ barcode, product_type, seasons })
-            })
-            .then(response => response.json())
-            .then(data => alert("Aggiornamento riuscito!"))
-            .catch(error => console.error("Errore nell'aggiornamento:", error));
-          });
+    if (stagioneSelect) {
+      stagioneSelect.addEventListener("change", function () {
+        let filtro = this.value.toLowerCase();
+        document.querySelectorAll("#advanced-table tbody tr").forEach(riga => {
+          let stagione = riga.querySelector("td:nth-child(5) select");
+          if (stagione) {
+            let valore = stagione.value.toLowerCase();
+            riga.style.display = (filtro === "" || valore === filtro) ? "" : "none";
+          }
         });
-
-      } else if (data.error) {
-        console.error("Errore:", data.error);
-
-      } else {
-        console.warn("Nessun prodotto avanzato trovato.");
-      }
-    })
-    .catch(err => console.error("Errore nel fetch della tabella avanzata:", err));
-}
+      });
+    }
+  }
 </script>
 
 <script>
-document.addEventListener("DOMContentLoaded", function () {
-  const advancedTabButton = document.querySelector('#add-tab');
+  function fetchAdvancedTable() {
+    fetch("/products/advanced")
+      .then(res => res.json())
+      .then(data => {
+        const tbody = document.querySelector("#advanced-table tbody");
+        if (!tbody) {
+          console.error("❌ #advanced-table tbody non trovato!");
+          return;
+        }
+        tbody.innerHTML = "";
+        console.log("📦 Dati ricevuti:", data.products);
 
-  advancedTabButton.addEventListener('shown.bs.tab', function (event) {
-    fetchAdvancedTable(); // Chiama la funzione che popola la tabella
+        if (data.found && Array.isArray(data.products)) {
+          data.products.forEach(product => {
+            const row = document.createElement("tr");
+            row.innerHTML = `
+              <td>${product.image ? `<img src="${product.image}" alt="img" style="max-width: 60px;">` : '<span class="text-muted">Nessuna immagine</span>'}</td>
+              <td>${product.barcode || "-"}</td>
+              <td>${product.name || "-"}</td>
+              <td>
+                <select class="tipo-prodotto">
+                  <option value="" ${!product.product_type ? "selected" : ""} disabled>-- Seleziona --</option>
+                  <option value="Indispensabile" ${product.product_type === "Indispensabile" ? "selected" : ""}>Indispensabile</option>
+                  <option value="Opzionale" ${product.product_type === "Opzionale" ? "selected" : ""}>Opzionale</option>
+                  <option value="Stagionale" ${product.product_type === "Stagionale" ? "selected" : ""}>Stagionale</option>
+                </select>
+              </td>
+              <td>
+                <select class="stagione">
+                  <option value="" ${!product.seasons ? "selected" : ""} disabled>-- Seleziona --</option>
+                  <option value="Primavera" ${product.seasons === "Primavera" ? "selected" : ""}>Primavera</option>
+                  <option value="Estate" ${product.seasons === "Estate" ? "selected" : ""}>Estate</option>
+                  <option value="Autunno" ${product.seasons === "Autunno" ? "selected" : ""}>Autunno</option>
+                  <option value="Inverno" ${product.seasons === "Inverno" ? "selected" : ""}>Inverno</option>
+                  <option value="Tutte" ${product.seasons === "Tutte" ? "selected" : ""}>Tutte</option>
+                </select>
+              </td>
+              <td>${product.priority_level || "-"}</td>
+              <td>
+                <button class="btn btn-sm btn-warning update-btn" data-barcode="${product.barcode}">✏️ Modifica</button>
+              </td>
+            `;
+            tbody.appendChild(row);
+          });
+
+          bindUpdateButtons();
+          setupAdvancedFilters(); // 🔁 Ricollega i filtri
+        } else {
+          tbody.innerHTML = "<tr><td colspan='7'>Nessun prodotto avanzato trovato.</td></tr>";
+        }
+      })
+      .catch(err => console.error("🚨 Errore nel fetch:", err));
+  }
+
+  function bindUpdateButtons() {
+    document.querySelectorAll(".update-btn").forEach(button => {
+      button.addEventListener("click", function () {
+        const row = this.closest("tr");
+        const barcode = this.dataset.barcode;
+        const product_type = row.querySelector(".tipo-prodotto").value;
+        const seasons = row.querySelector(".stagione").value;
+
+        console.log("📤 Aggiorno:", barcode, product_type, seasons);
+
+        fetch("/inventory/advanced/update", {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams({ barcode, product_type, seasons })
+        })
+          .then(response => response.text())
+          .then(html => {
+            const container = document.querySelector("#inventory-container");
+            if (container) {
+              container.innerHTML = html;
+
+              const tab = new bootstrap.Tab(document.querySelector('#add-tab'));
+              tab.show();
+
+              fetchAdvancedTable(); // Ricarica tabella aggiornata
+              const successMessage = document.createElement('div');
+              successMessage.className = 'alert alert-success';
+              successMessage.innerHTML = 'Prodotto aggiornato con successo!';
+              document.querySelector('#add-tab').prepend(successMessage);
+              setTimeout(() => successMessage.remove(), 3000);
+            } else {
+              location.reload();
+            }
+            alert("✅ Aggiornamento riuscito!");
+          })
+          .catch(error => {
+            console.error("❌ Errore:", error);
+            alert("Errore durante l'aggiornamento.");
+          });
+      });
+    });
+  }
+</script>
+
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    const advancedTabButton = document.querySelector('#add-tab');
+    if (advancedTabButton) {
+      advancedTabButton.addEventListener('shown.bs.tab', function () {
+        fetchAdvancedTable(); // Carica dati al cambio tab
+      });
+    }
+    setupAdvancedFilters(); // Inizializza i filtri al primo caricamento
   });
-});
+</script>
+
+
+<script>
+  function setupAdvancedFilters() {
+    const tipoSelect = document.getElementById("filterTipoProdotto");
+    const stagioneSelect = document.getElementById("filterStagione");
+
+    if (tipoSelect) {
+      tipoSelect.addEventListener("change", function () {
+        let filtro = this.value.toLowerCase();
+        document.querySelectorAll("#advanced-table tbody tr").forEach(riga => {
+          let tipo = riga.querySelector("td:nth-child(4) select");
+          if (tipo) {
+            let valore = tipo.value.toLowerCase();
+            riga.style.display = (filtro === "" || valore === filtro) ? "" : "none";
+          }
+        });
+      });
+    }
+
+    if (stagioneSelect) {
+      stagioneSelect.addEventListener("change", function () {
+        let filtro = this.value.toLowerCase();
+        document.querySelectorAll("#advanced-table tbody tr").forEach(riga => {
+          let stagione = riga.querySelector("td:nth-child(5) select");
+          if (stagione) {
+            let valore = stagione.value.toLowerCase();
+            riga.style.display = (filtro === "" || valore === filtro) ? "" : "none";
+          }
+        });
+      });
+    }
+  }
+</script>
+
+<script>
+  function fetchAdvancedTable() {
+    fetch("/products/advanced")
+      .then(res => res.json())
+      .then(data => {
+        const tbody = document.querySelector("#advanced-table tbody");
+        if (!tbody) {
+          console.error("❌ #advanced-table tbody non trovato!");
+          return;
+        }
+        tbody.innerHTML = "";
+        console.log("📦 Dati ricevuti:", data.products);
+
+        if (data.found && Array.isArray(data.products)) {
+          data.products.forEach(product => {
+            const row = document.createElement("tr");
+            row.innerHTML = `
+              <td>${product.image ? `<img src="${product.image}" alt="img" style="max-width: 60px;">` : '<span class="text-muted">Nessuna immagine</span>'}</td>
+              <td>${product.barcode || "-"}</td>
+              <td>${product.name || "-"}</td>
+              <td>
+                <select class="tipo-prodotto">
+                  <option value="" ${!product.product_type ? "selected" : ""} disabled>-- Seleziona --</option>
+                  <option value="Indispensabile" ${product.product_type === "Indispensabile" ? "selected" : ""}>Indispensabile</option>
+                  <option value="Opzionale" ${product.product_type === "Opzionale" ? "selected" : ""}>Opzionale</option>
+                  <option value="Stagionale" ${product.product_type === "Stagionale" ? "selected" : ""}>Stagionale</option>
+                </select>
+              </td>
+              <td>
+                <select class="stagione">
+                  <option value="" ${!product.seasons ? "selected" : ""} disabled>-- Seleziona --</option>
+                  <option value="Primavera" ${product.seasons === "Primavera" ? "selected" : ""}>Primavera</option>
+                  <option value="Estate" ${product.seasons === "Estate" ? "selected" : ""}>Estate</option>
+                  <option value="Autunno" ${product.seasons === "Autunno" ? "selected" : ""}>Autunno</option>
+                  <option value="Inverno" ${product.seasons === "Inverno" ? "selected" : ""}>Inverno</option>
+                  <option value="Tutte" ${product.seasons === "Tutte" ? "selected" : ""}>Tutte</option>
+                </select>
+              </td>
+              <td>${product.priority_level || "-"}</td>
+              <td>
+                <button class="btn btn-sm btn-warning update-btn" data-barcode="${product.barcode}">✏️ Modifica</button>
+              </td>
+            `;
+            tbody.appendChild(row);
+          });
+
+          bindUpdateButtons();
+          setupAdvancedFilters(); // 🔁 Riapplica i filtri
+        } else {
+          tbody.innerHTML = "<tr><td colspan='7'>Nessun prodotto avanzato trovato.</td></tr>";
+        }
+      })
+      .catch(err => console.error("🚨 Errore nel fetch:", err));
+  }
+
+  function bindUpdateButtons() {
+    document.querySelectorAll(".update-btn").forEach(button => {
+      button.addEventListener("click", function () {
+        const row = this.closest("tr");
+        const barcode = this.dataset.barcode;
+        const product_type = row.querySelector(".tipo-prodotto").value;
+        const seasons = row.querySelector(".stagione").value;
+
+        console.log("📤 Aggiorno:", barcode, product_type, seasons);
+
+        fetch("/inventory/advanced/update", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded",
+            "X-Requested-With": "XMLHttpRequest"
+          },
+          body: new URLSearchParams({ barcode, product_type, seasons })
+        })
+        .then(response => response.json())
+        .then(data => {
+          if (data.success) {
+            const successMessage = document.createElement('div');
+            successMessage.className = 'alert alert-success mt-2';
+            successMessage.innerText = '✅ Prodotto aggiornato con successo!';
+            document.querySelector('#inventory-container').prepend(successMessage);
+            setTimeout(() => successMessage.remove(), 3000);
+
+            fetchAdvancedTable(); // 🔁 Ricarica i dati aggiornati
+          } else {
+            alert("❌ Errore nell'aggiornamento del prodotto.");
+          }
+        })
+        .catch(error => {
+          console.error("❌ Errore:", error);
+          alert("Errore durante l'aggiornamento.");
+        });
+      });
+    });
+  }
+
+  // ✅ Esegui fetch iniziale
+  fetchAdvancedTable();
+</script>
+
+
+
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    const advancedTabButton = document.querySelector('#add-tab');
+    if (advancedTabButton) {
+      advancedTabButton.addEventListener('shown.bs.tab', function () {
+        fetchAdvancedTable(); // Carica dati al cambio tab
+      });
+    }
+    setupAdvancedFilters(); // Inizializza i filtri al primo caricamento
+  });
 </script>
 
 
