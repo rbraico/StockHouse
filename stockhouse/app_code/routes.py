@@ -391,7 +391,7 @@ def consumed_product():
     else:
         new_quantity = 0
         new_status = "out of stock"
-        consume_date = datetime.datetime.now().strftime("%Y-%m-%d")
+        consume_date = datetime.now().strftime("%Y-%m-%d")
 
     debug_print("Route 1: /consumed_product/",id, new_quantity, ins_date, expiry_date, consume_date, new_status)    
 
@@ -913,6 +913,7 @@ def inventory_advanced():
     # Renderizza la pagina e passa i prodotti alla template
     return render_template("inventory.html", products=expense_products)
 
+# Questa route serve per visualizzare i prodotti avanzati
 @main.route('/inventory/advanced/update', methods=['POST'])
 def update_expense():
     barcode = request.form.get('barcode')
@@ -922,19 +923,13 @@ def update_expense():
     debug_print("update_expense: ", barcode, product_type, seasons)
 
     if barcode:
-        # Aggiorna o inserisci le opzioni di spesa
         update_inventory_advanced_options(barcode, product_type, seasons)
-        flash("Impostazioni aggiornate con successo!", "success")
+        debug_print("Aggiornamento riuscito")
+        return jsonify({'success': True})
     else:
-        flash("Errore: barcode mancante", "danger")
+        debug_print("Errore: barcode mancante")
+        return jsonify({'success': False, 'error': 'Barcode mancante'})
 
-    # Ricarica i prodotti aggiornati
-    products = get_inventory_advanced()  # Funzione che estrae i prodotti più recenti dal database
-
-    debug_print("update_expense - Prodotti aggiornati: ", products)
-
-    # Rende la pagina 'inventory_advanced.html' passando i dati più aggiornati
-    return render_template('inventory.html', products=products)
 
 @main.route("/products/advanced", methods=["GET"])
 def products_advanced():
