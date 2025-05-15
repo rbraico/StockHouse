@@ -5,9 +5,10 @@ from stockhouse.app_code.models import add_product_dim, add_transaction_fact, de
                        lookup_category_by_item, update_transaction_fact, update_transaction_fact_consumed, get_products_by_name, get_expiring_products, get_shopping_list_data, insert_consumed_fact, \
                        get_number_expiring_products, get_out_of_stock_count, get_critical_stock_count, get_monthly_consumed_count, get_reorder_count_from_shopping_list, get_reorder_total_cost, \
                        get_current_week, get_week_date_range, get_product_by_name_and_dates, get_expiring_products_for_home, get_out_of_stock_products, get_critical_stock, get_monthly_consumed_statistics, \
-                       upsert_budget, get_budget, update_inventory_parameters, get_inventory_advanced, update_inventory_advanced_options
+                       upsert_budget, get_budget, update_inventory_parameters, get_inventory_advanced, update_inventory_advanced_options, get_unconsumed_products_full_list, get_shopping_list_data, \
+                       get_reorder_count_from_shopping_list, get_reorder_total_cost, get_unique_unconsumed_record
 from stockhouse.app_code.models import add_shop, update_shop, delete_shop  
-from stockhouse.app_code.models import add_category, get_all_categories, update_category, delete_category, add_item, get_all_items, update_item, delete_item
+from stockhouse.app_code.models import add_category, get_all_categories, update_category, delete_category, get_all_items, update_item, delete_item
 import sqlite3
 import hashlib
 from datetime import datetime, timedelta
@@ -361,7 +362,7 @@ def edit_product(name, ins_date):
     return render_template("edit_product.html", product=product, shop_list=shop_list, items=items)
 
 
-@main.route('/consumed/search')
+@main.route('/products/unconsumed')
 def search_unconsumed_products():
     query = request.args.get('q', '')
     debug_print("Route - unconsumed products1: ", query)
@@ -371,6 +372,31 @@ def search_unconsumed_products():
     
     debug_print("Route - unconsumed products2: ", results)
     return jsonify(results)
+
+# Questa route serve per visualizzare i prodotti non consumati filtrati dal menu a tendina (tab3)
+@main.route('/products/unconsumed_dropdown', methods=['GET'])
+def unconsumed_dropdown():
+    products = get_unconsumed_products_full_list()
+    return jsonify(products)
+
+# Questa route serve per visualizzare esclusivamente il prodotto non consumato filtrato dal dropdown menu (tab3) 
+@main.route('/consumed/get_by_unique', methods=['GET'])
+def get_single_unconsumed_product():
+    barcode = request.args.get('barcode')
+    ins_date = request.args.get('ins_date')
+    expiry_date = request.args.get('expiry_date')  # Può essere "null"
+
+    if not barcode or not ins_date:
+        return jsonify({'success': False, 'error': 'Dati insufficienti'}), 400
+
+    product = get_unique_unconsumed_record(barcode, ins_date, expiry_date)
+
+    if product:
+        return jsonify({'success': True, 'data': [product]})
+    else:
+        return jsonify({'success': False, 'data': []})
+
+
 
 
 @main.route('/consumed_product', methods=['GET', 'POST'])
@@ -405,17 +431,24 @@ def consumed_product():
 @main.route('/consumed/get_records', methods=["GET"])
 def get_records():
     # Ottieni i parametri dalla richiesta
-    name = request.args.get('nome')
+    name = request.args.get('name')  # Nome del prodotto
+    barcode = request.args.get('barcode') # Barcode del prodotto
     ins_date = request.args.get('ins_date')  # Data di inserimento
     expiry_date = request.args.get('expiry_date')  # Data di scadenza (può essere NULL)
 
-    debug_print("get_records - Nome: ", name)
+    # Debugging: stampa i parametri ricevuti
+    debug_print("get_records - name: ", name)
+    debug_print("get_records - barcode: ", barcode)
     debug_print("get_records - Data di inserimento: ", ins_date)
     debug_print("get_records - Data di scadenza: ", expiry_date)
 
     # Verifica che il parametro 'nome' sia presente
     if not name:
-        return jsonify({"error": "Parametro 'nome' mancante"}), 400
+        return jsonify({"error": "Parametro 'name' mancante"}), 400
+    
+    # Verifica che il barcode sia presente
+    #if not barcode:
+    #    return jsonify({"error": "Parametro 'barcode' mancante"}), 400
 
     # Verifica che la data di inserimento sia presente
     if not ins_date:
