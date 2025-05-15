@@ -517,6 +517,7 @@ def get_product_by_name_and_dates(name, ins_date, expiry_date=None):
         "stato": row[7]
     } for row in records]
 
+# Funzione per cercare i prodotti non consumati nel database. La ricerca e` effettuata su barcode e nome prodotto`
 def search_unconsumed_products_db(query):
     # Connessione al database
     conn = sqlite3.connect(Config.DATABASE_PATH)
@@ -553,6 +554,80 @@ def search_unconsumed_products_db(query):
         "id": row[0], "name": row[1], "barcode": row[2], "quantity": row[3], 
         "inserito": row[4], "scadenza": row[5], "consumo": row[6], "stato": row[7]
     } for row in results]
+
+# Funzione per ottenere la lista completa dei prodotti non consumati sulla base del filtro a tendina (tab3)
+def get_unconsumed_products_full_list():
+    conn = sqlite3.connect(Config.DATABASE_PATH)
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT pd.id, pd.name, pd.barcode, tf.ins_date, tf.expiry_date
+        FROM transaction_fact tf 
+        JOIN product_dim pd  ON pd.id = tf.product_key
+        WHERE tf.status = 'in stock'
+        ORDER BY pd.name ASC
+    """)
+    rows = cursor.fetchall()
+
+    conn.close()
+    debug_print("get_unconsumed_products_full_list: ", rows)
+
+    return [{
+        'id': row[0],
+        'name': row[1],
+        'barcode': row[2],
+        'ins_date': row[3],
+        'expiry_date': row[4]
+    } for row in rows]
+
+
+
+# Funzione per ottenere un record unico non consumato in base a barcode, ins_date e (opzionalmente) expiry_date
+def get_unique_unconsumed_record(barcode, ins_date, expiry_date):
+
+    conn = sqlite3.connect(Config.DATABASE_PATH)
+    cursor = conn.cursor()
+
+    if expiry_date and expiry_date.lower() != 'null':
+        cursor.execute("""
+            SELECT pd.id, pd.name, pd.barcode, tf.quantity, tf.ins_date, tf.expiry_date, tf.consume_date, tf.status 
+            FROM transaction_fact tf 
+            JOIN product_dim pd  ON pd.id = tf.product_key
+            WHERE tf.barcode = ?
+              AND tf.ins_date = ?
+              AND tf.expiry_date = ?
+              AND tf.status = 'in stock'
+        """, (barcode, ins_date, expiry_date))
+    else:
+        cursor.execute("""
+            SELECT pd.id, pd.name, pd.barcode, tf.quantity, tf.ins_date, tf.expiry_date, tf.consume_date, tf.status 
+            FROM transaction_fact tf 
+            JOIN product_dim pd  ON pd.id = tf.product_key
+            WHERE tf.barcode = ?
+              AND tf.ins_date = ?
+              AND tf.expiry_date IS NULL
+              AND tf.status = 'in stock'
+        """, (barcode, ins_date))
+
+    row = cursor.fetchone()
+    conn.close()
+    debug_print("get_unique_unconsumed_record: ", row)
+
+    if row:
+        return {
+            'id': row[0],
+            'name': row[1],
+            'barcode': row[2],
+            'quantity': row[3],
+            'inserito': row[4],
+            'scadenza': row[5],
+            'consumo': row[6],
+            'stato': row[7]
+        }
+    return None
+
+
+
 
 # Funzione per ottenere l'inventario dei prodotti
 def get_product_inventory():

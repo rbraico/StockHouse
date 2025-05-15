@@ -318,15 +318,24 @@
 </script>
 
 
-<!-- Terza tab: Prodotto Consumato -->
+  <!-- Terza tab: Prodotto Consumato -->
   <div class="tab-pane fade" id="consumed" role="tabpanel">
     <div id="search-consumati" style="margin-top: 20px; width: 100%;">
-      <div style="display: flex; align-items: center;">
-        <label for="productSearch" style="margin-right: 10px;">Cerca prodotto o barcode:</label>
+      <div style="display: flex; align-items: center; gap: 15px;">
+        <label for="productSearch" style="margin-right: 5px;">Cerca prodotto o barcode:</label>
+        
+        <!-- Campo input barcode o testo -->
         <input type="text" id="productSearch" name="productSearch" placeholder="Cerca..." style="width: 250px; padding: 8px; border-radius: 8px; background-color: #e0f7fa; border: 1px solid #ccc; font-size: 14px;">
+        
+        <!-- 🔽 Filtro a tendina per i nomi prodotto -->
+        <label for="productSearch" style="margin-right: 5px;">oppure:</label>
+
+        <select id="productDropdown" style="width: 250px; padding: 8px; border-radius: 8px; background-color: #e0f7fa; border: 1px solid #ccc; font-size: 14px;">
+          <option value="">-- Seleziona un prodotto --</option>
+          <!-- Le opzioni verranno inserite via JavaScript -->
+        </select>
       </div>
-      
-    
+
       <ul id="suggestions" style="
         list-style: none;
         margin: 0;
@@ -342,63 +351,54 @@
         display: none;
       "></ul>
     </div>
+
     <style>
-      /* Stile per la tabella */
       #resultsTable {
         width: 100%;
         border-collapse: collapse;
       }
-    
-      /* Righe alternate colorate (bianco e celeste) */
+
       #resultsTable tr:nth-child(even) {
-        background-color: #f1faff;  /* Celeste chiaro */
+        background-color: #f1faff;
       }
       #resultsTable tr:nth-child(odd) {
-        background-color: #ffffff;  /* Bianco */
+        background-color: #ffffff;
       }
-    
-      /* Stile per le celle */
+
       #resultsTable th, #resultsTable td {
         padding: 10px;
         text-align: left;
-        border: 1px solid #d1d1d1;  /* Linee grigie tra le celle */
+        border: 1px solid #d1d1d1;
       }
-    
-      /* Header con colore di sfondo e testo centrato */
+
       #resultsTable th {
         background-color: #e2e2e2;
         font-weight: bold;
-      }
-    
-      /* Separazione verticale tra le righe e orizzontale tra le celle */
-      #resultsTable td, #resultsTable th {
-        border: 1px solid #d1d1d1; /* Aggiungi linee di separazione grigie */
       }
     </style>
 
     <br><br><br>
     <div id="resultsContainer" style="margin-top: 20px;">
-      <table id="resultsTable" style="width: 100%; border-collapse: collapse;">
+      <table id="resultsTable">
         <thead style="position: sticky; top: 0; background-color: #f1f1f1; z-index: 1;">
           <tr>
-            <th style="padding: 8px; text-align: center;">Nome prodotto</th>
-            <th style="padding: 8px; text-align: center;">Barcode</th>
-            <th style="padding: 8px; text-align: center;">Quantita</th>
-            <th style="padding: 8px; text-align: center;">Data insert</th>
-            <th style="padding: 8px; text-align: center ;">Scadenza</th>
-            <th style="padding: 8px; text-align: center ;">Data consumo</th>
-            <th style="padding: 8px; text-align: center ;">Stato</th>
-            <th style="padding: 8px; text-align: center;">Azione</th>
+            <th style="text-align: center;">Nome prodotto</th>
+            <th style="text-align: center;">Barcode</th>
+            <th style="text-align: center;">Quantità</th>
+            <th style="text-align: center;">Data insert</th>
+            <th style="text-align: center;">Scadenza</th>
+            <th style="text-align: center;">Data consumo</th>
+            <th style="text-align: center;">Stato</th>
+            <th style="text-align: center;">Azione</th>
           </tr>
         </thead>
-        <tbody id="selectedProductsBody" style="max-height: 300px; overflow-y: auto;">
+        <tbody id="selectedProductsBody">
           <!-- I risultati verranno inseriti qui dinamicamente -->
         </tbody>
       </table>
     </div>
-
-  
   </div>
+
 </div>
 
 
@@ -485,7 +485,7 @@ let selectedProducts = [];
 
 // ✅ Funzione comune per ottenere i record e popolare la tabella
 function fetchAndDisplayRecords(productName, inserito = '', scadenza = '') {
-  let url = `/consumed/get_records?nome=${encodeURIComponent(productName)}`;
+  let url = `/consumed/get_records?name=${encodeURIComponent(productName)}`;
   if (inserito) url += `&ins_date=${encodeURIComponent(inserito)}`;
   if (scadenza) url += `&expiry_date=${encodeURIComponent(scadenza)}`;
 
@@ -516,7 +516,7 @@ input.addEventListener('input', function () {
     return;
   }
 
-  fetch(`/consumed/search?q=${encodeURIComponent(query)}`)
+  fetch(`/products/unconsumed?q=${encodeURIComponent(query)}`)
     .then(response => response.json())
     .then(results => {
       suggestions.innerHTML = '';
@@ -555,11 +555,18 @@ input.addEventListener('input', function () {
 
 // 🟡 Dropdown a tendina (selezione nome prodotto)
 dropdown.addEventListener('change', function () {
-  const selectedName = this.value;
-  if (selectedName) {
-    fetchAndDisplayRecords(selectedName); // <-- solo nome, nessuna data
+  const selectedValue = this.value;
+  if (selectedValue) {
+    const [barcode, ins_date, expiry_date] = selectedValue.split('|');
+
+    // Inserisce il barcode nel campo ricerca
+    input.value = barcode;
+
+    // Lancia la fetch usando i tre parametri
+    fetchAndDisplayRecords(barcode, ins_date, expiry_date);
   }
 });
+
 
 // ✅ Aggiorna la tabella con i prodotti selezionati
 function updateSelectedTable() {
@@ -666,6 +673,55 @@ function showSuccessMessage() {
 }
 </script>
 
+<script>
+  function populateProductDropdown() {
+    fetch("/products/unconsumed_dropdown")
+      .then(res => res.json())
+      .then(products => {
+        const dropdown = document.getElementById("productDropdown");
+        dropdown.innerHTML = '<option value="">Seleziona un prodotto...</option>';
+
+        products.forEach(p => {
+          const expiry = p.expiry_date ? p.expiry_date : "n.d.";
+
+          const option = document.createElement("option");
+          // ✅ value: concatenazione chiave univoca
+          option.value = `${p.barcode}|${p.ins_date}|${p.expiry_date || 'null'}`;
+          // ✅ testo visibile: nome prodotto e date
+          option.text = `${p.name} - ${p.ins_date} / ${expiry}`;
+          dropdown.appendChild(option);
+        });
+
+        dropdown.addEventListener("change", () => {
+          const selectedValue = dropdown.value;
+          if (!selectedValue) return;
+
+          const [barcode, ins_date, expiry_date_raw] = selectedValue.split('|');
+          const expiry_date = expiry_date_raw === 'null' ? '' : expiry_date_raw;
+
+          // ✅ fetch basata su barcode, ins_date, expiry_date
+          const url = `/consumed/get_by_unique?barcode=${encodeURIComponent(barcode)}&ins_date=${encodeURIComponent(ins_date)}&expiry_date=${encodeURIComponent(expiry_date)}`;
+
+          fetch(url)
+            .then(res => res.json())
+            .then(data => {
+              if (data.success && Array.isArray(data.data) && data.data.length > 0) {
+                selectedProducts.push(data.data[0]);
+                updateSelectedTable();
+              } else {
+                console.warn("⚠️ Nessun record trovato per:", barcode, ins_date, expiry_date);
+              }
+            })
+            .catch(err => console.error("❌ Errore fetch prodotto selezionato:", err));
+        });
+      })
+      .catch(err => console.error("❌ Errore nel caricamento dropdown:", err));
+  }
+
+  document.addEventListener("DOMContentLoaded", () => {
+    populateProductDropdown();
+  });
+</script>
 
 
 {% endblock %}
