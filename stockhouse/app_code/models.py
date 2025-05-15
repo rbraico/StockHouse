@@ -479,7 +479,8 @@ def get_product_by_name_and_dates(name, ins_date, expiry_date=None):
     conn = sqlite3.connect(Config.DATABASE_PATH)
     cur = conn.cursor()
 
-    if expiry_date:  # Se la data di scadenza è fornita
+    if expiry_date and expiry_date.lower() not in ("null", ""):   # Se la data di scadenza è fornita
+        debug_print("get_product_by_name_and_dates - Data di scadenza fornita")
         query = """
             SELECT tf.id, pd.name, tf.barcode, tf.quantity, tf.ins_date, tf.expiry_date, tf.consume_date, tf.status
             FROM transaction_fact tf
@@ -488,6 +489,7 @@ def get_product_by_name_and_dates(name, ins_date, expiry_date=None):
         """
         params = (name, ins_date, expiry_date)
     else:  # Se la data di scadenza non è fornita
+        debug_print("get_product_by_name_and_dates - Data di scadenza non fornita")
         query = """
             SELECT tf.id, pd.name, tf.barcode, tf.quantity, tf.ins_date, tf.expiry_date, tf.consume_date, tf.status
             FROM transaction_fact tf

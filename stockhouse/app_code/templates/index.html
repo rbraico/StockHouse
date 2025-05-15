@@ -557,13 +557,13 @@ input.addEventListener('input', function () {
 dropdown.addEventListener('change', function () {
   const selectedValue = this.value;
   if (selectedValue) {
-    const [barcode, ins_date, expiry_date] = selectedValue.split('|');
+    const [name, ins_date, expiry_date] = selectedValue.split('|');
 
-    // Inserisce il barcode nel campo ricerca
-    input.value = barcode;
+    // Inserisce il nome del prodotto nel campo ricerca
+    //input.value = name;
 
     // Lancia la fetch usando i tre parametri
-    fetchAndDisplayRecords(barcode, ins_date, expiry_date);
+    fetchAndDisplayRecords(name, ins_date, expiry_date);
   }
 });
 
@@ -686,7 +686,7 @@ function showSuccessMessage() {
 
           const option = document.createElement("option");
           // ✅ value: concatenazione chiave univoca
-          option.value = `${p.barcode}|${p.ins_date}|${p.expiry_date || 'null'}`;
+          option.value = `${p.name}|${p.ins_date}|${p.expiry_date || 'null'}`;
           // ✅ testo visibile: nome prodotto e date
           option.text = `${p.name} - ${p.ins_date} / ${expiry}`;
           dropdown.appendChild(option);
@@ -696,7 +696,7 @@ function showSuccessMessage() {
           const selectedValue = dropdown.value;
           if (!selectedValue) return;
 
-          const [barcode, ins_date, expiry_date_raw] = selectedValue.split('|');
+          const [name, ins_date, expiry_date_raw] = selectedValue.split('|');
           const expiry_date = expiry_date_raw === 'null' ? '' : expiry_date_raw;
 
           // ✅ fetch basata su barcode, ins_date, expiry_date
