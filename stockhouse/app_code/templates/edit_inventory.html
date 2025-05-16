@@ -141,16 +141,12 @@
               </div>
             
               <div class="col-5 form-check">
-                <!-- Campo nascosto: garantisce che user_override venga inviato anche se checkbox è deselezionata -->
-                <input type="hidden" name="user_override" value="0">
-            
-                <!-- Checkbox vera e propria -->
                 <input type="checkbox"
-                       class="form-check-input"
-                       id="user_override"
-                       name="user_override"
-                       value="1"
-                       {% if product.user_override == 1 or product.user_override == '1' %}checked{% endif %}>
+                      class="form-check-input"
+                      id="user_override"
+                      name="user_override"
+                      value="1"
+                      {% if product.user_override == 1 or product.user_override == '1' %}checked{% endif %}>
                 <label for="user_override" class="form-check-label">Attiva</label>
               </div>
             </div>

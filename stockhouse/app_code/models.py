@@ -866,9 +866,27 @@ def get_product_inventory_by_barcode(barcode):
     
     return product  # ⬅️ Restituisce direttamente il singolo prodotto
 
+
+# Funzione che cancella i record di transazione più vecchi di 365 giorni
+def clean_old_transactions():
+    debug_print("clean_old_transactions")
+    
+    conn = sqlite3.connect(Config.DATABASE_PATH)
+    cur = conn.cursor()
+
+    # Cancella record con consume_date più vecchia di 365 giorni rispetto ad oggi
+    cur.execute("""
+        DELETE FROM transaction_fact
+        WHERE consume_date IS NOT NULL
+        AND julianday('now') - julianday(consume_date) > 365
+    """)
+
+    conn.commit()
+    conn.close()
+
 # Funzione per aggiornare i parametri di inventario
-def update_inventory_parameters():
-    debug_print("update_inventory_parameters")
+def update_inventory_mean_usage_time():
+    debug_print("update_inventory_mean_usage_time")
 
     conn = sqlite3.connect(Config.DATABASE_PATH)
     cur = conn.cursor()
@@ -894,6 +912,50 @@ def update_inventory_parameters():
                 SET mean_usage_time = ?
                 WHERE barcode = ? and user_override = 1
             """, (mean_usage_time, barcode))
+
+    conn.commit()
+    conn.close()
+
+# Funzione per aggiornare i parametri di inventario reorder_frequency
+def update_reorder_frequency():
+    debug_print("update_reorder_frequency")
+
+    conn = sqlite3.connect(Config.DATABASE_PATH)
+    cur = conn.cursor()
+
+    # Prendi tutti i barcode con override attivo
+    cur.execute("""
+        SELECT DISTINCT barcode
+        FROM inventory
+        WHERE user_override = 1
+    """)
+    barcodes = [row[0] for row in cur.fetchall()]
+
+    for barcode in barcodes:
+        # Prendi tutte le ins_date ordinate
+        cur.execute("""
+            SELECT ins_date
+            FROM transaction_fact
+            WHERE barcode = ?
+            ORDER BY ins_date ASC
+        """, (barcode,))
+        rows = cur.fetchall()
+
+        # Calcola le differenze tra date successive
+        dates = [datetime.strptime(r[0], "%Y-%m-%d") for r in rows if r[0]]
+        if len(dates) < 2:
+            continue
+
+        gaps = [(dates[i+1] - dates[i]).days for i in range(len(dates)-1)]
+        avg_gap = int(sum(gaps) / len(gaps)) if gaps else None
+
+        if avg_gap:
+            debug_print(f"Updating barcode {barcode} with reorder_frequency: {avg_gap}")
+            cur.execute("""
+                UPDATE inventory
+                SET reorder_frequency = ?
+                WHERE barcode = ? AND user_override = 1
+            """, (avg_gap, barcode))
 
     conn.commit()
     conn.close()
@@ -927,9 +989,9 @@ def sync_inventory_fact_with_products():
     for product_key, barcode in missing_products:
         cur.execute("""
             INSERT INTO inventory (
-                product_key, barcode
-            ) VALUES (?, ?)
-        """, (product_key, barcode))
+                product_key, barcode, user_override
+            ) VALUES (?, ?, ?)
+        """, (product_key, barcode, 1))
 
     if missing_products:
         conn.commit()

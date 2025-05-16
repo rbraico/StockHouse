@@ -5,8 +5,8 @@ from stockhouse.app_code.models import add_product_dim, add_transaction_fact, de
                        lookup_category_by_item, update_transaction_fact, update_transaction_fact_consumed, get_products_by_name, get_expiring_products, get_shopping_list_data, insert_consumed_fact, \
                        get_number_expiring_products, get_out_of_stock_count, get_critical_stock_count, get_monthly_consumed_count, get_reorder_count_from_shopping_list, get_reorder_total_cost, \
                        get_current_week, get_week_date_range, get_product_by_name_and_dates, get_expiring_products_for_home, get_out_of_stock_products, get_critical_stock, get_monthly_consumed_statistics, \
-                       upsert_budget, get_budget, update_inventory_parameters, get_inventory_advanced, update_inventory_advanced_options, get_unconsumed_products_full_list, get_shopping_list_data, \
-                       get_reorder_count_from_shopping_list, get_reorder_total_cost, get_unique_unconsumed_record
+                       upsert_budget, get_budget, update_inventory_mean_usage_time, get_inventory_advanced, update_inventory_advanced_options, get_unconsumed_products_full_list, get_shopping_list_data, \
+                       get_reorder_count_from_shopping_list, get_reorder_total_cost, get_unique_unconsumed_record, clean_old_transactions, update_reorder_frequency
 from stockhouse.app_code.models import add_shop, update_shop, delete_shop  
 from stockhouse.app_code.models import add_category, get_all_categories, update_category, delete_category, get_all_items, update_item, delete_item
 import sqlite3
@@ -284,8 +284,11 @@ def delete_product(id):
 @main.route('/inventory')
 def list_inventory():
 
-    update_inventory_parameters()
-    products = get_product_inventory()
+    clean_old_transactions                  # 🧽 Step 1: pulizia
+    update_inventory_mean_usage_time()           # 🧠 Step 2: calcolo mean_usage_time
+    update_reorder_frequency()              # 🔄 Step 3: calcolo reorder_frequency
+    products = get_product_inventory()      # 🏭 Step 4 - Seleziona i records per l'inventario
+
     #debug_print ("Show_Product in inventory: ", products)
 
     return render_template("inventory.html", products=products)
@@ -306,12 +309,16 @@ def update_inventory():
     debug_print("update_inventory Request Form Data: ", request.form)
 
     int_fields = ["min_quantity", "max_quantity", "security_quantity", "reorder_point", "mean_usage_time", "user_override"]
-
+    debug_print("update_inventory: ", request.form)
+    # Ottiene i valori dei campi salvati nel form di modifica
     data = {"barcode": request.form.get("barcode")}
 
     for field in int_fields:
-        value = request.form.get(field)
-        data[field] = int(value) if value and value.isdigit() else None
+        if field == "user_override":
+            data[field] = 1 if request.form.get(field) == "1" else 0
+        else:
+            value = request.form.get(field)
+            data[field] = int(value) if value and value.isdigit() else None
 
     data["reorder_frequency"] = request.form.get("reorder_frequency")
 
@@ -927,24 +934,24 @@ def budget():
      return render_template("budget.html", budget_record=budget_record)
 
 
-# Questa route serve per visualizzare i prodotti avanzati
-@main.route('/inventory/advanced/data')
-def inventory_advanced_data():
-    expense_products = get_inventory_advanced()
-    debug_print("inventory_advanced_data - Prodotti avanzati: ", expense_products)
-    return jsonify(expense_products)
+# Questa route serve per visualizzare i parametri avanzati di inventory
+#@main.route('/inventory/advanced/data')
+#def inventory_advanced_data():
+#    advanced_inventory = get_inventory_advanced()
+#    debug_print("inventory_advanced_data - Prodotti avanzati: ", advanced_inventory)
+#    return jsonify(advanced_inventory)
 
 
 # Funzione per calcolare il livello di priorità in base alla stagione
 @main.route('/inventory/advanced')
 def inventory_advanced():
     # Ottieni i prodotti avanzati tramite la funzione del modello
-    expense_products = get_inventory_advanced()
+    advanced_inventory = get_inventory_advanced()
 
-    debug_print("inventory_advanced - Prodotti avanzati: ", expense_products)
+    debug_print("inventory_advanced - Prodotti avanzati: ", advanced_inventory)
 
     # Renderizza la pagina e passa i prodotti alla template
-    return render_template("inventory.html", products=expense_products)
+    return render_template("inventory.html", products=advanced_inventory)
 
 # Questa route serve per visualizzare i prodotti avanzati
 @main.route('/inventory/advanced/update', methods=['POST'])
