@@ -2,11 +2,11 @@ from flask import Blueprint, render_template, request, redirect, flash, url_for,
 from stockhouse.app_code.barcode import lookup_barcode
 from stockhouse.app_code.models import add_product_dim, add_transaction_fact, delete_product_from_db,  lookup_products, get_all_products, get_all_shops, get_all_categories, get_all_items, lookup_products_by_name,\
                        lookup_products_by_name_ins_date, update_product_dim, get_product_inventory, get_product_inventory_by_barcode, upsert_inventory, search_unconsumed_products_db, \
-                       lookup_category_by_item, update_transaction_fact, update_transaction_fact_consumed, get_products_by_name, get_expiring_products, get_shopping_list_data, insert_consumed_fact, \
-                       get_number_expiring_products, get_out_of_stock_count, get_critical_stock_count, get_monthly_consumed_count, get_reorder_count_from_shopping_list, get_reorder_total_cost, \
-                       get_current_week, get_week_date_range, get_product_by_name_and_dates, get_expiring_products_for_home, get_out_of_stock_products, get_critical_stock, get_monthly_consumed_statistics, \
-                       upsert_budget, get_budget, update_inventory_mean_usage_time, get_inventory_advanced, update_inventory_advanced_options, get_unconsumed_products_full_list, get_shopping_list_data, \
-                       get_reorder_count_from_shopping_list, get_reorder_total_cost, get_unique_unconsumed_record, clean_old_transactions, update_reorder_frequency
+                       lookup_category_by_item, update_transaction_fact, update_transaction_fact_consumed, get_products_by_name, get_expiring_products, insert_consumed_fact, \
+                       get_number_expiring_products, get_out_of_stock_count, get_critical_stock_count, get_monthly_consumed_count, \
+                       get_week_date_range, get_product_by_name_and_dates, get_expiring_products_for_home, get_out_of_stock_products, get_critical_stock, get_monthly_consumed_statistics, \
+                       upsert_budget, get_budget, update_inventory_mean_usage_time, get_inventory_advanced, update_inventory_advanced_options, get_unconsumed_products_full_list,  \
+                       get_unique_unconsumed_record, clean_old_transactions, update_reorder_frequency
 from stockhouse.app_code.models import add_shop, update_shop, delete_shop  
 from stockhouse.app_code.models import add_category, get_all_categories, update_category, delete_category, get_all_items, update_item, delete_item
 import sqlite3
@@ -17,6 +17,17 @@ from flask import send_from_directory
 import os
 from config import Config
 from stockhouse.utils import debug_print
+from stockhouse.shopping_list_utils import (
+    get_current_week,
+    get_week_date_range,
+    is_last_week_with_25,
+    get_shopping_list_data,
+    get_budget_info,
+    get_total_spesa_corrente,
+    get_reorder_count_from_shopping_list,
+    get_reorder_total_cost,
+    get_suggested_products,
+    generate_monthly_shopping_list)
 
 main = Blueprint('main', __name__)
 
@@ -497,16 +508,6 @@ def shops():
     return render_template("shops.html", shop_list=shop_list, last_shop=last_shop)
 
 
-@main.route('/delete_shop/<int:shop_id>')
-def delete_shop(shop_id):
-    conn = sqlite3.connect(Config.DATABASE_PATH)
-    c = conn.cursor()
-    c.execute("DELETE FROM shop_list WHERE id = ?", (shop_id,))
-    conn.commit()
-    conn.close()
-    flash("Negozio eliminato.", "success")
-    return redirect(url_for('main.shops'))
-
 @main.route('/edit_shop/<int:shop_id>', methods=['GET', 'POST'])
 def edit_shop(shop_id):
     conn = sqlite3.connect(Config.DATABASE_PATH)
@@ -719,30 +720,46 @@ def home_out_of_stock_products():
         "records": [[p["name"], p["barcode"], p["category"]] for p in products]
     })
 
+
+
+
 # Questa route serve per visualizzare la lista della spesa
 @main.route('/shopping_list')
 def shopping_list():
-    # Legge il numero di settimana dal parametro GET, altrimenti usa quella corrente
-    #week_number = get_current_week()  
-
+    # Legge il numero della settimana dal parametro GET
     week_param = request.args.get('week')
     debug_print("shopping_list week_param: ", week_param)
 
-    if week_param is None or not week_param.isdigit():  # Se non c'è o non è valido, prendi la settimana corrente
-        week_number = get_current_week()
-    else:  # Se c'è un parametro valido, usalo
-        week_number = int(week_param)
-
-
+    week_number = int(week_param) if week_param and week_param.isdigit() else get_current_week()
     debug_print("shopping_list week_number: ", week_number)
 
-    # Ottieni i dati filtrati per la settimana selezionata
-    items, shop_totals = get_shopping_list_data(week_number)
+    # Verifica se è la settimana di reintegro
+    last_week_restock = is_last_week_with_25(week_number)
+
+    # Verifica se la lista mensile è già stata generata (guardando la insert_date)
+    conn = sqlite3.connect(Config.DATABASE_PATH)
+    cursor = conn.cursor()
+    current_month = datetime.today().strftime("%Y-%m")
+    cursor.execute("SELECT COUNT(*) FROM shopping_list WHERE strftime('%Y-%m', insert_date) = ?", (current_month,))
+    already_generated = cursor.fetchone()[0] > 0
+    conn.close()
+
+    debug_print("shopping_list - Lista mensile già generata: ", already_generated)
+    if not already_generated:
+        debug_print("Lista mensile non trovata. Generazione in corso...")
+        generate_monthly_shopping_list()
+    else:
+        debug_print("Lista mensile già generata.")
+
+    # Recupera dati della lista spesa per la settimana corrente, SENZA salvare di nuovo
+    items, shop_totals = get_shopping_list_data(week_number, last_week_restock, save_to_db=False)
+
+    # Recupera i prodotti suggeriti
+    suggested_items = get_suggested_products()
 
     # Calcola intervallo di date
     start_date, end_date = get_week_date_range(week_number)
-
-    if start_date is None or end_date is None:
+    if not start_date or not end_date:
         return render_template(
             'shopping_list.html',
             items=[],
@@ -753,7 +770,7 @@ def shopping_list():
             selected_week=week_number
         )
 
-    # Genera tutte le settimane del mese per il dropdown
+    # Recupera le settimane del mese corrente per il dropdown
     def generate_weeks_for_month():
         today = datetime.today()
         first_day = today.replace(day=1)
@@ -772,6 +789,11 @@ def shopping_list():
 
     weeks = generate_weeks_for_month()
 
+    # Recupera budget, spesa effettuata, residuo
+    budget, budget_date = get_budget_info()
+    spesa_corrente = get_total_spesa_corrente()
+    budget_residuo = round(budget - spesa_corrente, 2)
+
     return render_template(
         'shopping_list.html',
         items=items,
@@ -779,9 +801,84 @@ def shopping_list():
         start_date=start_date.strftime('%A %d %B %Y'),
         end_date=end_date.strftime('%A %d %B %Y'),
         weeks=weeks,
-        selected_week=week_number
+        selected_week=week_number,
+        suggested_items=suggested_items,
+        budget=budget,
+        spesa_corrente=spesa_corrente,
+        budget_residuo=budget_residuo
     )
 
+
+@main.route('/shopping_list/add_selected', methods=['POST'])
+def add_selected_products():
+    try:
+        data = request.get_json()
+        debug_print("🔍 Dati ricevuti:", data)
+
+        barcodes = data.get('barcodes')
+        if not barcodes:
+            return "Nessun barcode ricevuto", 400
+
+        conn = sqlite3.connect(Config.DATABASE_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        for barcode in barcodes:
+            # Verifica se è già nella lista
+            cursor.execute("SELECT 1 FROM shopping_list WHERE barcode = ?", (barcode,))
+            if cursor.fetchone():
+                continue
+            debug_print("add_selected_products - barcode: ", barcode)       
+
+            # Recupera i dati per quel barcode
+            cursor.execute("""
+                SELECT pd.name, pd.shop, tf.price
+                FROM product_dim pd
+                JOIN (
+                    SELECT barcode, price
+                    FROM (
+                        SELECT barcode, price, ins_date,
+                            ROW_NUMBER() OVER (PARTITION BY barcode ORDER BY ins_date DESC) AS rn
+                        FROM transaction_fact
+                    ) AS ranked
+                    WHERE rn = 1
+                ) AS tf ON pd.barcode = tf.barcode
+                WHERE pd.barcode = ?
+            """, (barcode,))
+
+            row = cursor.fetchone()
+            if not row:
+                continue  # se il barcode non esiste in product_dim, salta
+     
+            # Inserisce nella lista
+            try:
+                week_number = get_current_week()
+                cursor.execute("""
+                    INSERT INTO shopping_list (barcode, product_name, quantity_to_buy, shop, reason, price, week_number) )
+                    VALUES (?, ?, ?, ?, ?, ?)
+                """, (barcode, row["name"], 1, row["shop"], "Sotto scorta", row["price"], week_number))
+                 
+            except Exception as insert_error:
+                debug_print("❌ Errore durante INSERT:", str(insert_error))
+
+        conn.commit()
+          
+        # Ricarica la nuova lista 
+        cursor.execute("""
+            SELECT barcode, product_name, quantity_to_buy, shop, reason, price
+            FROM shopping_list
+            ORDER BY shop, product_name
+        """)
+
+        updated_items = cursor.fetchall()
+        conn.close()
+  
+        return render_template('shopping_list_table.html', items=updated_items)
+
+    except Exception as e:
+        conn.rollback()
+        print("❌ Errore nella route add_selected_products:", str(e))
+        return "Errore interno", 500
 
 
 #Mainpage - Calcola il numero dei prodotti in scadenza
@@ -887,7 +984,10 @@ def home_reorder_products():
     print("[DEBUG] Route /home_reorder_products chiamata")
       
     # Recupera i prodotti da riordinare
-    items, shop_totals = get_shopping_list_data(get_current_week())
+       # Verifica se è la settimana di reintegro
+    week_number = get_current_week()
+    last_week_restock = is_last_week_with_25(week_number)
+    items, shop_totals = get_shopping_list_data(week_number, last_week_restock)
     debug_print("home_reorder_producs - Prodotti coda riordinare: ", items)
  
     # Se non ci sono prodotti, restituisci un messaggio vuoto

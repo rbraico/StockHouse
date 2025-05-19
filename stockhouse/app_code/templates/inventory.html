@@ -156,7 +156,8 @@
               <select id="filterTipoProdotto">
                 <option value="">Mostra Tutti</option>
                 <option value="Indispensabile">Indispensabile</option>
-                <option value="Opzionale">Opzionale</option>
+                <option value="Utile">Utile</option>
+                <option value="Occasionale">Occasionale</option>
                 <option value="Stagionale">Stagionale</option>
               </select>
             </th>
@@ -180,14 +181,16 @@
                 <td>
                   <select class="tipo-prodotto">
                     <option value="Indispensabile">Indispensabile</option>
-                    <option value="Opzionale">Opzionale</option>
+                    <option value="Utile">Utile</option>
+                    <option value="Occasionale">Occasionale</option>
                     <option value="Stagionale">Stagionale</option>
                   </select>
                 </td>
                 <td>
                   <select class="tipo-prodotto">
                     <option value="Indispensabile">Indispensabile</option>
-                    <option value="Opzionale">Opzionale</option>
+                    <option value="Utile">Utile</option>
+                    <option value="Occasionale">Occasionale</option>
                     <option value="Stagionale">Stagionale</option>
                   </select>
                 </td>
@@ -296,7 +299,8 @@
                 <select class="tipo-prodotto">
                   <option value="" ${!product.product_type ? "selected" : ""} disabled>-- Seleziona --</option>
                   <option value="Indispensabile" ${product.product_type === "Indispensabile" ? "selected" : ""}>Indispensabile</option>
-                  <option value="Opzionale" ${product.product_type === "Opzionale" ? "selected" : ""}>Opzionale</option>
+                  <option value="Utile" ${product.product_type === "Utile" ? "selected" : ""}>Utile</option>
+                  <option value="Occasionale" ${product.product_type === "Occasionale" ? "selected" : ""}>Occasionale</option>
                   <option value="Stagionale" ${product.product_type === "Stagionale" ? "selected" : ""}>Stagionale</option>
                 </select>
               </td>
@@ -441,7 +445,8 @@
                 <select class="tipo-prodotto">
                   <option value="" ${!product.product_type ? "selected" : ""} disabled>-- Seleziona --</option>
                   <option value="Indispensabile" ${product.product_type === "Indispensabile" ? "selected" : ""}>Indispensabile</option>
-                  <option value="Opzionale" ${product.product_type === "Opzionale" ? "selected" : ""}>Opzionale</option>
+                  <option value="Utile" ${product.product_type === "Utile" ? "selected" : ""}>Utile</option>
+                  <option value="Occasionale" ${product.product_type === "Occasionale" ? "selected" : ""}>Occasionale</option>
                   <option value="Stagionale" ${product.product_type === "Stagionale" ? "selected" : ""}>Stagionale</option>
                 </select>
               </td>

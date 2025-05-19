@@ -98,7 +98,8 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             budget INTEGER,  
             note TEXT,
-            budget_ins_date TEXT
+            budget_ins_date TEXT,
+            bilancio_precedente INTEGER
             )
     """)
     conn.commit()
@@ -112,6 +113,24 @@ def init_db():
             seasons TEXT, 
             priority_level INTEGER -- Valore da 1 (alta priorita`) a 3 (bassa priorita`) viene settato in automatico, funzione di product_type e seasons
             )
+    """)
+
+    conn.commit()
+
+
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS shopping_list (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            barcode TEXT,
+            product_name TEXT,
+            quantity_to_buy INTEGER,
+            shop TEXT,
+            reason TEXT,
+            price REAL,
+            week_number INTEGER,
+            insert_date DATE,
+            FOREIGN KEY (barcode) REFERENCES product_dim(barcode)
+        )
     """)
 
     conn.commit()
@@ -1000,6 +1019,12 @@ def sync_inventory_fact_with_products():
     conn.close()
 
 
+def to_int_or_none(value):
+    print(f"Valore ricevuto: '{value}' → tipo: {type(value)}")
+    try:
+        return int(str(value).strip())
+    except (TypeError, ValueError):
+        return None
 
 
 def upsert_inventory(data):
@@ -1016,18 +1041,22 @@ def upsert_inventory(data):
     record_exists = cur.fetchone()[0] > 0
 
     if record_exists:
-        # Se il record esiste, esegui l'UPDATE
         cur.execute("""
             UPDATE inventory
             SET min_quantity = ?, max_quantity = ?, security_quantity = ?, reorder_point = ?, 
                 mean_usage_time = ?, reorder_frequency = ?, user_override = ?
             WHERE barcode = ?
         """, (
-            data['min_quantity'], data['max_quantity'], data['security_quantity'], 
-            data['reorder_point'], data['mean_usage_time'], data['reorder_frequency'], 
-            data['user_override'], data['barcode']
+            to_int_or_none(data['min_quantity']),
+            to_int_or_none(data['max_quantity']),
+            to_int_or_none(data['security_quantity']),
+            to_int_or_none(data['reorder_point']),
+            to_int_or_none(data['mean_usage_time']),
+            to_int_or_none(data['reorder_frequency']),
+            data['user_override'],
+            data['barcode']
         ))
-        debug_print(f"Record con barcode {data['barcode']} aggiornato.")
+
     else:
         # Se il record non esiste, esegui l'INSERT
         cur.execute("""
@@ -1036,10 +1065,16 @@ def upsert_inventory(data):
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             product_key,
-            data['barcode'], data['min_quantity'], data['max_quantity'], data['security_quantity'], 
-            data['reorder_point'], data['mean_usage_time'], data['reorder_frequency'], data['user_override']
+            data['barcode'],
+            to_int_or_none(data['min_quantity']),
+            to_int_or_none(data['max_quantity']),
+            to_int_or_none(data['security_quantity']),
+            to_int_or_none(data['reorder_point']),
+            to_int_or_none(data['mean_usage_time']),
+            to_int_or_none(data['reorder_frequency']),
+            data['user_override']
         ))
-        debug_print(f"Nuovo record con barcode {data['barcode']} inserito.")
+
 
     conn.commit()
     conn.close()
@@ -1312,22 +1347,7 @@ def get_expiring_products_for_home(months):
 
 
 
-# Calcola il numero della settimana corrente
-def get_current_week():
-    today = datetime.today().date()
-    first_day_of_month = today.replace(day=1)
 
-    # Trova il lunedì della settimana che contiene il primo giorno del mese
-    start_of_first_week = first_day_of_month - timedelta(days=first_day_of_month.weekday())
-
-    # Calcola la distanza in giorni tra oggi e l'inizio della prima settimana
-    days_difference = (today - start_of_first_week).days
-
-    # Settimana reale = ogni 7 giorni da quel primo lunedì
-    week_number = days_difference // 7 + 1
-
-    debug_print(f"Numero settimana corrente: {week_number}, Giorno corrente: {today.day}, Primo giorno del mese: {first_day_of_month.day}")
-    return week_number
 
 
 
@@ -1349,117 +1369,12 @@ def get_week_date_range(week_number):
 
     return start_date, end_date
 
-# Mainpage, calcola la lista della spesa
-def get_shopping_list_data(week_number):
-    conn = sqlite3.connect(Config.DATABASE_PATH)
-    conn.row_factory = sqlite3.Row
-    cursor = conn.cursor()
-
-    # Debug: stampa il numero della settimana
-    debug_print(f"get_shopping_list_data - Numero settimana corrente: {week_number}")
 
 
-    # Query per la settimana 1: Ripristino delle scorte pesanti
-    if week_number == 1:
-        query = """
-                SELECT 
-                    i.product_key, 
-                    i.barcode, 
-                    tf.quantity,
-                    i.min_quantity, 
-                    i.max_quantity, 
-                    i.security_quantity, 
-                    i.reorder_point, 
-                    i.mean_usage_time, 
-                    i.reorder_frequency,
-                    pd.name,
-                    pd.shop,
-                    tf.price,
-                    totals.tot
-                FROM inventory i
-                JOIN product_dim pd ON i.barcode = pd.barcode
-                JOIN transaction_fact tf ON i.barcode = tf.barcode
-                JOIN (
-                    SELECT barcode, SUM(quantity) AS tot
-                    FROM transaction_fact
-                    GROUP BY barcode
-                ) AS totals ON i.barcode = totals.barcode
-                WHERE  
-                    (i.reorder_point IS NOT NULL AND i.reorder_point > 0)
-                    AND (
-                        COALESCE(NULLIF(i.reorder_frequency, ''), i.mean_usage_time) >= 30 
-                        OR totals.tot < i.security_quantity 
-                        OR totals.tot < i.reorder_point 
-                    ) GROUP BY i.barcode
-        """
-    else:
-        # Query per le settimane 2, 3 e 4: Prodotti esauriti o sotto quantità minima
-        query = """
-            SELECT 
-                i.product_key, 
-                i.barcode, 
-                tf.quantity,
-                i.min_quantity, 
-                i.max_quantity, 
-                pd.name,
-                pd.shop,
-                tf.price
-            FROM 
-                inventory i
-            JOIN 
-                transaction_fact tf ON i.barcode = tf.barcode
-            JOIN
-                product_dim pd ON i.barcode = pd.barcode
-            WHERE 
-                tf.quantity = 0 
-                OR tf.quantity < i.min_quantity
-                OR COALESCE(NULLIF(i.reorder_frequency, ''), i.mean_usage_time) < 15
-        """
 
-    cursor.execute(query)
-    rows = cursor.fetchall()
-    conn.close()
 
-    items = []
-    shop_totals = {}
 
-    for row in rows:
-        # Calcola la quantità da acquistare
-    
-        if (row['quantity'] is not None and row['max_quantity'] is not None and row['max_quantity'] != ''):
-              quantity_to_buy = max(row['max_quantity'] - row['quantity'], 1)
-        else:
-              quantity_to_buy = 1
 
-        # Calcola il motivo
-        motivo = "Riordino programmato"
-        if week_number == 1:
-            if row['quantity'] is not None and row['security_quantity'] is not None and row['quantity'] < row['security_quantity']:
-                motivo = "Sotto scorta"
-            elif row['quantity'] is not None and row['reorder_point'] is not None and row['quantity'] < row['reorder_point']:
-                motivo = "Vicino al punto di riordino"
-            elif row['mean_usage_time'] is not None and row['mean_usage_time'] > 15:
-                motivo = "Consumo rapido"
-        else:
-            motivo = "Esaurito" if row['quantity'] == 0 else "Sotto quantità minima"
-
-        # Crea l'oggetto prodotto
-        item = {
-            "product_name": row['name'],
-            "quantity_to_buy": quantity_to_buy,
-            "store_name": row['shop'],
-            "motivo": motivo,
-            "price": row['price'] or 0  # se price è NULL
-        }
-        items.append(item)
-
-        # Calcolo totale spesa per negozio
-        if item["store_name"]:
-            if item["store_name"] not in shop_totals:
-                shop_totals[item["store_name"]] = 0
-            shop_totals[item["store_name"]] += quantity_to_buy * item["price"]
-
-    return items, shop_totals
 
 # Mainpage, calcola il numero dei prodotti che scadono nel mese corrente
 def get_number_expiring_products():
@@ -1676,25 +1591,6 @@ def get_monthly_consumed_statistics():
     return products
 
 
-
-# Mainpage, calcola il numero dei prodotti che sono da riordinare
-def get_reorder_count_from_shopping_list():
-    # Usa la funzione esistente per ottenere i dati della lista della spesa
-    items, _ = get_shopping_list_data(get_current_week())  # Considera la prima settimana del mese
-    return len(items)  # Restituisce il numero totale di prodotti
-
-# Mainpage, calcola il costo totale dei prodotti da riordinare
-def get_reorder_total_cost():
-    # Usa la funzione esistente per ottenere i dati della lista della spesa
-    items, _ = get_shopping_list_data(get_current_week())  # Considera la prima settimana del mese
-    total_cost = 0
-
-    # Calcola il costo totale
-    for item in items:
-        total_cost += item["quantity_to_buy"] * item["price"]  # Prezzo totale per il prodotto
-
-    return round(total_cost, 2)  # Arrotonda a due decimali
-
 # Budget - Setta il budget mensile. La tabella prevede un solo record
 def upsert_budget(id, budget, note):
     
@@ -1722,8 +1618,8 @@ def upsert_budget(id, budget, note):
         # Se il record non esiste, esegui l'INSERT
         debug_print("Record non esistente, esegui l'INSERT")
         cur.execute("""
-            INSERT INTO budget_config (id, budget, note, budget_ins_date)
-            VALUES (?, ?, ?, CURRENT_DATE)
+            INSERT INTO budget_config (id, budget, note, budget_ins_date, bilancio_precedente)
+            VALUES (?, ?, ?, CURRENT_DATE, 0)
         """, (id, budget, note)
         )
  
@@ -1762,66 +1658,58 @@ def get_budget():
 
 # Funzione per calcolare il livello di priorità in base alla stagione
 def get_priority_level(product_type, product_seasons):
-    # 1. Mappa delle stagioni disposte "a croce"
-    seasons_circle = ['primavera', 'estate', 'autunno', 'invern']
+    seasons_circle = ['primavera', 'estate', 'autunno', 'inverno']
     debug_print("get_priority_level - product_type: ", product_type, "product_seasons: ", product_seasons)
-
-    # Fallback
-
 
     if not product_type:
         return 3
 
-    # 2. Se è un prodotto indispensabile → priorità 1 fissa
-    if product_type.lower() == 'indispensabile':
+    tipo = product_type.lower()
+
+    # 1. Indispensabile → priorità 1 fissa
+    if tipo == 'indispensabile':
         return 1
-    
 
-    if product_seasons.lower() == 'tutte':
-        if product_type.lower() == 'indispensabile':
-            return 1
-        elif product_type.lower() == 'opzionale':
-            return 2
+    # 2. Utile → priorità 2 fissa
+    if tipo == 'utile':
+        return 2
+
+    # 3. Occasionale → priorità 4 fissa (bassa)
+    if tipo == 'occasionale':
+        return 4
+
+    # 4. Stagionale → dipende dalla stagione
+    if tipo == 'stagionale':
+        month = datetime.now().month
+        if month in [3, 4, 5]:
+            current_season = 'primavera'
+        elif month in [6, 7, 8]:
+            current_season = 'estate'
+        elif month in [9, 10, 11]:
+            current_season = 'autunno'
         else:
-            return 3
+            current_season = 'inverno'
 
-    
-    # 3. Ottieni la stagione corrente
-    month = datetime.now().month
-    if month in [3, 4, 5]:
-        current_season = 'primavera'
-    elif month in [6, 7, 8]:
-        current_season = 'estate'
-    elif month in [9, 10, 11]:
-        current_season = 'autunno'
-    else:
-        current_season = 'inverno'
+        product_seasons = [s.strip().lower() for s in product_seasons.split(',') if s.strip()]
+        curr_index = seasons_circle.index(current_season)
 
-    # 4. Parsing delle stagioni valide per il prodotto
-    product_seasons = [s.strip().lower() for s in product_seasons.split(',') if s.strip()]
+        distances = []
+        for season in product_seasons:
+            if season in seasons_circle:
+                season_index = seasons_circle.index(season)
+                distance = min((season_index - curr_index) % 4, (curr_index - season_index) % 4)
+                if distance == 0:
+                    distances.append(3)  # Stagione corrente → priorità 3
+                elif distance == 1:
+                    distances.append(4)  # Vicina → priorità 4
+                else:
+                    distances.append(5)  # Lontana → ignorabile per ora
 
-    # 5. Calcola distanza stagionale
-    curr_index = seasons_circle.index(current_season)
-    
-    # Trova la distanza minima tra la stagione attuale e le stagioni valide
-    distances = []
-    for season in product_seasons:
-        if season in seasons_circle:
-            season_index = seasons_circle.index(season)
-            # Distanza circolare
-            distance = min((season_index - curr_index) % 4, (curr_index - season_index) % 4)
-            # Mappa: distanza 0 → 1, distanza 1 → 2, distanza 2 → 3
-            if distance == 0:
-                distances.append(1)
-            elif distance == 1:
-                distances.append(2)
-            elif distance == 2:
-                distances.append(3)
-            else:
-                distances.append(3)  # caso estremo: opposta
+        return min(distances) if distances else 5
 
-    # 6. Restituisci il livello minimo trovato, oppure 3 se nessuna stagione combacia
-    return min(distances) if distances else 3
+    # Fallback
+    return 3
+
 
 
 # Funzione per ottenere l'inventario avanzato
