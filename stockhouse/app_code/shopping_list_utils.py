@@ -1,8 +1,40 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 import sqlite3
 from stockhouse.app_code.models import get_week_date_range
 from config import Config  # usa il path corretto se è diverso
 from stockhouse.utils import debug_print
+
+
+
+# Funzione per calcolare il numero della decade corrente
+def get_current_decade(today=None):
+    today = today or date.today()
+    day = today.day
+    if day <= 10:
+        return 1
+    elif day <= 20:
+        return 2
+    else:
+        return 3
+
+def format_decade_label(decade_number):
+    labels = {
+        1: "1ª Decade (1-10)",
+        2: "2ª Decade (11-20)",
+        3: "3ª Decade (21-31)"
+    }
+    return labels.get(decade_number, "Decade sconosciuta")
+
+
+# Funzione per calcolare il budget per la decade corrente
+def get_budget_for_decade(total_budget, decade):
+    # Distribuzione modificabile come vuoi
+    budget_distribution = {
+        1: 0.30,  # 30% del budget nella 1ª decade
+        2: 0.30,  # 30% nella 2ª
+        3: 0.40   # 40% nell'ultima
+    }
+    return round(total_budget * budget_distribution.get(decade, 0), 2)
 
 
 
@@ -155,7 +187,7 @@ def generate_monthly_shopping_list():
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
 
-    # Controlla se la lista è già stata generata per questo mese
+    # Controlla se ci sono già dati per questo mese
     cursor.execute("""
         SELECT COUNT(*) as count FROM shopping_list
         WHERE strftime('%Y-%m', insert_date) = ?
@@ -163,45 +195,21 @@ def generate_monthly_shopping_list():
     result = cursor.fetchone()
 
     if result['count'] > 0:
-        debug_print("La lista per questo mese è già stata generata. Nessuna azione necessaria.")
+        debug_print("⚠️ La lista per questo mese è già stata generata. Nessuna azione necessaria.")
         conn.close()
         return
 
-    debug_print("Nessuna lista trovata per il mese corrente. Procedo con la generazione...")
+    debug_print("✅ Nessuna lista trovata per il mese corrente. Procedo con la generazione...")
 
-    for week_number in range(1, 5):
-        is_restock_week = (week_number == 4)
-        items, _ = get_shopping_list_data(
-            week_number=week_number,
-            is_restock_week=is_restock_week,
-            save_to_db=True,
-            conn=conn,
-            cursor=cursor
-        )
-        debug_print(f"Lista spesa per la settimana {week_number}: {len(items)} prodotti")
-        
-        for item in items:
-            cursor.execute("""
-                INSERT INTO shopping_list (
-                    barcode, product_name, quantity_to_buy,
-                    shop, reason, price, week_number, insert_date
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                item["barcode"],
-                item["product_name"],
-                item["quantity_to_buy"],
-                item["shop"],
-                item["reason"],
-                item["price"] or 0,
-                week_number,
-                today
-            ))
-        debug_print(f"✔️ Inseriti {len(items)} prodotti per la settimana {week_number} (Restock: {is_restock_week})")
+    # Genera per ogni decade, passando il parametro
+    for decade in ["D1", "D2", "D3"]:
+        debug_print(f"Generazione lista per {decade}...")
+        items, _ = get_shopping_list_data(save_to_db=True, conn=conn, cursor=cursor, decade=decade)
+        debug_print(f"✔️ Inseriti {len(items)} prodotti per la {decade}")
 
     conn.commit()
     conn.close()
-    debug_print("✅ Lista spesa mensile completata con successo.")
-
+    debug_print("🎯 Lista spesa mensile completata con successo.")
 
 
 def safe_int(value):
@@ -214,152 +222,154 @@ def safe_int(value):
 
 
 
+# Funzione per ottenere i dati della lista della spesa
+def get_shopping_list_data(save_to_db=False, conn=None, cursor=None, decade=None):
+    def get_current_decade(today=None):
+        today = today or datetime.today()
+        day = today.day
+        if day <= 10:
+            return "D1"
+        elif day <= 20:
+            return "D2"
+        else:
+            return "D3"
 
-
-# Mainpage, calcola la lista della spesa della settimana corrente
-def get_shopping_list_data(week_number, is_restock_week=False, save_to_db=False,  conn=None, cursor=None):
- 
- 
+    external_connection = False
     if conn is None or cursor is None:
         conn = sqlite3.connect(Config.DATABASE_PATH, timeout=10)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
-        external_connection = False
-    else:
         external_connection = True
- 
-    
-    debug_print(f"get_shopping_list_data - week_number: {week_number}, is_restock_week: {is_restock_week}")
 
-    if save_to_db:
-        # Cancella solo i dati della settimana corrente
-        cursor.execute("DELETE FROM shopping_list WHERE week_number = ?", (week_number,))
-        conn.commit()
+    # Usa decade passata oppure calcola quella corrente
+    decade = decade or get_current_decade()
+    debug_print(f"📆 Decade corrente/elaborata: {decade}")
 
-    debug_print(f"get_shopping_list_data - Numero settimana corrente: {week_number}")
-    debug_print(f"is_restock_week: {is_restock_week}")
+    # Recupera il budget totale dal DB
+    cursor.execute("SELECT budget FROM budget_config LIMIT 1")
+    row = cursor.fetchone()
+    monthly_budget = row["budget"] if row else 0
 
-    if is_restock_week:
+    # Percentuali budget per decade
+    if decade == "D1":
+        budget = monthly_budget * 0.15
+    elif decade == "D2":
+        budget = monthly_budget * 0.30
+    else:
+        budget = monthly_budget * 0.55
+
+    debug_print(f"💰 Budget disponibile per la {decade}: {budget:.2f}")
+
+    # Query specifica per decade
+    if decade == "D3":
+        # Ultima decade: reintegro scorte a lunga conservazione o ad alta priorità
         query = """
             SELECT 
-                i.product_key, 
-                i.barcode, 
-                MAX(tf.quantity) as quantity,
-                i.min_quantity, 
-                i.max_quantity, 
-                i.security_quantity, 
-                i.reorder_point, 
-                i.mean_usage_time, 
-                i.reorder_frequency,
-                pd.name,
-                pd.shop,
-                tf.price,
-                totals.tot
+                i.barcode,
+                MAX(tf.quantity) AS quantity,
+                i.reorder_point, i.min_quantity, i.max_quantity, i.security_quantity,
+                pd.name, pd.shop, tf.price,
+                adv.product_type, adv.priority_level
             FROM inventory i
-            JOIN product_dim pd ON i.barcode = pd.barcode
             JOIN transaction_fact tf ON i.barcode = tf.barcode
-            JOIN (
-                SELECT barcode, SUM(quantity) AS tot
-                FROM transaction_fact
-                GROUP BY barcode
-            ) AS totals ON i.barcode = totals.barcode
-            WHERE  
-                (i.reorder_point IS NOT NULL AND i.reorder_point > 0)
-                AND (
-                    COALESCE(NULLIF(i.reorder_frequency, ''), i.mean_usage_time) >= 30 
-                    OR totals.tot < i.security_quantity 
-                    OR totals.tot < i.reorder_point 
-                ) 
+            JOIN product_dim pd ON i.barcode = pd.barcode
+            JOIN inventory_advanced_options adv ON i.barcode = adv.barcode
+            WHERE i.max_quantity > 0 AND tf.quantity < i.reorder_point
             GROUP BY i.barcode
+            ORDER BY adv.priority_level DESC
         """
     else:
+        # Prime due decadi: prodotti freschi e indispensabili
         query = """
             SELECT 
-                i.product_key, 
-                i.barcode, 
-                MAX(tf.quantity) as quantity,
-                i.min_quantity, 
-                i.max_quantity, 
-                i.security_quantity,
-                i.reorder_point,
-                i.mean_usage_time,
-                pd.name,
-                pd.shop,
-                tf.price
+                i.barcode,
+                MAX(tf.quantity) AS quantity,
+                i.reorder_point, i.min_quantity, i.max_quantity, i.security_quantity,
+                pd.name, pd.shop, tf.price,
+                adv.product_type, adv.priority_level
             FROM inventory i
             JOIN transaction_fact tf ON i.barcode = tf.barcode
             JOIN product_dim pd ON i.barcode = pd.barcode
-            WHERE 
-                tf.quantity = 0 
-                OR tf.quantity < i.min_quantity
-                OR COALESCE(NULLIF(i.reorder_frequency, ''), i.mean_usage_time) < 15
+            JOIN inventory_advanced_options adv ON i.barcode = adv.barcode
+            WHERE i.max_quantity > 0
             GROUP BY i.barcode
+            HAVING (
+                (adv.product_type = "Indispensabile" AND quantity < i.security_quantity)
+                OR
+                (adv.product_type = "Fresco" AND quantity < i.min_quantity)
+            )
+            ORDER BY adv.priority_level DESC
         """
 
     cursor.execute(query)
     rows = cursor.fetchall()
-    if not save_to_db:
-        conn.close()
 
     items = []
     shop_totals = {}
+    total_cost = 0
 
     for row in rows:
-        if (row['quantity'] is not None and row['max_quantity'] is not None and row['max_quantity'] != ''):
-            quantity_to_buy = max(row['max_quantity'] - row['quantity'], 1)
-        else:
-            quantity_to_buy = 1
+        barcode = row["barcode"]
+        product_name = row["name"]
+        shop = row["shop"]
+        price = row["price"] or 0
+        quantity = safe_int(row["quantity"])
+        max_q = safe_int(row["max_quantity"])
+        min_q = safe_int(row["min_quantity"])
+        sec_q = safe_int(row["security_quantity"])
+        reorder_point = safe_int(row["reorder_point"])
+        product_type = row["product_type"]
+        quantity_to_buy = 1
+        reason = ""
 
-        quantity = safe_int(row['quantity'])
-        security_quantity = safe_int(row['security_quantity'])
-        reorder_point = safe_int(row['reorder_point'])
-        mean_usage_time = safe_int(row['mean_usage_time'])
+        if decade == "D3":
+            quantity_to_buy = max(max_q - quantity, 1)
+            reason = "Reintegro scorte"
+        elif product_type == "Indispensabile" and quantity < sec_q:
+            quantity_to_buy = max(sec_q - quantity, 1)
+            reason = "Sotto scorta"
+        elif product_type == "Fresco" and quantity < min_q:
+            quantity_to_buy = max(min_q - quantity, 1)
+            reason = "Da consumare"
 
-        if is_restock_week:
-            # Prima converti i valori
-            motivo = "Riordino programmato"
-            if quantity is not None and security_quantity is not None and quantity < security_quantity:
-                motivo = "Sotto scorta"
-            elif quantity is not None and reorder_point is not None and quantity < reorder_point:
-                motivo = "Vicino al punto di riordino"
-            elif mean_usage_time is not None and mean_usage_time > 15:
-                motivo = "Consumo rapido"
-        else:
-            motivo = "Esaurito" if quantity == 0 else "Sotto quantità minima"
+        product_cost = quantity_to_buy * price
+        if total_cost + product_cost > budget:
+            debug_print("❌ Raggiunto il limite di budget")
+            break
+
+        total_cost += product_cost
 
         item = {
-            "barcode": row['barcode'],
-            "product_name": row['name'],
+            "barcode": barcode,
+            "product_name": product_name,
             "quantity_to_buy": quantity_to_buy,
-            "shop": row['shop'],
-            "reason": motivo,
-            "price": row['price'] or 0,
-            "week_number": week_number
+            "shop": shop,
+            "reason": reason,
+            "price": price,
+            "decade_number": decade
         }
         items.append(item)
 
-        if item["shop"]:
-            shop_totals.setdefault(item["shop"], 0)
-            shop_totals[item["shop"]] += quantity_to_buy * item["price"]
+        if shop:
+            shop_totals.setdefault(shop, 0)
+            shop_totals[shop] += product_cost
 
     if save_to_db:
+        cursor.execute("DELETE FROM shopping_list WHERE decade_number = ?", (decade,))
         for item in items:
             cursor.execute("""
-                INSERT INTO shopping_list (barcode, product_name, quantity_to_buy, shop, reason, price, week_number, insert_date)
-                VALUES (?, ?, ?, ?, ?, ?, ?, DATE('now'))
+                INSERT INTO shopping_list (
+                    barcode, product_name, quantity_to_buy,
+                    shop, reason, price, decade_number, insert_date
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, DATE('now'))
             """, (
-                item["barcode"],
-                item["product_name"],
-                item["quantity_to_buy"],
-                item["shop"],
-                item["reason"],
-                item["price"],
-                week_number
+                item["barcode"], item["product_name"], item["quantity_to_buy"],
+                item["shop"], item["reason"], item["price"], item["decade_number"]
             ))
         conn.commit()
 
-        if not external_connection:
-            conn.close()
+    if external_connection:
+        conn.close()
 
     return items, shop_totals
 
@@ -370,13 +380,13 @@ def get_shopping_list_data(week_number, is_restock_week=False, save_to_db=False,
 # Mainpage, calcola il numero dei prodotti che sono da riordinare
 def get_reorder_count_from_shopping_list():
     # Usa la funzione esistente per ottenere i dati della lista della spesa
-    items, _ = get_shopping_list_data(get_current_week())  # Considera la prima settimana del mese
+    items, _ = get_shopping_list_data()  # Considera la prima settimana del mese
     return len(items)  # Restituisce il numero totale di prodotti
 
 # Mainpage, calcola il costo totale dei prodotti da riordinare
 def get_reorder_total_cost():
     # Usa la funzione esistente per ottenere i dati della lista della spesa
-    items, _ = get_shopping_list_data(get_current_week())  # Considera la prima settimana del mese
+    items, _ = get_shopping_list_data()  # Considera la prima settimana del mese
     total_cost = 0
 
     # Calcola il costo totale
