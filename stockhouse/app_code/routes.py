@@ -1062,3 +1062,22 @@ def products_advanced():
     #debug_print("get_expense_products - Prodotti: ", inventory_advanced)
 
     return jsonify({"found": bool(inventory_advanced), "products": inventory_advanced})
+
+# Questa route serve per visualizzare i prodotti avanzati per Node Red
+@main.route('/api/shopping_list/current', methods=['GET'])
+def get_current_shopping_list():
+    current_decade = get_current_decade(datetime.today())
+    conn = sqlite3.connect(Config.DATABASE_PATH)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    
+    cursor.execute("""
+        SELECT barcode, product_name, quantity_to_buy, shop, reason, price, decade_number
+        FROM shopping_list
+        WHERE decade_number = ?
+    """, (f"D{current_decade}",))
+    
+    items = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    
+    return jsonify(items)

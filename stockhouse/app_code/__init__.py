@@ -10,6 +10,7 @@ def create_app():
     from stockhouse.app_code.routes import main
     app.register_blueprint(main)
 
+
     init_db()
 
     return app

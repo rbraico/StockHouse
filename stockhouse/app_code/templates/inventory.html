@@ -89,10 +89,14 @@
 <div class="tab-content mt-3">
 
   <!-- 📋 Prodotti in Magazzino-->
+<div class="tab-content mt-3">
+
+  <!-- 📋 Prodotti in Magazzino-->
   <div class="tab-pane fade show active" id="list" role="tabpanel" aria-labelledby="list-tab">
     <div class="table-container">
       <table class="table table-bordered custom-table">
         <thead class="table-dark">
+          <!-- Prima riga: intestazioni con tooltip -->
           <tr>
             <th title="Immagine del prodotto">Prodotto</th>
             <th title="Nome del prodotto">Nome</th>
@@ -107,6 +111,32 @@
             <th title="Frequenza con cui riordinare il prodotto (giorni)">Frequenza Riordino</th>
             <th title="Parametri aggiornati automaticamente">Aggiornamento Automatico</th>
             <th title="Azioni che puoi eseguire sul prodotto">Azioni</th>
+          </tr>
+          <!-- Seconda riga: filtri -->
+          <tr>
+            <th></th>
+            <th>
+              <select id="filterName" class="form-select form-select-sm">
+                <option value="">Tutti</option>
+                <!-- Opzioni da popolare dinamicamente -->
+              </select>
+            </th>
+            <th>
+              <select id="filterCategory" class="form-select form-select-sm">
+                <option value="">Tutte</option>
+                <!-- Opzioni da popolare dinamicamente -->
+              </select>
+            </th>
+            <th></th>
+            <th></th>
+            <th></th>
+            <th></th>
+            <th></th>
+            <th></th>
+            <th></th>
+            <th></th>
+            <th></th>
+            <th></th>
           </tr>
         </thead>
         <tbody>
@@ -139,6 +169,8 @@
       </table>
     </div>
   </div>
+</div>
+
 
   <!-- ⚙️ Impostazioni avanzate ottimizzazione spesa -->
   <div class="tab-pane fade" id="add" role="tabpanel" aria-labelledby="add-tab">
@@ -208,6 +240,53 @@
   </div>
 
 </div>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  const filterName = document.getElementById("filterName");
+  const filterCategory = document.getElementById("filterCategory");
+  const table = document.querySelector(".custom-table tbody");
+
+  function getUniqueValues(index) {
+    const values = new Set();
+    for (const row of table.rows) {
+      const text = row.cells[index].textContent.trim();
+      if (text && text !== "-") values.add(text);
+    }
+    return Array.from(values).sort();
+  }
+
+  function populateDropdown(dropdown, values) {
+    for (const val of values) {
+      const option = document.createElement("option");
+      option.value = val;
+      option.textContent = val;
+      dropdown.appendChild(option);
+    }
+  }
+
+  function filterTable() {
+    const nameVal = filterName.value.toLowerCase();
+    const categoryVal = filterCategory.value.toLowerCase();
+
+    for (const row of table.rows) {
+      const nameText = row.cells[1].textContent.toLowerCase();
+      const categoryText = row.cells[2].textContent.toLowerCase();
+      const matchName = !nameVal || nameText === nameVal;
+      const matchCategory = !categoryVal || categoryText === categoryVal;
+      row.style.display = (matchName && matchCategory) ? "" : "none";
+    }
+  }
+
+  // Popola i dropdown al caricamento
+  populateDropdown(filterName, getUniqueValues(1));     // colonna Nome
+  populateDropdown(filterCategory, getUniqueValues(2)); // colonna Categoria
+
+  // Aggiungi listener per il filtro
+  filterName.addEventListener("change", filterTable);
+  filterCategory.addEventListener("change", filterTable);
+});
+</script>
 
 <script>
   function autoFillProduct() {
