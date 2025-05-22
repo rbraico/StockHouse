@@ -17,7 +17,7 @@ from flask import send_from_directory
 import os
 from config import Config
 from stockhouse.utils import debug_print
-from stockhouse.shopping_list_utils import (
+from stockhouse.app_code.shopping_list_utils import (
     get_current_week,
     get_week_date_range,
     is_last_week_with_25,
@@ -27,9 +27,19 @@ from stockhouse.shopping_list_utils import (
     get_reorder_count_from_shopping_list,
     get_reorder_total_cost,
     get_suggested_products,
-    generate_monthly_shopping_list)
+    generate_monthly_shopping_list,
+    get_current_decade,
+    format_decade_label)
 
 main = Blueprint('main', __name__)
+
+
+@main.route('/')
+def homepage():
+    decade_number = get_current_decade()
+    current_decade_label = format_decade_label(decade_number)
+    return render_template('home.html', current_decade=current_decade_label)
+
 
 @main.route('/api/system/db-changed-time')
 def fake_db_changed_time():
@@ -726,17 +736,15 @@ def home_out_of_stock_products():
 # Questa route serve per visualizzare la lista della spesa
 @main.route('/shopping_list')
 def shopping_list():
-    # Legge il numero della settimana dal parametro GET
-    week_param = request.args.get('week')
-    debug_print("shopping_list week_param: ", week_param)
+    # Legge il numero della decade dal parametro GET
+    decade_param = request.args.get('decade')
+    debug_print("shopping_list decade_param: ", decade_param)
 
-    week_number = int(week_param) if week_param and week_param.isdigit() else get_current_week()
-    debug_print("shopping_list week_number: ", week_number)
+    # Se non specificata, usa la decade corrente
+    selected_decade = decade_param or get_current_decade()
+    debug_print("Decade selezionata: ", selected_decade)
 
-    # Verifica se è la settimana di reintegro
-    last_week_restock = is_last_week_with_25(week_number)
-
-    # Verifica se la lista mensile è già stata generata (guardando la insert_date)
+    # Verifica se la lista mensile è già stata generata
     conn = sqlite3.connect(Config.DATABASE_PATH)
     cursor = conn.cursor()
     current_month = datetime.today().strftime("%Y-%m")
@@ -751,43 +759,18 @@ def shopping_list():
     else:
         debug_print("Lista mensile già generata.")
 
-    # Recupera dati della lista spesa per la settimana corrente, SENZA salvare di nuovo
-    items, shop_totals = get_shopping_list_data(week_number, last_week_restock, save_to_db=False)
+    # Recupera i dati della lista spesa per la decade selezionata
+    items, shop_totals = get_shopping_list_data(decade=selected_decade)
 
     # Recupera i prodotti suggeriti
     suggested_items = get_suggested_products()
 
-    # Calcola intervallo di date
-    start_date, end_date = get_week_date_range(week_number)
-    if not start_date or not end_date:
-        return render_template(
-            'shopping_list.html',
-            items=[],
-            shop_totals={},
-            start_date="Settimana non valida",
-            end_date="",
-            weeks=[],
-            selected_week=week_number
-        )
-
-    # Recupera le settimane del mese corrente per il dropdown
-    def generate_weeks_for_month():
-        today = datetime.today()
-        first_day = today.replace(day=1)
-        weeks = []
-        num = 1
-
-        while True:
-            s_date, e_date = get_week_date_range(num)
-            if s_date.month != first_day.month and s_date > first_day:
-                break
-            label = f"Settimana {num} ({s_date.strftime('%d/%m')} - {e_date.strftime('%d/%m')})"
-            weeks.append((num, label))
-            num += 1
-
-        return weeks
-
-    weeks = generate_weeks_for_month()
+    # Dropdown delle decadi (fisso)
+    decades = [
+        ("D1", "1ª Decade (1-10)"),
+        ("D2", "2ª Decade (11-20)"),
+        ("D3", "3ª Decade (21-31)")
+    ]
 
     # Recupera budget, spesa effettuata, residuo
     budget, budget_date = get_budget_info()
@@ -798,15 +781,14 @@ def shopping_list():
         'shopping_list.html',
         items=items,
         shop_totals=shop_totals,
-        start_date=start_date.strftime('%A %d %B %Y'),
-        end_date=end_date.strftime('%A %d %B %Y'),
-        weeks=weeks,
-        selected_week=week_number,
+        decades=decades,
+        selected_decade=selected_decade,
         suggested_items=suggested_items,
         budget=budget,
         spesa_corrente=spesa_corrente,
         budget_residuo=budget_residuo
     )
+
 
 
 @main.route('/shopping_list/add_selected', methods=['POST'])

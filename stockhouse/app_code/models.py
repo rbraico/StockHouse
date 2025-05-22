@@ -127,7 +127,7 @@ def init_db():
             shop TEXT,
             reason TEXT,
             price REAL,
-            week_number INTEGER,
+            decade_number TEXT,
             insert_date DATE,
             FOREIGN KEY (barcode) REFERENCES product_dim(barcode)
         )

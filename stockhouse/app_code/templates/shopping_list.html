@@ -3,12 +3,12 @@
 {% block content %}
 <h2 class="text-center">🍭️ Lista della Spesa</h2>
 <br>
-<!-- Filtro settimana -->
+<!-- Filtro decade -->
 <form method="get" class="mb-3 text-center">
-    <label for="weekSelect" class="form-label fw-bold me-2">Seleziona Settimana:</label>
-    <select name="week" id="weekSelect" class="form-select d-inline-block w-auto">
-        {% for number, label in weeks %}
-            <option value="{{ number }}" {% if number == selected_week %}selected{% endif %}>
+    <label for="decadeSelect" class="form-label fw-bold me-2">Seleziona Decade:</label>
+    <select name="decade" id="decadeSelect" class="form-select d-inline-block w-auto">
+        {% for number, label in decades %}
+            <option value="{{ number }}" {% if number == selected_decade %}selected{% endif %}>
                 {{ label }}
             </option>
         {% endfor %}
