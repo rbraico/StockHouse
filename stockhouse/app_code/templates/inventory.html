@@ -96,52 +96,41 @@
     <div class="table-container">
       <table class="table table-bordered custom-table">
         <thead class="table-dark">
-          <!-- Prima riga: intestazioni con tooltip -->
           <tr>
-            <th title="Immagine del prodotto">Prodotto</th>
-            <th title="Nome del prodotto">Nome</th>
-            <th title="Categoria del prodotto">Categoria</th>
-            <th title="Prezzo per unità del prodotto">Prezzo</th>
-            <th title="Quantità attuale in magazzino">Quantita` Attuale</th>
-            <th title="Quantità minima per il prodotto">Scorta Minima</th>
-            <th title="Quantità massima per il prodotto">Scorta Massima</th>
-            <th title="Quantità di sicurezza per evitare rotture di stock">Scorta Sicurezza</th>
-            <th title="Punto in cui bisogna riordinare il prodotto">Punto di Riordino</th>
-            <th title="Tempo medio di consumo del prodotto (giorni)">Tempo Consumo Medio</th>
-            <th title="Frequenza con cui riordinare il prodotto (giorni)">Frequenza Riordino</th>
-            <th title="Parametri aggiornati automaticamente">Aggiornamento Automatico</th>
-            <th title="Azioni che puoi eseguire sul prodotto">Azioni</th>
+            <th>Prodotto</th>
+            <th>Nome</th>
+            <th>Categoria</th>
+            <th>Prezzo</th>
+            <th>Quantita` Attuale</th>
+            <th>Scorta Minima</th>
+            <th>Scorta Massima</th>
+            <th>Scorta Sicurezza</th>
+            <th>Punto di Riordino</th>
+            <th>Tempo Consumo Medio</th>
+            <th>Frequenza Riordino</th>
+            <th>Aggiornamento Automatico</th>
+            <th>Azioni</th>
           </tr>
-          <!-- Seconda riga: filtri -->
           <tr>
             <th></th>
             <th>
               <select id="filterName" class="form-select form-select-sm">
                 <option value="">Tutti</option>
-                <!-- Opzioni da popolare dinamicamente -->
+                <!-- Opzioni popolate via JS -->
               </select>
             </th>
             <th>
               <select id="filterCategory" class="form-select form-select-sm">
                 <option value="">Tutte</option>
-                <!-- Opzioni da popolare dinamicamente -->
+                <!-- Opzioni popolate via JS -->
               </select>
             </th>
-            <th></th>
-            <th></th>
-            <th></th>
-            <th></th>
-            <th></th>
-            <th></th>
-            <th></th>
-            <th></th>
-            <th></th>
-            <th></th>
+            <th colspan="10"></th>
           </tr>
         </thead>
         <tbody>
           {% for product in products %}
-          <tr>
+          <tr data-barcode="{{ product.barcode }}">
             <td>
               {% if product.image %}
                 <img src="{{ product.image }}" alt="Immagine prodotto" style="max-width: 80px; height: auto;">
@@ -153,15 +142,37 @@
             <td>{{ product.category or "-" }}</td>
             <td>€{{ product.price or "0.00" }}</td>
             <td>{{ product.quantity_in_inventory or "-" }}</td>
-            <td>{{ product.min_quantity or "-" }}</td>
-            <td>{{ product.max_quantity or "-" }}</td>
-            <td>{{ product.security_quantity or "-" }}</td>
-            <td>{{ product.reorder_point or "-" }}</td>
-            <td>{{ product.mean_usage_time or "-" }}</td>
-            <td>{{ product.reorder_frequency or "-" }}</td>
-            <td>{{ 'Sì' if product.user_override == 1 else 'No' }}</td>
             <td>
-              <a href="{{ url_for('main.edit_inventory', barcode=product.barcode) }}" class="btn btn-sm btn-warning">✏️ Modifica</a>
+              <input type="number"  min="0" class="form-control form-control-sm inline-edit" data-field="min_quantity"
+                value="{{ product.min_quantity or '' }}">
+            </td>
+            <td>
+              <input type="number"  min="0" class="form-control form-control-sm inline-edit" data-field="max_quantity"
+                value="{{ product.max_quantity or '' }}">
+            </td>
+            <td>
+              <input type="number"  min="0" class="form-control form-control-sm inline-edit" data-field="security_quantity"
+                value="{{ product.security_quantity or '' }}">
+            </td>
+            <td>
+              <input type="number"  min="0" class="form-control form-control-sm inline-edit" data-field="reorder_point"
+                value="{{ product.reorder_point or '' }}">
+            </td>
+            <td>
+              <input type="number"  min="0" class="form-control form-control-sm inline-edit mean-usage" data-field="mean_usage_time"
+                value="{{ product.mean_usage_time or '' }}">
+            </td>
+            <td>
+              <input type="number"  min="0" class="form-control form-control-sm inline-edit reorder-freq" data-field="reorder_frequency"
+                value="{{ product.reorder_frequency or '' }}">
+            </td>
+            <td>
+              <input type="checkbox" class="form-check-input auto-update-checkbox"
+                data-field="user_override"
+                {% if product.user_override == 1 %}checked{% endif %}>
+            </td>
+            <td>
+              <button class="btn btn-sm btn-success save-row-btn" style="display:none;">💾 Salva</button>
             </td>
           </tr>
           {% endfor %}
@@ -170,78 +181,196 @@
     </div>
   </div>
 </div>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  // Gestione readonly dei campi consumo medio e frequenza riordino
+  document.querySelectorAll('.auto-update-checkbox').forEach(function (checkbox) {
+    const row = checkbox.closest('tr');
+    const meanUsage = row.querySelector('.mean-usage');
+    const reorderFreq = row.querySelector('.reorder-freq');
+    function toggleReadonly() {
+      const checked = checkbox.checked;
+      meanUsage.readOnly = checked;
+      reorderFreq.readOnly = checked;
+    }
+    checkbox.addEventListener('change', function () {
+      toggleReadonly();
+      showSave(row);
+    });
+    toggleReadonly();
+  });
+
+  // Mostra il tasto Salva quando una cella viene modificata
+  document.querySelectorAll('.inline-edit, .auto-update-checkbox').forEach(function (input) {
+    input.addEventListener('input', function () {
+      const row = input.closest('tr');
+      showSave(row);
+    });
+  });
+
+  // Gestione click sul tasto Salva
+  document.querySelectorAll('.save-row-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      const row = btn.closest('tr');
+      const barcode = row.dataset.barcode;
+      // Raccogli tutti i valori dei campi modificabili
+      const data = {
+        barcode: barcode,
+        min_quantity: row.querySelector('input[data-field="min_quantity"]').value,
+        max_quantity: row.querySelector('input[data-field="max_quantity"]').value,
+        security_quantity: row.querySelector('input[data-field="security_quantity"]').value,
+        reorder_point: row.querySelector('input[data-field="reorder_point"]').value,
+        mean_usage_time: row.querySelector('input[data-field="mean_usage_time"]').value,
+        reorder_frequency: row.querySelector('input[data-field="reorder_frequency"]').value,
+        user_override: row.querySelector('.auto-update-checkbox').checked ? 1 : 0
+      };
+
+      // Soft check logico
+      if (Number(data.min_quantity) > Number(data.max_quantity)) {
+        alert("La scorta minima deve essere inferiore alla scorta massima.");
+        return;
+      }
+      if (Number(data.security_quantity) >= Number(data.max_quantity)) {
+        alert("La scorta di sicurezza deve essere inferiore alla scorta massima.");
+        return;
+      }
+      if (Number(data.reorder_point) >= Number(data.max_quantity)) {
+        alert("Il punto di riordino deve essere inferiore alla scorta massima.");
+        return;
+      }
+
+      fetch('/inventory/update_inline', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      })
+      .then(res => res.json())
+      .then(data => {
+        btn.style.display = 'none';
+        let icon = document.createElement('span');
+        icon.style.fontSize = '1.5em';
+        icon.style.marginLeft = '5px';
+        if (data.success) {
+          icon.textContent = '😊';
+          icon.style.color = 'green';
+        } else {
+          icon.textContent = '😞';
+          icon.style.color = 'red';
+        }
+        btn.parentNode.appendChild(icon);
+        setTimeout(() => {
+          icon.remove();
+        }, 2000);
+      });
+    });
+  });
+
+  // Funzione per mostrare il tasto Salva
+  function showSave(row) {
+    const btn = row.querySelector('.save-row-btn');
+    if (btn) btn.style.display = '';
+  }
+});
+</script>
+
+<script>
+// Funzione per popolare i filtri dinamici TAB1  
+document.addEventListener("DOMContentLoaded", function () {
+  // ... (script inline editing già presente) ...
+
+  // --- FILTRI DINAMICI ---
+  function populateFilters() {
+    const nameSet = new Set();
+    const categorySet = new Set();
+    document.querySelectorAll('tbody tr').forEach(row => {
+      const name = row.children[1].textContent.trim();
+      const category = row.children[2].textContent.trim();
+      if (name) nameSet.add(name);
+      if (category) categorySet.add(category);
+    });
+
+    const filterName = document.getElementById('filterName');
+    const filterCategory = document.getElementById('filterCategory');
+    // Pulisci le opzioni tranne la prima
+    filterName.innerHTML = '<option value="">Tutti</option>';
+    filterCategory.innerHTML = '<option value="">Tutte</option>';
+
+    Array.from(nameSet).sort().forEach(name => {
+      filterName.innerHTML += `<option value="${name}">${name}</option>`;
+    });
+    Array.from(categorySet).sort().forEach(cat => {
+      filterCategory.innerHTML += `<option value="${cat}">${cat}</option>`;
+    });
+  }
+
+  function filterTable() {
+    const nameVal = document.getElementById('filterName').value;
+    const catVal = document.getElementById('filterCategory').value;
+    document.querySelectorAll('tbody tr').forEach(row => {
+      const name = row.children[1].textContent.trim();
+      const category = row.children[2].textContent.trim();
+      let show = true;
+      if (nameVal && name !== nameVal) show = false;
+      if (catVal && category !== catVal) show = false;
+      row.style.display = show ? '' : 'none';
+    });
+  }
+
+  populateFilters();
+
+  document.getElementById('filterName').addEventListener('change', filterTable);
+  document.getElementById('filterCategory').addEventListener('change', filterTable);
+});
+</script>
 
 
   <!-- ⚙️ Impostazioni avanzate ottimizzazione spesa -->
   <div class="tab-pane fade" id="add" role="tabpanel" aria-labelledby="add-tab">
     <div id="inventory-container"> 
-     <div class="table-container">
-      
-      <table class="table table-bordered custom-table" id="advanced-table">
-        <thead class="table-dark">
-          <tr>
-            <th>Prodotto</th>
-            <th>Barcode</th>
-            <th>Nome</th>
-            <th>
-              <label for="filterTipoProdotto">Tipo:</label>
-              <select id="filterTipoProdotto">
-                <option value="">Mostra Tutti</option>
-                <option value="Indispensabile">Indispensabile</option>
-                <option value="Utile">Utile</option>
-                <option value="Occasionale">Occasionale</option>
-                <option value="Stagionale">Stagionale</option>
-              </select>
-            </th>
-            <th>
-              <label for="filterStagione">Stagione:</label>
-              <select id="filterStagione">
-                <option value="">Mostra Tutti</option>
-                <option value="Primavera">Primavera</option>
-                <option value="Estate">Estate</option>
-                <option value="Autunno">Autunno</option>
-                <option value="Inverno">Inverno</option>
-                <option value="Tutte">Tutte</option>
-              </select>
-            </th>
-            <th>Priorità</th>
-            <th>Azioni</th>
-          </tr>
-        </thead>
-            <tbody>
-              <tr>
-                <td>
-                  <select class="tipo-prodotto">
-                    <option value="Indispensabile">Indispensabile</option>
-                    <option value="Utile">Utile</option>
-                    <option value="Occasionale">Occasionale</option>
-                    <option value="Stagionale">Stagionale</option>
-                  </select>
-                </td>
-                <td>
-                  <select class="tipo-prodotto">
-                    <option value="Indispensabile">Indispensabile</option>
-                    <option value="Utile">Utile</option>
-                    <option value="Occasionale">Occasionale</option>
-                    <option value="Stagionale">Stagionale</option>
-                  </select>
-                </td>
-
-                <td>✏️ Modifica</td>
-              </tr>
-              <!-- Altre righe generate da JS -->
-
-                      <!-- Sarà riempito da JavaScript -->
-
-            </tbody>
-          </table>
-        </div>
-     </div>   
+      <div class="table-container">
+        <table class="table table-bordered custom-table" id="advanced-table">
+          <thead class="table-dark">
+            <tr>
+              <th>Prodotto</th>
+              <th>Barcode</th>
+              <th>Nome</th>
+              <th>
+                <label for="filterTipoProdotto">Tipo:</label>
+                <select id="filterTipoProdotto">
+                  <option value="">Mostra Tutti</option>
+                  <option value="Indispensabile">Indispensabile</option>
+                  <option value="Utile">Utile</option>
+                  <option value="Occasionale">Occasionale</option>
+                  <option value="Stagionale">Stagionale</option>
+                </select>
+              </th>
+              <th>
+                <label for="filterStagione">Stagione:</label>
+                <select id="filterStagione">
+                  <option value="">Mostra Tutti</option>
+                  <option value="Primavera">Primavera</option>
+                  <option value="Estate">Estate</option>
+                  <option value="Autunno">Autunno</option>
+                  <option value="Inverno">Inverno</option>
+                  <option value="Tutte">Tutte</option>
+                </select>
+              </th>
+              <th>Priorità</th>
+              <th>Azioni</th>
+            </tr>
+          </thead>
+          <tbody>
+            <!-- Le righe verranno popolate dinamicamente via JavaScript -->
+          </tbody>
+        </table>
+      </div>
+    </div>   
   </div>
 
 </div>
 
 <script>
+// Funzione per popolare i filtri dinamici TAB2
 document.addEventListener("DOMContentLoaded", function () {
   const filterName = document.getElementById("filterName");
   const filterCategory = document.getElementById("filterCategory");
@@ -395,7 +524,7 @@ document.addEventListener("DOMContentLoaded", function () {
               </td>
               <td>${product.priority_level || "-"}</td>
               <td>
-                <button class="btn btn-sm btn-warning update-btn" data-barcode="${product.barcode}">✏️ Modifica</button>
+                <button class="btn btn-sm btn-success save-advanced-btn" style="display:none;" data-barcode="${product.barcode}">💾 Salva</button>
               </td>
             `;
             tbody.appendChild(row);
@@ -541,10 +670,69 @@ document.addEventListener("DOMContentLoaded", function () {
               </td>
               <td>${product.priority_level || "-"}</td>
               <td>
-                <button class="btn btn-sm btn-warning update-btn" data-barcode="${product.barcode}">✏️ Modifica</button>
+                <button class="btn btn-sm btn-success save-advanced-btn" style="display:none;" data-barcode="${product.barcode}">💾 Salva</button>
               </td>
             `;
             tbody.appendChild(row);
+
+            // Mostra il tasto Salva quando si cambia un select
+            row.querySelectorAll('.tipo-prodotto, .stagione').forEach(function(select) {
+              select.addEventListener('change', function() {
+                const saveBtn = row.querySelector('.save-advanced-btn');
+                if (saveBtn) saveBtn.style.display = '';
+              });
+            });
+
+
+            // Gestione click sul tasto Salva e faccine
+            row.querySelector('.save-advanced-btn').addEventListener('click', function() {
+              const saveBtn = this;
+              const product_type = row.querySelector('.tipo-prodotto').value;
+              const seasons = row.querySelector('.stagione').value;
+              const barcode = row.children[1].textContent.trim();
+
+              fetch("/inventory/advanced/update", {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/x-www-form-urlencoded",
+                  "X-Requested-With": "XMLHttpRequest"
+                },
+                body: new URLSearchParams({ barcode, product_type, seasons })
+              })
+              .then(response => response.json())
+              .then(data => {
+                saveBtn.style.display = 'none';
+                let icon = document.createElement('span');
+                icon.style.fontSize = '1.5em';
+                icon.style.marginLeft = '5px';
+                if (data.success) {
+                  icon.textContent = '😊';
+                  icon.style.color = 'green';
+                } else {
+                  icon.textContent = '😞';
+                  icon.style.color = 'red';
+                }
+                saveBtn.parentNode.appendChild(icon);
+                setTimeout(() => {
+                  icon.remove();
+                  if (data.success) fetchAdvancedTable(); // <-- ora qui!
+                }, 2000);
+              })
+              .catch(error => {
+                saveBtn.style.display = 'none';
+                let icon = document.createElement('span');
+                icon.textContent = '😞';
+                icon.style.color = 'red';
+                icon.style.fontSize = '1.5em';
+                icon.style.marginLeft = '5px';
+                saveBtn.parentNode.appendChild(icon);
+                setTimeout(() => {
+                  icon.remove();
+                }, 2000);
+              });
+            });
+
+
           });
 
           bindUpdateButtons();

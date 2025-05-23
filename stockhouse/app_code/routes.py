@@ -314,40 +314,32 @@ def list_inventory():
 
     return render_template("inventory.html", products=products)
 
-
-@main.route("/inventory/<barcode>", methods=["GET"])
-# Questa procedura apre e riempie il form per eseguire modifiche esclusivamente sui parametri di magazzino
-def edit_inventory(barcode):
-    # Recupera i dettagli del prodotto dal database
-    product = get_product_inventory_by_barcode(barcode)
-    #debug_print("edit_inventory: ", product)
-    return render_template("edit_inventory.html", product=product)
-
 # Questa procedura viene chiamata dal metodo POST dopo aver cliccato sul pulsante Modifica Parametri di Magazzino
-# Per inserire oppure modificare un record esistente nella tabella inventory
-@main.route("/update_inventory", methods=["POST"])
-def update_inventory():
-    debug_print("update_inventory Request Form Data: ", request.form)
+# Per inserire oppure modificare un record esistente nella tabella product_dim
+@main.route('/inventory/update_inline', methods=['POST'])
+def update_inventory_inline():
+    data = request.get_json()
+    barcode = data.get('barcode')
+    allowed_fields = [
+        'min_quantity', 'max_quantity', 'security_quantity',
+        'reorder_point', 'mean_usage_time', 'reorder_frequency', 'user_override'
+    ]
+    updates = []
+    values = []
+    for field in allowed_fields:
+        if field in data:
+            updates.append(f"{field} = ?")
+            values.append(data[field])
+    if not updates:
+        return jsonify(success=False, error="Nessun campo da aggiornare")
+    values.append(barcode)
+    conn = sqlite3.connect(Config.DATABASE_PATH)
+    cursor = conn.cursor()
+    cursor.execute(f"UPDATE inventory SET {', '.join(updates)} WHERE barcode = ?", values)
+    conn.commit()
+    conn.close()
+    return jsonify(success=True)
 
-    int_fields = ["min_quantity", "max_quantity", "security_quantity", "reorder_point", "mean_usage_time", "user_override"]
-    debug_print("update_inventory: ", request.form)
-    # Ottiene i valori dei campi salvati nel form di modifica
-    data = {"barcode": request.form.get("barcode")}
-
-    for field in int_fields:
-        if field == "user_override":
-            data[field] = 1 if request.form.get(field) == "1" else 0
-        else:
-            value = request.form.get(field)
-            data[field] = int(value) if value and value.isdigit() else None
-
-    data["reorder_frequency"] = request.form.get("reorder_frequency")
-
-    debug_print("update_inventory: ", data)
-    upsert_inventory(data)
-
-    flash("Inventory aggiornato con successo!")
-    return redirect(url_for("main.edit_inventory", barcode=data["barcode"]))
 
 @main.route("/edit/<name>/<ins_date>", methods=["GET", "POST"])
 #La procedura viene chiamata da Prodotti--> Modifica/Rimuovi Prodotta al momento del click sul pulsaante Modifica
@@ -983,7 +975,7 @@ def home_reorder_products():
     # Restituisci i dati come JSON
     return jsonify({
         "headers": ["Nome", "Quantita`", "Negozio", "Motivo"],
-        "records": [[p["product_name"], p["quantity_to_buy"], p["store_name"], p["motivo"]] for p in items]
+        "records": [[p["product_name"], p["quantity_to_buy"], p["shop"], p["reason"]] for p in items]
     })
 
 
