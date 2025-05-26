@@ -1064,12 +1064,14 @@ def get_current_shopping_list():
     cursor = conn.cursor()
     
     cursor.execute("""
-        SELECT barcode, product_name, quantity_to_buy, shop, reason, price, decade_number
+        SELECT product_name, quantity_to_buy, shop
         FROM shopping_list
         WHERE decade_number = ?
     """, (f"D{current_decade}",))
     
     items = [dict(row) for row in cursor.fetchall()]
     conn.close()
+
+    debug_print("get_current_shopping_list - Items: ", items)
     
     return jsonify(items)
