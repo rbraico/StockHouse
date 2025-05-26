@@ -13,6 +13,10 @@ def create_app():
 
     init_db()
 
+    print("=== ROUTES DISPONIBILI ===")
+    print(app.url_map)  # <--- AGGIUNGI QUESTA RIGA QUI
+
+
     return app
 
 

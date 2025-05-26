@@ -212,13 +212,13 @@ def generate_monthly_shopping_list():
     debug_print("🎯 Lista spesa mensile completata con successo.")
 
 
-def safe_int(value):
+def parse_quantity(value):
     try:
-        if value is None or str(value).strip() == '':
-            return None
+        if value is None or str(value).strip() == '' or str(value).strip() == '-':
+            return 0
         return int(str(value).strip())
     except (ValueError, TypeError):
-        return None
+        return 0
 
 
 
@@ -276,7 +276,7 @@ def get_shopping_list_data(save_to_db=False, conn=None, cursor=None, decade=None
             JOIN inventory_advanced_options adv ON i.barcode = adv.barcode
             WHERE i.max_quantity > 0 AND tf.quantity < i.reorder_point
             GROUP BY i.barcode
-            ORDER BY adv.priority_level DESC
+            ORDER BY adv.priority_level ASC, tf.price ASC
         """
     else:
         # Prime due decadi: prodotti freschi e indispensabili
@@ -298,7 +298,7 @@ def get_shopping_list_data(save_to_db=False, conn=None, cursor=None, decade=None
                 OR
                 (adv.product_type = "Fresco" AND quantity < i.min_quantity)
             )
-            ORDER BY adv.priority_level DESC
+            ORDER BY adv.priority_level ASC, tf.price ASC
         """
 
     cursor.execute(query)
@@ -313,11 +313,11 @@ def get_shopping_list_data(save_to_db=False, conn=None, cursor=None, decade=None
         product_name = row["name"]
         shop = row["shop"]
         price = row["price"] or 0
-        quantity = safe_int(row["quantity"])
-        max_q = safe_int(row["max_quantity"])
-        min_q = safe_int(row["min_quantity"])
-        sec_q = safe_int(row["security_quantity"])
-        reorder_point = safe_int(row["reorder_point"])
+        quantity = parse_quantity(row["quantity"])
+        max_q = parse_quantity(row["max_quantity"])
+        min_q = parse_quantity(row["min_quantity"])
+        sec_q = parse_quantity(row["security_quantity"])
+        reorder_point = parse_quantity(row["reorder_point"])
         product_type = row["product_type"]
         quantity_to_buy = 1
         reason = ""
