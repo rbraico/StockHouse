@@ -752,7 +752,8 @@ def shopping_list():
         debug_print("Lista mensile già generata.")
 
     # Recupera i dati della lista spesa per la decade selezionata
-    items, shop_totals = get_shopping_list_data(decade=selected_decade)
+    debug_print("Recupero dati della lista spesa per la decade selezionata: ", selected_decade)
+    items, shop_totals = get_shopping_list_data(save_to_db=True, decade=selected_decade)
 
     # Recupera i prodotti suggeriti
     suggested_items = get_suggested_products()

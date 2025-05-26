@@ -8,14 +8,15 @@ from stockhouse.utils import debug_print
 
 # Funzione per calcolare il numero della decade corrente
 def get_current_decade(today=None):
-    today = today or date.today()
+    today = today or datetime.today()
     day = today.day
     if day <= 10:
-        return 1
+        return "D1"
     elif day <= 20:
-        return 2
+        return "D2"
     else:
-        return 3
+        return "D3"
+
 
 def format_decade_label(decade_number):
     labels = {
@@ -224,15 +225,10 @@ def parse_quantity(value):
 
 # Funzione per ottenere i dati della lista della spesa
 def get_shopping_list_data(save_to_db=False, conn=None, cursor=None, decade=None):
-    def get_current_decade(today=None):
-        today = today or datetime.today()
-        day = today.day
-        if day <= 10:
-            return "D1"
-        elif day <= 20:
-            return "D2"
-        else:
-            return "D3"
+ 
+    
+    debug_print("get_shopping_list_data, save_to_db:", save_to_db, "decade:", decade)
+
 
     external_connection = False
     if conn is None or cursor is None:
@@ -353,6 +349,8 @@ def get_shopping_list_data(save_to_db=False, conn=None, cursor=None, decade=None
         if shop:
             shop_totals.setdefault(shop, 0)
             shop_totals[shop] += product_cost
+
+    debug_print("save_to_db, decade:", decade)
 
     if save_to_db:
         cursor.execute("DELETE FROM shopping_list WHERE decade_number = ?", (decade,))
