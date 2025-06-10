@@ -1,6 +1,6 @@
 from flask import Flask, render_template, request, flash
 from stockhouse.app_code.routes import main as main_blueprint  # Importa il blueprint 'main'
-from stockhouse.app_code.models import init_db, save_product, get_all_products, get_all_shop_list, get_all_categories
+from stockhouse.app_code.models import init_db
 from stockhouse.app_code.barcode import lookup_barcode
 from config import Config
 import os

@@ -41,7 +41,7 @@ class Config:
     #
     def get_image_folder():
         if platform.system() == "Windows":
-            return "C:/Users/Gebruiker/Projects/StockHouse/stockhouse_images"
+            return "\\192.168.1.31\Progetti\StockHouse\stockhouse_images"
         else:
             return "/config/www/stockhouse_images"
 
