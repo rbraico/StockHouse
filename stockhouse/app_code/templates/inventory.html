@@ -7,94 +7,155 @@
 </div>
 
 <br>
-<!-- ✅ Stile migliorato per tabella con righe alternate, bordi definiti e header fisso -->
 <style>
-  /* Intestazione tabella */
   .custom-table thead {
-      background-color: #0050b9 !important; /* Blu uniforme */
+      background-color: #0050b9 !important;
       color: white !important;
       position: sticky;
       top: 0;
       z-index: 10;
   }
-
-  /* Definizione dei bordi su righe E colonne */
   .custom-table th, .custom-table td {
-      border: 2px solid #dee2e6; /* Bordo visibile */
+      border: 2px solid #dee2e6;
       padding: 10px;
       text-align: center;
   }
-
   .custom-table {
     border-collapse: collapse !important;
   }
-  
-  /* Alternanza righe */
   .custom-table tbody tr:nth-child(odd) td {
       background-color: #ffffff !important;
   }
-
   .custom-table tbody tr:nth-child(even) td {
       background-color: #e7f1ff !important;
   }
-
-  /* Rende l'header uniforme con la fascia blu */
   .table-dark {
-      background-color: #0050b9 !important; 
+      background-color: #0050b9 !important;
       color: white !important;
   }
-
-  /* Scroll per il corpo della tabella */
   .table-container {
-      max-height: 600px; /* Altezza massima */
+      max-height: 600px;
       overflow-y: auto;
       border: 2px solid #dee2e6;
       display: block;
   }
-
-  /* Mantiene l'header fisso durante lo scroll */
   .custom-table thead {
       position: sticky;
       top: 0;
       background-color: #0050b9;
       z-index: 10;
   }
-
-  /* Evita sovrapposizione tra intestazione e contenuto */
   .table-container .row.bg-primary {
       background-color: transparent !important;
   }
-
+  .consume-btn {
+    min-width: 160px; /* Scegli la larghezza che preferisci */
+  }
 </style>
 
+<!-- Modale per selezionare il lotto da consumare. Prima TAB -->
+<div class="modal fade" id="consumeModal" tabindex="-1" aria-labelledby="consumeModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="consumeModalLabel">Seleziona lotto da consumare</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Chiudi"></button>
+      </div>
+      <div class="modal-body">
+        <select id="consumeSelect" class="form-select"></select>
+      </div>
+      <div class="modal-footer">
+        <button type="button" id="confirmConsumeBtn" class="btn btn-primary">Conferma</button>
+      </div>
+    </div>
+  </div>
+</div>
 
-<br>  
-<!-- Nav tabs -->
+<br>
 <ul class="nav nav-tabs" id="productTabs" role="tablist">
   <li class="nav-item" role="presentation">
-    <button class="nav-link active" id="list-tab" data-bs-toggle="tab" data-bs-target="#list" type="button" role="tab" aria-controls="list" aria-selected="true">
-      📋 Prodotti in Magazzino
+    <button class="nav-link active" id="gestione-tab" data-bs-toggle="tab" data-bs-target="#gestione" type="button" role="tab" aria-controls="gestione" aria-selected="true">
+      📋 Gestione Magazzino
     </button>
   </li>
   <li class="nav-item" role="presentation">
-    <button class="nav-link" id="add-tab" data-bs-toggle="tab" data-bs-target="#add" type="button" role="tab" aria-controls="add" aria-selected="false">
-      ⚙️ Impostazioni avanzate ottimizzazione spesa
+    <button class="nav-link" id="list-tab" data-bs-toggle="tab" data-bs-target="#list" type="button" role="tab" aria-controls="list" aria-selected="false">
+      📋 Prodotti in Magazzino
     </button>
   </li>
 </ul>
 
-
-
-<!-- Tab content  -->
 <div class="tab-content mt-3">
 
-  <!-- 📋 Prodotti in Magazzino-->
-<div class="tab-content mt-3">
+  <!-- 📋 Gestione Magazzino-->
+  <div class="tab-pane fade show active" id="gestione" role="tabpanel" aria-labelledby="gestione-tab">
+  <div class="table-container">
+    <table class="table table-bordered custom-table" id="gestione-table">
+      <thead class="table-dark">
+        <tr>
+          <th>Prodotto</th>
+          <th>Barcode</th>
+          <th>Nome</th>
+          <th>Articolo</th>
+          <th>Categoria</th>
+          <th>Prezzo</th>
+          <th>Quantità Attuale</th>
+          <th>Valore Totale</th>
+          <th>Azioni</th>
+        </tr>
+        <tr>
+          <th></th>
+          <th></th>
+          <th>
+            <select id="filterNameGestione" class="form-select form-select-sm">
+              <option value="">Tutti</option>
+            </select>
+          </th>
+          <th>
+            <select id="filterArticleGestione" class="form-select form-select-sm">
+              <option value="">Tutti</option>
+            </select>
+          </th>
+          <th>
+            <select id="filterCategoryGestione" class="form-select form-select-sm">
+              <option value="">Tutte</option>
+            </select>
+          </th>
+          <th colspan="4"></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for product in products %}
+          <tr data-barcode="{{ product.barcode }}">
+            <td>
+              {% if product.image %}
+                <img src="{{ product.image }}" alt="Immagine prodotto" style="max-width: 80px; height: auto;">
+              {% else %}
+                <span class="text-muted">Nessuna immagine</span>
+              {% endif %}
+            </td>
+            <td>{{ product.barcode or "-" }}</td>
+            <td>{{ product.name or "-" }}</td>
+            <td>{{ product.item or "-" }}</td>
+            <td>{{ product.category or "-" }}</td>
+            <td>€{{ product.price or "0.00" }}</td>  
+            <td>{{ product.quantity_in_inventory or "-" }}</td>
+            <td>€{{ product.total_value or "0.00" }}</td>
+            <td>
+              <button class="btn btn-sm btn-warning consume-btn">🍽️ Consumato</button>
+            </td>
+
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
 
   <!-- 📋 Prodotti in Magazzino-->
-  <div class="tab-pane fade show active" id="list" role="tabpanel" aria-labelledby="list-tab">
+  <div class="tab-pane fade" id="list" role="tabpanel" aria-labelledby="list-tab">
     <div class="table-container">
-      <table class="table table-bordered custom-table">
+      <table class="table table-bordered custom-table" id="list-table">
         <thead class="table-dark">
           <tr>
             <th>Prodotto</th>
@@ -114,15 +175,13 @@
           <tr>
             <th></th>
             <th>
-              <select id="filterName" class="form-select form-select-sm">
+              <select id="filterNameList" class="form-select form-select-sm">
                 <option value="">Tutti</option>
-                <!-- Opzioni popolate via JS -->
               </select>
             </th>
             <th>
-              <select id="filterCategory" class="form-select form-select-sm">
+              <select id="filterCategoryList" class="form-select form-select-sm">
                 <option value="">Tutte</option>
-                <!-- Opzioni popolate via JS -->
               </select>
             </th>
             <th colspan="10"></th>
@@ -180,7 +239,129 @@
       </table>
     </div>
   </div>
-</div>
+
+<!-- --- PRIMA TAB - INVENTORY: Filtri e bottone Consumato avanzato --- -->
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  function populateGestioneFilters() {
+    const nameSet = new Set();
+    const articleSet = new Set();
+    const categorySet = new Set();
+    document.querySelectorAll('#gestione-table tbody tr').forEach(row => {
+      const name = row.children[2].textContent.trim();
+      const article = row.children[3].textContent.trim();
+      const category = row.children[4].textContent.trim();
+      if (name) nameSet.add(name);
+      if (article) articleSet.add(article);
+      if (category) categorySet.add(category);
+    });
+    const filterName = document.getElementById('filterNameGestione');
+    const filterArticle = document.getElementById('filterArticleGestione');
+    const filterCategory = document.getElementById('filterCategoryGestione');
+    filterName.innerHTML = '<option value="">Tutti</option>';
+    filterArticle.innerHTML = '<option value="">Tutti</option>';
+    filterCategory.innerHTML = '<option value="">Tutte</option>';
+    Array.from(nameSet).sort().forEach(name => {
+      filterName.innerHTML += `<option value="${name}">${name}</option>`;
+    });
+    Array.from(articleSet).sort().forEach(article => {
+      filterArticle.innerHTML += `<option value="${article}">${article}</option>`;
+    });
+    Array.from(categorySet).sort().forEach(cat => {
+      filterCategory.innerHTML += `<option value="${cat}">${cat}</option>`;
+    });
+  }
+
+  function filterGestioneTable() {
+    const nameVal = document.getElementById('filterNameGestione').value;
+    const articleVal = document.getElementById('filterArticleGestione').value;
+    const catVal = document.getElementById('filterCategoryGestione').value;
+    document.querySelectorAll('#gestione-table tbody tr').forEach(row => {
+      const name = row.children[2].textContent.trim();
+      const article = row.children[3].textContent.trim();
+      const category = row.children[4].textContent.trim();
+      let show = true;
+      if (nameVal && name !== nameVal) show = false;
+      if (articleVal && article !== articleVal) show = false;
+      if (catVal && category !== catVal) show = false;
+      row.style.display = show ? '' : 'none';
+    });
+  }
+
+  populateGestioneFilters();
+  document.getElementById('filterNameGestione').addEventListener('change', filterGestioneTable);
+  document.getElementById('filterArticleGestione').addEventListener('change', filterGestioneTable);
+  document.getElementById('filterCategoryGestione').addEventListener('change', filterGestioneTable);
+
+  // --- Nuovo comportamento bottone Consumato ---
+  let selectedRow = null;
+  let selectedBarcode = null;
+
+  document.querySelectorAll('#gestione-table .consume-btn').forEach(function(button) {
+    button.addEventListener('click', function() {
+      console.log("Cliccato Consumato!");
+      selectedRow = button.closest('tr');
+      selectedBarcode = selectedRow.dataset.barcode;
+      const productName = selectedRow.children[2].textContent.trim();
+
+      // Fetch lotti disponibili per questo prodotto
+      fetch("/products/unconsumed_dropdown")
+        .then(res => res.json())
+        .then(products => {
+          // Filtra solo i lotti del prodotto selezionato
+          const filtered = products.filter(p => p.name === productName);
+          const select = document.getElementById('consumeSelect');
+          select.innerHTML = '';
+          if (filtered.length > 0) {
+            filtered.forEach(record => {
+              const label = `Inserito: ${record.ins_date} - Scadenza: ${record.expiry_date || 'N/A'} - Q.tà: ${record.quantity}`;
+              select.innerHTML += `<option value="${record.ins_date}|${record.expiry_date}|${record.id}|${record.barcode}|${record.quantity}">${label}</option>`;
+            });
+            const modal = new bootstrap.Modal(document.getElementById('consumeModal'));
+            modal.show();
+          } else {
+            alert("Nessun lotto disponibile per questo prodotto.");
+          }
+        });
+    });
+  });
+
+  document.getElementById('confirmConsumeBtn').addEventListener('click', function() {
+    const select = document.getElementById('consumeSelect');
+    if (!select.value) return;
+    const [ins_date, expiry_date, id, product_key, quantity] = select.value.split('|');
+    // Chiamata alla route per consumare il prodotto
+    fetch(`/consumed_product?id=${id}&product_key=${product_key}&barcode=${encodeURIComponent(selectedBarcode)}&ins_date=${ins_date}&expiry_date=${expiry_date}&quantity=${quantity}`)
+      .then(res => res.json())
+      .then(data => {
+        console.log('Risposta da /consumed_product:', data);
+        if (data.success) {
+          // Aggiorna la quantità nella tabella
+          selectedRow.children[6].textContent = data.quantita;
+          // Aggiorna il bottone
+          const btn = selectedRow.querySelector('.consume-btn');
+          btn.textContent = "✅ DB Aggiornato";
+          btn.classList.remove('btn-warning');
+          btn.classList.add('btn-success');
+          btn.disabled = true;
+          // Chiudi il modale
+          bootstrap.Modal.getInstance(document.getElementById('consumeModal')).hide();
+          // Dopo 2 secondi, ripristina il bottone
+          setTimeout(() => {
+            btn.textContent = "🍽️ Consumato";
+            btn.classList.remove('btn-success');
+            btn.classList.add('btn-warning');
+            btn.disabled = false;
+          }, 2000);
+        } else {
+          alert("Errore durante la registrazione del consumo.");
+        }
+      });
+  });
+});
+</script>
+
+<!-- --- SECONDA TAB - LIST: Filtri e inline edit --- -->
 <script>
 document.addEventListener("DOMContentLoaded", function () {
   // Gestione readonly dei campi consumo medio e frequenza riordino
@@ -322,485 +503,5 @@ document.addEventListener("DOMContentLoaded", function () {
   document.getElementById('filterCategory').addEventListener('change', filterTable);
 });
 </script>
-
-
-  <!-- ⚙️ Impostazioni avanzate ottimizzazione spesa -->
-  <div class="tab-pane fade" id="add" role="tabpanel" aria-labelledby="add-tab">
-    <div id="inventory-container"> 
-      <div class="table-container">
-        <table class="table table-bordered custom-table" id="advanced-table">
-          <thead class="table-dark">
-            <tr>
-              <th>Prodotto</th>
-              <th>Barcode</th>
-              <th>Nome</th>
-              <th>
-                <label for="filterTipoProdotto">Tipo:</label>
-                <select id="filterTipoProdotto">
-                  <option value="">Mostra Tutti</option>
-                  <option value="Indispensabile">Indispensabile</option>
-                  <option value="Utile">Utile</option>
-                  <option value="Occasionale">Occasionale</option>
-                  <option value="Stagionale">Stagionale</option>
-                </select>
-              </th>
-              <th>
-                <label for="filterStagione">Stagione:</label>
-                <select id="filterStagione">
-                  <option value="">Mostra Tutti</option>
-                  <option value="Primavera">Primavera</option>
-                  <option value="Estate">Estate</option>
-                  <option value="Autunno">Autunno</option>
-                  <option value="Inverno">Inverno</option>
-                  <option value="Tutte">Tutte</option>
-                </select>
-              </th>
-              <th>Priorità</th>
-              <th>Azioni</th>
-            </tr>
-          </thead>
-          <tbody>
-            <!-- Le righe verranno popolate dinamicamente via JavaScript -->
-          </tbody>
-        </table>
-      </div>
-    </div>   
-  </div>
-
-</div>
-
-<script>
-// Funzione per popolare i filtri dinamici TAB2
-document.addEventListener("DOMContentLoaded", function () {
-  const filterName = document.getElementById("filterName");
-  const filterCategory = document.getElementById("filterCategory");
-  const table = document.querySelector(".custom-table tbody");
-
-  function getUniqueValues(index) {
-    const values = new Set();
-    for (const row of table.rows) {
-      const text = row.cells[index].textContent.trim();
-      if (text && text !== "-") values.add(text);
-    }
-    return Array.from(values).sort();
-  }
-
-  function populateDropdown(dropdown, values) {
-    for (const val of values) {
-      const option = document.createElement("option");
-      option.value = val;
-      option.textContent = val;
-      dropdown.appendChild(option);
-    }
-  }
-
-  function filterTable() {
-    const nameVal = filterName.value.toLowerCase();
-    const categoryVal = filterCategory.value.toLowerCase();
-
-    for (const row of table.rows) {
-      const nameText = row.cells[1].textContent.toLowerCase();
-      const categoryText = row.cells[2].textContent.toLowerCase();
-      const matchName = !nameVal || nameText === nameVal;
-      const matchCategory = !categoryVal || categoryText === categoryVal;
-      row.style.display = (matchName && matchCategory) ? "" : "none";
-    }
-  }
-
-  // Popola i dropdown al caricamento
-  populateDropdown(filterName, getUniqueValues(1));     // colonna Nome
-  populateDropdown(filterCategory, getUniqueValues(2)); // colonna Categoria
-
-  // Aggiungi listener per il filtro
-  filterName.addEventListener("change", filterTable);
-  filterCategory.addEventListener("change", filterTable);
-});
-</script>
-
-<script>
-  function autoFillProduct() {
-    const value = document.getElementById('barcode').value.trim();
-    if (!value) return;
-    const isBarcode = /^\d+$/.test(value);
-    const url = isBarcode
-      ? `/api/product-by-barcode?barcode=${encodeURIComponent(value)}`
-      : `/api/product-by-name?name=${encodeURIComponent(value)}`;
-  
-    fetch(url)
-      .then(response => response.json())
-      .then(data => {
-        if (data && data.found) {
-          document.getElementById('name').value = data.name || '';
-          document.getElementById('brand').value = data.brand || '';
-          document.getElementById('shop').value = data.shop || '';
-          document.getElementById('price').value = data.price || '';
-          document.getElementById('category').value = data.category || '';
-          document.getElementById('expiry_date').value = data.expiry_date || '';
-          document.getElementById('quantity').value = data.quantity || '';
-          if (data.image) {
-            document.getElementById('productImage').src = data.image;
-            document.getElementById('productImage').style.display = 'block';
-            document.getElementById('image-placeholder').style.display = 'none';
-          }
-        } else {
-          console.log("Nessun prodotto trovato");
-        }
-      })
-      .catch(err => console.error("Errore nella richiesta:", err));
-  }
-</script>
-
-<script>
-  function setupAdvancedFilters() {
-    const tipoSelect = document.getElementById("filterTipoProdotto");
-    const stagioneSelect = document.getElementById("filterStagione");
-
-    if (tipoSelect) {
-      tipoSelect.addEventListener("change", function () {
-        let filtro = this.value.toLowerCase();
-        document.querySelectorAll("#advanced-table tbody tr").forEach(riga => {
-          let tipo = riga.querySelector("td:nth-child(4) select");
-          if (tipo) {
-            let valore = tipo.value.toLowerCase();
-            riga.style.display = (filtro === "" || valore === filtro) ? "" : "none";
-          }
-        });
-      });
-    }
-
-    if (stagioneSelect) {
-      stagioneSelect.addEventListener("change", function () {
-        let filtro = this.value.toLowerCase();
-        document.querySelectorAll("#advanced-table tbody tr").forEach(riga => {
-          let stagione = riga.querySelector("td:nth-child(5) select");
-          if (stagione) {
-            let valore = stagione.value.toLowerCase();
-            riga.style.display = (filtro === "" || valore === filtro) ? "" : "none";
-          }
-        });
-      });
-    }
-  }
-</script>
-
-<script>
-  function fetchAdvancedTable() {
-    fetch("/products/advanced")
-      .then(res => res.json())
-      .then(data => {
-        const tbody = document.querySelector("#advanced-table tbody");
-        if (!tbody) {
-          console.error("❌ #advanced-table tbody non trovato!");
-          return;
-        }
-        tbody.innerHTML = "";
-        console.log("📦 Dati ricevuti:", data.products);
-
-        if (data.found && Array.isArray(data.products)) {
-          data.products.forEach(product => {
-            const row = document.createElement("tr");
-            row.innerHTML = `
-              <td>${product.image ? `<img src="${product.image}" alt="img" style="max-width: 60px;">` : '<span class="text-muted">Nessuna immagine</span>'}</td>
-              <td>${product.barcode || "-"}</td>
-              <td>${product.name || "-"}</td>
-              <td>
-                <select class="tipo-prodotto">
-                  <option value="" ${!product.product_type ? "selected" : ""} disabled>-- Seleziona --</option>
-                  <option value="Indispensabile" ${product.product_type === "Indispensabile" ? "selected" : ""}>Indispensabile</option>
-                  <option value="Utile" ${product.product_type === "Utile" ? "selected" : ""}>Utile</option>
-                  <option value="Occasionale" ${product.product_type === "Occasionale" ? "selected" : ""}>Occasionale</option>
-                  <option value="Stagionale" ${product.product_type === "Stagionale" ? "selected" : ""}>Stagionale</option>
-                </select>
-              </td>
-              <td>
-                <select class="stagione">
-                  <option value="" ${!product.seasons ? "selected" : ""} disabled>-- Seleziona --</option>
-                  <option value="Primavera" ${product.seasons === "Primavera" ? "selected" : ""}>Primavera</option>
-                  <option value="Estate" ${product.seasons === "Estate" ? "selected" : ""}>Estate</option>
-                  <option value="Autunno" ${product.seasons === "Autunno" ? "selected" : ""}>Autunno</option>
-                  <option value="Inverno" ${product.seasons === "Inverno" ? "selected" : ""}>Inverno</option>
-                  <option value="Tutte" ${product.seasons === "Tutte" ? "selected" : ""}>Tutte</option>
-                </select>
-              </td>
-              <td>${product.priority_level || "-"}</td>
-              <td>
-                <button class="btn btn-sm btn-success save-advanced-btn" style="display:none;" data-barcode="${product.barcode}">💾 Salva</button>
-              </td>
-            `;
-            tbody.appendChild(row);
-          });
-
-          bindUpdateButtons();
-          setupAdvancedFilters(); // 🔁 Ricollega i filtri
-        } else {
-          tbody.innerHTML = "<tr><td colspan='7'>Nessun prodotto avanzato trovato.</td></tr>";
-        }
-      })
-      .catch(err => console.error("🚨 Errore nel fetch:", err));
-  }
-
-  function bindUpdateButtons() {
-    document.querySelectorAll(".update-btn").forEach(button => {
-      button.addEventListener("click", function () {
-        const row = this.closest("tr");
-        const barcode = this.dataset.barcode;
-        const product_type = row.querySelector(".tipo-prodotto").value;
-        const seasons = row.querySelector(".stagione").value;
-
-        console.log("📤 Aggiorno:", barcode, product_type, seasons);
-
-        fetch("/inventory/advanced/update", {
-          method: "POST",
-          headers: { "Content-Type": "application/x-www-form-urlencoded" },
-          body: new URLSearchParams({ barcode, product_type, seasons })
-        })
-          .then(response => response.text())
-          .then(html => {
-            const container = document.querySelector("#inventory-container");
-            if (container) {
-              container.innerHTML = html;
-
-              const tab = new bootstrap.Tab(document.querySelector('#add-tab'));
-              tab.show();
-
-              fetchAdvancedTable(); // Ricarica tabella aggiornata
-              const successMessage = document.createElement('div');
-              successMessage.className = 'alert alert-success';
-              successMessage.innerHTML = 'Prodotto aggiornato con successo!';
-              document.querySelector('#add-tab').prepend(successMessage);
-              setTimeout(() => successMessage.remove(), 3000);
-            } else {
-              location.reload();
-            }
-            alert("✅ Aggiornamento riuscito!");
-          })
-          .catch(error => {
-            console.error("❌ Errore:", error);
-            alert("Errore durante l'aggiornamento.");
-          });
-      });
-    });
-  }
-</script>
-
-<script>
-  document.addEventListener("DOMContentLoaded", function () {
-    const advancedTabButton = document.querySelector('#add-tab');
-    if (advancedTabButton) {
-      advancedTabButton.addEventListener('shown.bs.tab', function () {
-        fetchAdvancedTable(); // Carica dati al cambio tab
-      });
-    }
-    setupAdvancedFilters(); // Inizializza i filtri al primo caricamento
-  });
-</script>
-
-
-<script>
-  function setupAdvancedFilters() {
-    const tipoSelect = document.getElementById("filterTipoProdotto");
-    const stagioneSelect = document.getElementById("filterStagione");
-
-    if (tipoSelect) {
-      tipoSelect.addEventListener("change", function () {
-        let filtro = this.value.toLowerCase();
-        document.querySelectorAll("#advanced-table tbody tr").forEach(riga => {
-          let tipo = riga.querySelector("td:nth-child(4) select");
-          if (tipo) {
-            let valore = tipo.value.toLowerCase();
-            riga.style.display = (filtro === "" || valore === filtro) ? "" : "none";
-          }
-        });
-      });
-    }
-
-    if (stagioneSelect) {
-      stagioneSelect.addEventListener("change", function () {
-        let filtro = this.value.toLowerCase();
-        document.querySelectorAll("#advanced-table tbody tr").forEach(riga => {
-          let stagione = riga.querySelector("td:nth-child(5) select");
-          if (stagione) {
-            let valore = stagione.value.toLowerCase();
-            riga.style.display = (filtro === "" || valore === filtro) ? "" : "none";
-          }
-        });
-      });
-    }
-  }
-</script>
-
-<script>
-  function fetchAdvancedTable() {
-    fetch("/products/advanced")
-      .then(res => res.json())
-      .then(data => {
-        const tbody = document.querySelector("#advanced-table tbody");
-        if (!tbody) {
-          console.error("❌ #advanced-table tbody non trovato!");
-          return;
-        }
-        tbody.innerHTML = "";
-        console.log("📦 Dati ricevuti:", data.products);
-
-        if (data.found && Array.isArray(data.products)) {
-          data.products.forEach(product => {
-            const row = document.createElement("tr");
-            row.innerHTML = `
-              <td>${product.image ? `<img src="${product.image}" alt="img" style="max-width: 60px;">` : '<span class="text-muted">Nessuna immagine</span>'}</td>
-              <td>${product.barcode || "-"}</td>
-              <td>${product.name || "-"}</td>
-              <td>
-                <select class="tipo-prodotto">
-                  <option value="" ${!product.product_type ? "selected" : ""} disabled>-- Seleziona --</option>
-                  <option value="Indispensabile" ${product.product_type === "Indispensabile" ? "selected" : ""}>Indispensabile</option>
-                  <option value="Utile" ${product.product_type === "Utile" ? "selected" : ""}>Utile</option>
-                  <option value="Occasionale" ${product.product_type === "Occasionale" ? "selected" : ""}>Occasionale</option>
-                  <option value="Stagionale" ${product.product_type === "Stagionale" ? "selected" : ""}>Stagionale</option>
-                </select>
-              </td>
-              <td>
-                <select class="stagione">
-                  <option value="" ${!product.seasons ? "selected" : ""} disabled>-- Seleziona --</option>
-                  <option value="Primavera" ${product.seasons === "Primavera" ? "selected" : ""}>Primavera</option>
-                  <option value="Estate" ${product.seasons === "Estate" ? "selected" : ""}>Estate</option>
-                  <option value="Autunno" ${product.seasons === "Autunno" ? "selected" : ""}>Autunno</option>
-                  <option value="Inverno" ${product.seasons === "Inverno" ? "selected" : ""}>Inverno</option>
-                  <option value="Tutte" ${product.seasons === "Tutte" ? "selected" : ""}>Tutte</option>
-                </select>
-              </td>
-              <td>${product.priority_level || "-"}</td>
-              <td>
-                <button class="btn btn-sm btn-success save-advanced-btn" style="display:none;" data-barcode="${product.barcode}">💾 Salva</button>
-              </td>
-            `;
-            tbody.appendChild(row);
-
-            // Mostra il tasto Salva quando si cambia un select
-            row.querySelectorAll('.tipo-prodotto, .stagione').forEach(function(select) {
-              select.addEventListener('change', function() {
-                const saveBtn = row.querySelector('.save-advanced-btn');
-                if (saveBtn) saveBtn.style.display = '';
-              });
-            });
-
-
-            // Gestione click sul tasto Salva e faccine
-            row.querySelector('.save-advanced-btn').addEventListener('click', function() {
-              const saveBtn = this;
-              const product_type = row.querySelector('.tipo-prodotto').value;
-              const seasons = row.querySelector('.stagione').value;
-              const barcode = row.children[1].textContent.trim();
-
-              fetch("/inventory/advanced/update", {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/x-www-form-urlencoded",
-                  "X-Requested-With": "XMLHttpRequest"
-                },
-                body: new URLSearchParams({ barcode, product_type, seasons })
-              })
-              .then(response => response.json())
-              .then(data => {
-                saveBtn.style.display = 'none';
-                let icon = document.createElement('span');
-                icon.style.fontSize = '1.5em';
-                icon.style.marginLeft = '5px';
-                if (data.success) {
-                  icon.textContent = '😊';
-                  icon.style.color = 'green';
-                } else {
-                  icon.textContent = '😞';
-                  icon.style.color = 'red';
-                }
-                saveBtn.parentNode.appendChild(icon);
-                setTimeout(() => {
-                  icon.remove();
-                  if (data.success) fetchAdvancedTable(); // <-- ora qui!
-                }, 2000);
-              })
-              .catch(error => {
-                saveBtn.style.display = 'none';
-                let icon = document.createElement('span');
-                icon.textContent = '😞';
-                icon.style.color = 'red';
-                icon.style.fontSize = '1.5em';
-                icon.style.marginLeft = '5px';
-                saveBtn.parentNode.appendChild(icon);
-                setTimeout(() => {
-                  icon.remove();
-                }, 2000);
-              });
-            });
-
-
-          });
-
-          bindUpdateButtons();
-          setupAdvancedFilters(); // 🔁 Riapplica i filtri
-        } else {
-          tbody.innerHTML = "<tr><td colspan='7'>Nessun prodotto avanzato trovato.</td></tr>";
-        }
-      })
-      .catch(err => console.error("🚨 Errore nel fetch:", err));
-  }
-
-  function bindUpdateButtons() {
-    document.querySelectorAll(".update-btn").forEach(button => {
-      button.addEventListener("click", function () {
-        const row = this.closest("tr");
-        const barcode = this.dataset.barcode;
-        const product_type = row.querySelector(".tipo-prodotto").value;
-        const seasons = row.querySelector(".stagione").value;
-
-        console.log("📤 Aggiorno:", barcode, product_type, seasons);
-
-        fetch("/inventory/advanced/update", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/x-www-form-urlencoded",
-            "X-Requested-With": "XMLHttpRequest"
-          },
-          body: new URLSearchParams({ barcode, product_type, seasons })
-        })
-        .then(response => response.json())
-        .then(data => {
-          if (data.success) {
-            const successMessage = document.createElement('div');
-            successMessage.className = 'alert alert-success mt-2';
-            successMessage.innerText = '✅ Prodotto aggiornato con successo!';
-            document.querySelector('#inventory-container').prepend(successMessage);
-            setTimeout(() => successMessage.remove(), 3000);
-
-            fetchAdvancedTable(); // 🔁 Ricarica i dati aggiornati
-          } else {
-            alert("❌ Errore nell'aggiornamento del prodotto.");
-          }
-        })
-        .catch(error => {
-          console.error("❌ Errore:", error);
-          alert("Errore durante l'aggiornamento.");
-        });
-      });
-    });
-  }
-
-  // ✅ Esegui fetch iniziale
-  fetchAdvancedTable();
-</script>
-
-
-
-<script>
-  document.addEventListener("DOMContentLoaded", function () {
-    const advancedTabButton = document.querySelector('#add-tab');
-    if (advancedTabButton) {
-      advancedTabButton.addEventListener('shown.bs.tab', function () {
-        fetchAdvancedTable(); // Carica dati al cambio tab
-      });
-    }
-    setupAdvancedFilters(); // Inizializza i filtri al primo caricamento
-  });
-</script>
-
 
 {% endblock %}

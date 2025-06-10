@@ -292,7 +292,7 @@ def index():
 
 @main.route('/delete_product/<int:id>')
 def delete_product(id):
-    debug_print("delete_product: " , id)
+    #debug_print("delete_product: " , id)
 
     delete_product_from_db(id)
 
@@ -306,13 +306,15 @@ def delete_product(id):
 def list_inventory():
 
     clean_old_transactions                  # 🧽 Step 1: pulizia
-    update_inventory_mean_usage_time()           # 🧠 Step 2: calcolo mean_usage_time
+    update_inventory_mean_usage_time()      # 🧠 Step 2: calcolo mean_usage_time
     update_reorder_frequency()              # 🔄 Step 3: calcolo reorder_frequency
     products = get_product_inventory()      # 🏭 Step 4 - Seleziona i records per l'inventario
 
     #debug_print ("Show_Product in inventory: ", products)
 
     return render_template("inventory.html", products=products)
+
+
 
 # Questa procedura viene chiamata dal metodo POST dopo aver cliccato sul pulsante Modifica Parametri di Magazzino
 # Per inserire oppure modificare un record esistente nella tabella product_dim
@@ -347,15 +349,15 @@ def update_inventory_inline():
 # Il metodo POST serve per attivare la modifica nel Database
 def edit_product(name, ins_date):
     # Recupera i dettagli del prodotto dal database per il form di modifica
-    debug_print("edith_product: ", name, ins_date)
-    debug_print("requested method: ", request.method)
+    #debug_print("edit_product: ", name, ins_date)
+    #debug_print("requested method: ", request.method)
 
     product    = lookup_products_by_name_ins_date(name,ins_date)
     id = product["id"]
     shop_list  = get_all_shops()
     items = get_all_items()
-    debug_print("requested method: ", product)
-    debug_print("edit product intero record: ", product)
+    #debug_print("requested method: ", product)
+    #debug_print("edit product intero record: ", product)
 
     if request.method == "POST":
         # Modifica i dati del prodotto
@@ -371,7 +373,7 @@ def edit_product(name, ins_date):
 
         
         # Salva il prodotto modificato nel database
-        debug_print ("update_product: ", barcode, name, brand, shop, item, ins_date)
+        #debug_print ("update_product: ", barcode, name, brand, shop, item, ins_date)
         category = lookup_category_by_item(item)
         update_product_dim(id, name, brand, shop, category, item)
         update_transaction_fact(id, price, quantity,  expiry_date, ins_date)
@@ -446,7 +448,19 @@ def consumed_product():
     #Registra il consumo in consume_fact
     insert_consumed_fact (product_key, barcode, ins_date, expiry_date)
     
-    return jsonify(success=True, quantita=new_quantity, status=new_status, consumo=consume_date)
+    # Calcola la quantità totale aggiornata a magazzino per quel barcode
+    conn = sqlite3.connect(Config.DATABASE_PATH)
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT COALESCE(SUM(quantity), 0)
+        FROM transaction_fact
+        WHERE barcode = ? AND status = 'in stock'
+    """, (barcode,))
+    total_quantity = cur.fetchone()[0]
+    conn.close()
+
+
+    return jsonify(success=True, quantita=total_quantity, status=new_status, consumo=consume_date)
 
 @main.route('/consumed/get_records', methods=["GET"])
 def get_records():
@@ -457,10 +471,10 @@ def get_records():
     expiry_date = request.args.get('expiry_date')  # Data di scadenza (può essere NULL)
 
     # Debugging: stampa i parametri ricevuti
-    debug_print("get_records - name: ", name)
-    debug_print("get_records - barcode: ", barcode)
-    debug_print("get_records - Data di inserimento: ", ins_date)
-    debug_print("get_records - Data di scadenza: ", expiry_date)
+    #debug_print("get_records - name: ", name)
+    #debug_print("get_records - barcode: ", barcode)
+    #debug_print("get_records - Data di inserimento: ", ins_date)
+    #debug_print("get_records - Data di scadenza: ", expiry_date)
 
     # Verifica che il parametro 'nome' sia presente
     if not name:

@@ -582,7 +582,7 @@ def get_unconsumed_products_full_list():
     cursor = conn.cursor()
 
     cursor.execute("""
-        SELECT pd.id, pd.name, pd.barcode, tf.ins_date, tf.expiry_date
+        SELECT tf.id, pd.name, pd.barcode, tf.ins_date, tf.expiry_date, tf.quantity
         FROM transaction_fact tf 
         JOIN product_dim pd  ON pd.id = tf.product_key
         WHERE tf.status = 'in stock'
@@ -598,7 +598,8 @@ def get_unconsumed_products_full_list():
         'name': row[1],
         'barcode': row[2],
         'ins_date': row[3],
-        'expiry_date': row[4]
+        'expiry_date': row[4],
+        'quantity': row[5]
     } for row in rows]
 
 
@@ -706,6 +707,7 @@ def get_product_inventory():
             p.brand,
             p.shop,
             p.price,
+            p.item,
             p.category,
             p.ins_date,
             p.consume_date,
@@ -720,7 +722,14 @@ def get_product_inventory():
                 WHERE pd2.barcode = p.barcode
                 AND tf2.consume_date IS NULL
             ) AS quantity_in_inventory,
-            
+            (p.price * (
+                SELECT COALESCE(SUM(tf2.quantity), 0)
+                FROM transaction_fact tf2
+                LEFT JOIN product_dim pd2 ON tf2.product_key = pd2.id
+                WHERE pd2.barcode = p.barcode
+                AND tf2.consume_date IS NULL
+            )) AS total_value,
+
             p.image,
 
             -- Parametri inventory dalla tabella 'inventory'
@@ -734,6 +743,8 @@ def get_product_inventory():
 
         FROM ranked_products p
         LEFT JOIN inventory s ON s.barcode = p.barcode
+        WHERE 
+            quantity_in_inventory > 0
         ORDER BY p.barcode;
 
     """
@@ -758,20 +769,22 @@ def get_product_inventory():
             "brand": row[2],
             "shop": row[3],
             "price": row[4],
-            "category": row[5],
-            "ins_date": row[6],
-            "consume_date": row[7],
-            "expiry_date": row[8],
-            "status": row[9],
-            "quantity_in_inventory": row[10],
-            "image": row[11],
-            "min_quantity": row[12],
-            "max_quantity": row[13],
-            "security_quantity": row[14],
-            "reorder_point": row[15],
-            "mean_usage_time": row[16],
-            "reorder_frequency": row[17],
-            "user_override": row[18]
+            "item": row[5],
+            "category": row[6],
+            "ins_date": row[7],
+            "consume_date": row[8],
+            "expiry_date": row[9],
+            "status": row[10],
+            "quantity_in_inventory": row[11],
+            "total_value": row[12],
+            "image": row[13],
+            "min_quantity": row[14],
+            "max_quantity": row[15],
+            "security_quantity": row[16],
+            "reorder_point": row[17],
+            "mean_usage_time": row[18],
+            "reorder_frequency": row[19],
+            "user_override": row[20]
         }
         for row in rows
     ]
