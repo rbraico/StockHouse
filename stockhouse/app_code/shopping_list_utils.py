@@ -79,61 +79,12 @@ def get_spese_settimanali(database_path, year, month):
     return spese
 
 
-# calcola_budget_settimanale per la spesa settimanale
-def calcola_budget_settimanale(week_number, budget_mensile, spese_settimanali, settimana_reintegro):
-    """
-    Calcola il budget disponibile per la settimana corrente.
-    
-    Args:
-        week_number (int): Numero della settimana attuale.
-        budget_mensile (float): Budget totale mensile.
-        spese_settimanali (dict): Dizionario con chiave=numero settimana, valore=spesa effettuata.
-        settimana_reintegro (int): Settimana scelta per il reintegro del magazzino (es: quella con giorno >= 25).
-
-    Returns:
-        float: Budget disponibile per questa settimana.
-    """
-
-    # Parametri fissi configurabili
-    quota_reintegro = 0.40  # 40% del budget se è settimana reintegro
-    settimane_totali = 4
-
-    spesa_totale_finora = sum(spese_settimanali.get(w, 0) for w in range(1, week_number))
-
-    # Calcolo quota residua disponibile
-    budget_residuo = budget_mensile - spesa_totale_finora
-
-    # Se siamo nella settimana di reintegro
-    if week_number == settimana_reintegro:
-        budget_settimanale = budget_mensile * quota_reintegro
-    else:
-        # Distribuisci il resto del budget sulle settimane rimanenti (inclusa questa)
-        settimane_rimanenti = settimane_totali - (week_number - 1)
-        budget_settimanale = budget_residuo / max(settimane_rimanenti, 1)
-
-    return round(budget_settimanale, 2)
-
-
 # Funzioni utili per la gestione settimanale della lista della spesa
-
 def is_last_week_with_25(week_number):
 
     start_date, end_date = get_week_date_range(week_number)
     return any(day >= 25 for day in range(start_date.day, end_date.day + 1))
 
-
-def get_week_with_day_over_25():
-    today = datetime.today()
-    month = today.month
-    num = 1
-    while True:
-        start_date, end_date = get_week_date_range(num)
-        if start_date.month != month:
-            break
-        if any(day >= 25 for day in range(start_date.day, end_date.day + 1)):
-            return num
-        num += 1
-    return None
 
 def get_budget_info():
     conn = sqlite3.connect(Config.DATABASE_PATH)
@@ -262,40 +213,96 @@ def get_shopping_list_data(save_to_db=False, conn=None, cursor=None, decade=None
         query = """
             SELECT 
                 i.barcode,
-                MAX(tf.quantity) AS quantity,
+                stock.total_quantity  AS quantity,
                 i.reorder_point, i.min_quantity, i.max_quantity, i.security_quantity,
                 pd.name, pd.shop, tf.price,
-                adv.product_type, adv.priority_level
+                adv.product_type, adv.priority_level,
+                MAX(tf.expiry_date) as expiry_date,
+                MAX(tf.ins_date) as ins_date
             FROM inventory i
+            JOIN (
+                SELECT barcode, SUM(quantity) AS total_quantity
+                FROM transaction_fact
+                WHERE status = 'in stock'
+                GROUP BY barcode
+                ) AS stock ON i.barcode = stock.barcode
             JOIN transaction_fact tf ON i.barcode = tf.barcode
             JOIN product_dim pd ON i.barcode = pd.barcode
             JOIN inventory_advanced_options adv ON i.barcode = adv.barcode
-            WHERE i.max_quantity > 0 AND tf.quantity < i.reorder_point
+            WHERE 
+                i.max_quantity > 0
+                AND pd.item NOT LIKE '%Frutta'
+                AND pd.item NOT LIKE '%Verdura'
+                AND (JULIANDAY(tf.expiry_date) - JULIANDAY(tf.ins_date)) > 30
+                AND tf.ins_date >= date('now', '-6 months')
             GROUP BY i.barcode
+            HAVING 
+                stock.total_quantity < i.reorder_point
+                OR stock.total_quantity <= i.security_quantity
             ORDER BY adv.priority_level ASC, tf.price ASC
         """
-    else:
-        # Prime due decadi: prodotti freschi e indispensabili
+    elif decade == "D1": 
+        # Prima decade: prodotti freschi e indispensabili
         query = """
             SELECT 
                 i.barcode,
-                MAX(tf.quantity) AS quantity,
+                stock.total_quantity AS quantity,
                 i.reorder_point, i.min_quantity, i.max_quantity, i.security_quantity,
                 pd.name, pd.shop, tf.price,
                 adv.product_type, adv.priority_level
             FROM inventory i
+            JOIN (
+                SELECT barcode, SUM(quantity) AS total_quantity
+                FROM transaction_fact
+                WHERE status = 'in stock'
+                GROUP BY barcode
+            ) AS stock ON i.barcode = stock.barcode
+            JOIN transaction_fact tf ON i.barcode = tf.barcode
+            JOIN product_dim pd ON i.barcode = pd.barcode
+            JOIN inventory_advanced_options adv ON i.barcode = adv.barcode
+            WHERE i.max_quantity > 0
+            AND (pd.item LIKE '%Frutta' OR pd.item LIKE '%Verdura') -- prodotti freschi
+            GROUP BY i.barcode
+            HAVING (
+                (adv.product_type = 'Indispensabile' AND stock.total_quantity <= i.security_quantity)
+                OR
+                (pd.category LIKE '%Alimenti freschi' AND stock.total_quantity < i.min_quantity)
+            )
+            ORDER BY adv.priority_level ASC, tf.price ASC
+        """
+    else:
+        # Seconda decade: prodotti freschi e indispensabili e utilo avendo piu budget
+        query = """
+            SELECT
+            i.barcode,
+            stock.total_quantity AS quantity,
+            i.reorder_point, i.min_quantity, i.max_quantity, i.security_quantity,
+            pd.name, pd.shop, tf.price,
+            adv.product_type, adv.priority_level
+            FROM inventory i
+            JOIN (
+            SELECT barcode, SUM(quantity) AS total_quantity
+            FROM transaction_fact
+            WHERE status = 'in stock'
+            GROUP BY barcode
+            ) AS stock ON i.barcode = stock.barcode
             JOIN transaction_fact tf ON i.barcode = tf.barcode
             JOIN product_dim pd ON i.barcode = pd.barcode
             JOIN inventory_advanced_options adv ON i.barcode = adv.barcode
             WHERE i.max_quantity > 0
             GROUP BY i.barcode
             HAVING (
-                (adv.product_type = "Indispensabile" AND quantity < i.security_quantity)
-                OR
-                (adv.product_type = "Fresco" AND quantity < i.min_quantity)
+            (adv.product_type = 'Indispensabile' AND stock.total_quantity <= i.reorder_point)
+            OR
+            (adv.product_type = 'Utile' AND stock.total_quantity < i.min_quantity)
+            OR
+            (pd.category LIKE "%Alimenti Freschi" AND stock.total_quantity < i.min_quantity)
             )
-            ORDER BY adv.priority_level ASC, tf.price ASC
+            ORDER BY adv.priority_level ASC, tf.price ASC;
         """
+
+
+
 
     cursor.execute(query)
     rows = cursor.fetchall()
@@ -318,15 +325,16 @@ def get_shopping_list_data(save_to_db=False, conn=None, cursor=None, decade=None
         quantity_to_buy = 1
         reason = ""
 
-        if decade == "D3":
-            quantity_to_buy = max(max_q - quantity, 1)
-            reason = "Reintegro scorte"
-        elif product_type == "Indispensabile" and quantity < sec_q:
+        if product_type == "Indispensabile" and quantity < sec_q:
             quantity_to_buy = max(sec_q - quantity, 1)
             reason = "Sotto scorta"
         elif product_type == "Fresco" and quantity < min_q:
             quantity_to_buy = max(min_q - quantity, 1)
             reason = "Da consumare"
+        elif max_q > quantity and quantity <= reorder_point:
+            quantity_to_buy = max(max_q - quantity, 1)
+            reason = "Reintegro scorte"
+  
 
         product_cost = quantity_to_buy * price
         if total_cost + product_cost > budget:
