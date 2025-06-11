@@ -338,6 +338,13 @@ document.addEventListener("DOMContentLoaded", function () {
         if (data.success) {
           // Aggiorna la quantità nella tabella
           selectedRow.children[6].textContent = data.quantita;
+
+          // Aggiorna il valore totale (colonna 7, cioè children[7])
+          const prezzo = parseFloat(selectedRow.children[5].textContent.replace('€', '').replace(',', '.'));
+          const nuovaQuantita = parseInt(data.quantita, 10);
+          const nuovoTotale = isNaN(prezzo) || isNaN(nuovaQuantita) ? "0.00" : (prezzo * nuovaQuantita).toFixed(2);
+          selectedRow.children[7].textContent = `€${nuovoTotale}`;
+          
           // Aggiorna il bottone
           const btn = selectedRow.querySelector('.consume-btn');
           btn.textContent = "✅ DB Aggiornato";
