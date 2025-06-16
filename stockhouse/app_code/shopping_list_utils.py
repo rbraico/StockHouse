@@ -181,6 +181,8 @@ def get_shopping_list_data(save_to_db=False, conn=None, cursor=None, decade=None
     debug_print("get_shopping_list_data, save_to_db:", save_to_db, "decade:", decade)
 
 
+    # deve chiamare update_inventory_advanced_options(barcode, product_type, seasons)
+
     external_connection = False
     if conn is None or cursor is None:
         conn = sqlite3.connect(Config.DATABASE_PATH, timeout=10)
@@ -219,7 +221,7 @@ def get_shopping_list_data(save_to_db=False, conn=None, cursor=None, decade=None
                 adv.product_type, adv.priority_level,
                 MAX(tf.expiry_date) as expiry_date,
                 MAX(tf.ins_date) as ins_date
-            FROM inventory i
+            FROM product_settings i
             JOIN (
                 SELECT barcode, SUM(quantity) AS total_quantity
                 FROM transaction_fact
@@ -250,8 +252,8 @@ def get_shopping_list_data(save_to_db=False, conn=None, cursor=None, decade=None
                 i.reorder_point, i.min_quantity, i.max_quantity, i.security_quantity,
                 pd.name, pd.shop, tf.price,
                 adv.product_type, adv.priority_level
-            FROM inventory i
-            JOIN (
+            FROM product_settings i
+            JOIN(
                 SELECT barcode, SUM(quantity) AS total_quantity
                 FROM transaction_fact
                 WHERE status = 'in stock'
@@ -279,7 +281,7 @@ def get_shopping_list_data(save_to_db=False, conn=None, cursor=None, decade=None
             i.reorder_point, i.min_quantity, i.max_quantity, i.security_quantity,
             pd.name, pd.shop, tf.price,
             adv.product_type, adv.priority_level
-            FROM inventory i
+            FROM product_settings i
             JOIN (
             SELECT barcode, SUM(quantity) AS total_quantity
             FROM transaction_fact
@@ -416,7 +418,7 @@ def get_suggested_products():
             i.reorder_point,
             i.mean_usage_time,
             pd.shop
-        FROM inventory i
+        FROM product_settings i
         JOIN product_dim pd ON i.barcode = pd.barcode
         JOIN transaction_fact tf ON i.barcode = tf.barcode
         WHERE pd.name NOT IN (

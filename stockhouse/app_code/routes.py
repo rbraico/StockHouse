@@ -1,11 +1,11 @@
 from flask import Blueprint, render_template, request, redirect, flash, url_for, jsonify
 from stockhouse.app_code.barcode import lookup_barcode
 from stockhouse.app_code.models import add_product_dim, add_transaction_fact, delete_product_from_db,  lookup_products, get_all_products, get_all_shops, get_all_categories, get_all_items, lookup_products_by_name,\
-                       lookup_products_by_name_ins_date, update_product_dim, get_product_inventory, get_product_inventory_by_barcode, upsert_inventory, search_unconsumed_products_db, \
+                       lookup_products_by_name_ins_date, update_product_dim, get_priority_level, get_product_inventory, get_product_inventory_by_barcode, upsert_inventory, search_unconsumed_products_db, \
                        lookup_category_by_item, update_transaction_fact, update_transaction_fact_consumed, get_products_by_name, get_expiring_products, insert_consumed_fact, \
                        get_number_expiring_products, get_out_of_stock_count, get_critical_stock_count, get_monthly_consumed_count, \
                        get_week_date_range, get_product_by_name_and_dates, get_expiring_products_for_home, get_out_of_stock_products, get_critical_stock, get_monthly_consumed_statistics, \
-                       upsert_budget, get_budget, update_inventory_mean_usage_time, get_inventory_advanced, update_inventory_advanced_options, get_unconsumed_products_full_list,  \
+                       upsert_budget, get_budget, update_inventory_mean_usage_time, get_unconsumed_products_full_list,  \
                        get_unique_unconsumed_record, clean_old_transactions, update_reorder_frequency
 from stockhouse.app_code.models import add_shop, update_shop, delete_shop  
 from stockhouse.app_code.models import add_category, get_all_categories, update_category, delete_category, get_all_items, update_item, delete_item
@@ -278,6 +278,7 @@ def index():
 
     # 💡 Se la richiesta è GET, semplicemente carichiamo la pagina
     products      = get_all_products()
+    debug_print("ALL PRODUCTS: ", products)
     shops         = get_all_shops()
     #debug_print("ALL SHOPS: ", shops)
     categories    = get_all_categories()
@@ -310,7 +311,7 @@ def list_inventory():
     update_reorder_frequency()              # 🔄 Step 3: calcolo reorder_frequency
     products = get_product_inventory()      # 🏭 Step 4 - Seleziona i records per l'inventario
 
-    #debug_print ("Show_Product in inventory: ", products)
+    debug_print ("Show_Product in inventory: ", products)
 
     return render_template("inventory.html", products=products)
 
@@ -318,29 +319,48 @@ def list_inventory():
 
 # Questa procedura viene chiamata dal metodo POST dopo aver cliccato sul pulsante Modifica Parametri di Magazzino
 # Per inserire oppure modificare un record esistente nella tabella product_dim
-@main.route('/inventory/update_inline', methods=['POST'])
-def update_inventory_inline():
+@main.route('/products/update_inline', methods=['POST'])
+def update_products_inline():
     data = request.get_json()
     barcode = data.get('barcode')
     allowed_fields = [
-        'min_quantity', 'max_quantity', 'security_quantity',
-        'reorder_point', 'mean_usage_time', 'reorder_frequency', 'user_override'
+        'necessity_level', 'season', 'min_quantity', 'max_quantity',
+        'security_quantity', 'reorder_point', 'mean_usage_time',
+        'reorder_frequency', 'user_override'
     ]
+    
     updates = []
     values = []
+
+    # Prepara i campi normali
     for field in allowed_fields:
         if field in data:
             updates.append(f"{field} = ?")
             values.append(data[field])
+
+    # Se abbiamo necessity_level e season, calcoliamo priority
+    necessity_level = data.get('necessity_level')
+    product_seasons = data.get('season')
+
+    if necessity_level is not None and product_seasons is not None:
+        priority_level = get_priority_level(barcode, necessity_level, product_seasons)
+        updates.append("priority_level = ?")
+        values.append(priority_level)
+
     if not updates:
         return jsonify(success=False, error="Nessun campo da aggiornare")
+
     values.append(barcode)
+
     conn = sqlite3.connect(Config.DATABASE_PATH)
     cursor = conn.cursor()
-    cursor.execute(f"UPDATE inventory SET {', '.join(updates)} WHERE barcode = ?", values)
+    cursor.execute(f"UPDATE product_settings SET {', '.join(updates)} WHERE barcode = ?", values)
     conn.commit()
     conn.close()
-    return jsonify(success=True)
+
+    # Recupera il nuovo livello di priorità
+    return jsonify(success=True, priority_level=priority_level if 'priority_level' in locals() else None, barcode=barcode)
+
 
 
 @main.route("/edit/<name>/<ins_date>", methods=["GET", "POST"])
@@ -690,7 +710,7 @@ def expiring_products():
     # Renderizza la pagina HTML con i prodotti filtrati e il messaggio
     return render_template('expiring_products.html', products=products, message=message)
 
-#
+# Questa route serve per visualizzare i prodotti in scadenza nella home page
 @main.route('/home_expiring_products', methods=['GET'])
 def home_expiring_products():
     # Ottieni il parametro "months" dalla query string (default: 1 mese)
@@ -698,7 +718,7 @@ def home_expiring_products():
     debug_print(f"home_expiring_products - Filtro mesi: {months}")
 
     # Recupera i prodotti in scadenza entro il numero di mesi specificato
-    products = get_expiring_products_for_home(months)
+    products = get_expiring_products_for_home()
     debug_print("home_expiring_products - Prodotti in scadenza: ", products)
 
     # Se non ci sono prodotti, restituisci un messaggio vuoto
@@ -1023,52 +1043,6 @@ def budget():
      return render_template("budget.html", budget_record=budget_record)
 
 
-# Questa route serve per visualizzare i parametri avanzati di inventory
-#@main.route('/inventory/advanced/data')
-#def inventory_advanced_data():
-#    advanced_inventory = get_inventory_advanced()
-#    debug_print("inventory_advanced_data - Prodotti avanzati: ", advanced_inventory)
-#    return jsonify(advanced_inventory)
-
-
-# Funzione per calcolare il livello di priorità in base alla stagione
-@main.route('/inventory/advanced')
-def inventory_advanced():
-    # Ottieni i prodotti avanzati tramite la funzione del modello
-    advanced_inventory = get_inventory_advanced()
-
-    debug_print("inventory_advanced - Prodotti avanzati: ", advanced_inventory)
-
-    # Renderizza la pagina e passa i prodotti alla template
-    return render_template("inventory.html", products=advanced_inventory)
-
-# Questa route serve per visualizzare i prodotti avanzati
-@main.route('/inventory/advanced/update', methods=['POST'])
-def update_expense():
-    barcode = request.form.get('barcode')
-    product_type = request.form.get('product_type')
-    seasons = request.form.get('seasons')
-
-    debug_print("update_expense: ", barcode, product_type, seasons)
-
-    if barcode:
-        update_inventory_advanced_options(barcode, product_type, seasons)
-        debug_print("Aggiornamento riuscito")
-        return jsonify({'success': True})
-    else:
-        debug_print("Errore: barcode mancante")
-        return jsonify({'success': False, 'error': 'Barcode mancante'})
-
-
-@main.route("/products/advanced", methods=["GET"])
-def products_advanced():
-    debug_print("get_products_advanced - Chiamata API ricevuta")
-
-    inventory_advanced = get_inventory_advanced()
-   
-    #debug_print("get_expense_products - Prodotti: ", inventory_advanced)
-
-    return jsonify({"found": bool(inventory_advanced), "products": inventory_advanced})
 
 # Questa route serve per visualizzare i prodotti avanzati per Node Red
 @main.route('/api/shopping_list/current', methods=['GET'])
