@@ -74,19 +74,22 @@ def init_db():
 
     conn.commit()
 
-    # ✅ CREA TABELLA INVENTORY che contiene i parametri di magazzino
+    # ✅ CREA TABELLA product_settings che contiene i parametri di configurazione diei prodotti
     c.execute("""
-        CREATE TABLE IF NOT EXISTS inventory (
+        CREATE TABLE IF NOT EXISTS product_settings (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             product_key INTEGER,  
             barcode TEXT,
+            necessity_level TEXT,  -- (es.indispensabile, utile,occasionale,stagionale)
+            season TEXT,  -- (es. primavera, estate, autunno, inverno)
             min_quantity INTEGER,
             max_quantity INTEGER,
             security_quantity INTEGER,
             reorder_point INTEGER,
             mean_usage_time INTEGER,
             reorder_frequency INTEGER,
-            user_override INTEGER DEFAULT 1,
+            priority_level INTEGER DEFAULT 2,  -- Valore da 1 (alta priorita`) a 3 (bassa priorita`) viene settato in automatico, funzione di product_type e seasons
+            user_override INTEGER DEFAULT 1, -- 1=abilitato, 0=disabilitato
             FOREIGN KEY(product_key) REFERENCES product_dim(id)
         )
     """)
@@ -108,7 +111,7 @@ def init_db():
     c.execute("""
         CREATE TABLE IF NOT EXISTS inventory_advanced_options (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            barcode TEXT UNIQUE REFERENCES inventory(barcode),
+            barcode TEXT UNIQUE REFERENCES product_settings(barcode),
             product_type TEXT, 
             seasons TEXT, 
             priority_level INTEGER -- Valore da 1 (alta priorita`) a 3 (bassa priorita`) viene settato in automatico, funzione di product_type e seasons
@@ -387,11 +390,22 @@ def get_all_products():
             trs.consume_date, 
             trs.expiry_date, 
             trs.status,  
+            ps.necessity_level,
+            ps.season,
+            ps.min_quantity,
+            ps.max_quantity,
+            ps.security_quantity,
+            ps.reorder_point,
+            ps.mean_usage_time,
+            ps.reorder_frequency,
+            ps.priority_level,
+            ps.user_override,                   
             dim.image
         FROM transaction_fact trs
         INNER JOIN product_dim dim ON dim.id = trs.product_key
         LEFT JOIN item_list itl ON dim.item = itl.name
         LEFT JOIN category_list cat ON itl.category_id = cat.id
+        LEFT JOIN product_settings ps ON dim.barcode = ps.barcode
         WHERE trs.consume_date IS NULL
         ORDER BY dim.name
     """)
@@ -416,7 +430,17 @@ def get_all_products():
             "consume_date": row[10],
             "expiry_date": row[11],
             "status": row[12],
-            "image": row[13]
+            "necessity_level": row[13],
+            "season": row[14],
+            "min_quantity": row[15],
+            "max_quantity": row[16],
+            "security_quantity": row[17],
+            "reorder_point": row[18],
+            "mean_usage_time": row[19],
+            "reorder_frequency": row[20],
+            "priority_level": row[21],
+            "user_override": row[22],
+            "image": row[23]
         }
         for row in rows
     ]
@@ -739,10 +763,11 @@ def get_product_inventory():
             s.reorder_point,
             s.mean_usage_time,
             s.reorder_frequency,
-            s.user_override
-
+            s.user_override,
+            s.necessity_level,
+            s.season
         FROM ranked_products p
-        LEFT JOIN inventory s ON s.barcode = p.barcode
+        LEFT JOIN product_settings s ON s.barcode = p.barcode
         WHERE 
             quantity_in_inventory > 0
         ORDER BY p.barcode;
@@ -784,7 +809,9 @@ def get_product_inventory():
             "reorder_point": row[17],
             "mean_usage_time": row[18],
             "reorder_frequency": row[19],
-            "user_override": row[20]
+            "user_override": row[20],
+            "necessity_level": row[21],
+            "season": row[22]
         }
         for row in rows
     ]
@@ -855,10 +882,12 @@ def get_product_inventory_by_barcode(barcode):
             s.reorder_point,
             s.mean_usage_time,
             s.reorder_frequency,
-            s.user_override
+            s.user_override,
+            s.necessity_level,
+            s.season
 
         FROM ranked_products p
-        LEFT JOIN inventory s ON s.barcode = p.barcode
+        LEFT JOIN product_settings s ON s.barcode = p.barcode
         WHERE p.barcode = ?
     """
 
@@ -893,7 +922,9 @@ def get_product_inventory_by_barcode(barcode):
         "reorder_point": row[15],
         "mean_usage_time": row[16],
         "reorder_frequency": row[17],
-        "user_override": row[18]
+        "user_override": row[18],
+        'necessity_level': row[19],
+        'season': row[20]
     }
     
     return product  # ⬅️ Restituisce direttamente il singolo prodotto
@@ -940,7 +971,7 @@ def update_inventory_mean_usage_time():
         if mean_usage_time is not None:
             # Esegui l'UPDATE nel tuo inventario (sostituisci il nome della tabella e campo)
             cur.execute("""
-                UPDATE inventory
+                UPDATE product_settings
                 SET mean_usage_time = ?
                 WHERE barcode = ? and user_override = 1
             """, (mean_usage_time, barcode))
@@ -958,7 +989,7 @@ def update_reorder_frequency():
     # Prendi tutti i barcode con override attivo
     cur.execute("""
         SELECT DISTINCT barcode
-        FROM inventory
+        FROM product_settings
         WHERE user_override = 1
     """)
     barcodes = [row[0] for row in cur.fetchall()]
@@ -984,7 +1015,7 @@ def update_reorder_frequency():
         if avg_gap:
             debug_print(f"Updating barcode {barcode} with reorder_frequency: {avg_gap}")
             cur.execute("""
-                UPDATE inventory
+                UPDATE product_settings
                 SET reorder_frequency = ?
                 WHERE barcode = ? AND user_override = 1
             """, (avg_gap, barcode))
@@ -1000,8 +1031,8 @@ def sync_inventory_fact_with_products():
     conn = sqlite3.connect(Config.DATABASE_PATH)
     cur = conn.cursor()
 
-    # Leggi tutti i barcode già presenti nella tabella inventory
-    cur.execute("SELECT barcode FROM inventory")
+    # Leggi tutti i barcode già presenti nella tabella product_settings
+    cur.execute("SELECT barcode FROM product_settings")
     existing_barcodes = {row[0] for row in cur.fetchall()}
     #debug_print("existing_barcodes: ", existing_barcodes)
 
@@ -1020,7 +1051,7 @@ def sync_inventory_fact_with_products():
     # Inserisci i prodotti mancanti
     for product_key, barcode in missing_products:
         cur.execute("""
-            INSERT INTO inventory (
+            INSERT INTO product_settings (
                 product_key, barcode, user_override
             ) VALUES (?, ?, ?)
         """, (product_key, barcode, 1))
@@ -1050,12 +1081,12 @@ def upsert_inventory(data):
     if product_key:
        product_key = product_key[0]  # Prendi solo l’intero valore, non la tupla
 
-    cur.execute("SELECT COUNT(*) FROM inventory WHERE barcode = ?", (data['barcode'],))
+    cur.execute("SELECT COUNT(*) FROM product_settings WHERE barcode = ?", (data['barcode'],))
     record_exists = cur.fetchone()[0] > 0
 
     if record_exists:
         cur.execute("""
-            UPDATE inventory
+            UPDATE product_settings
             SET min_quantity = ?, max_quantity = ?, security_quantity = ?, reorder_point = ?, 
                 mean_usage_time = ?, reorder_frequency = ?, user_override = ?
             WHERE barcode = ?
@@ -1073,7 +1104,7 @@ def upsert_inventory(data):
     else:
         # Se il record non esiste, esegui l'INSERT
         cur.execute("""
-            INSERT INTO inventory (product_key, barcode, min_quantity, max_quantity, security_quantity, reorder_point,
+            INSERT INTO product_settings (product_key, barcode, min_quantity, max_quantity, security_quantity, reorder_point,
                                     mean_usage_time, reorder_frequency, user_override)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
@@ -1285,7 +1316,7 @@ def get_expiring_products(months):
         INNER JOIN product_dim dim ON dim.id = trs.product_key
         LEFT JOIN item_list itl ON dim.item = itl.name
         LEFT JOIN category_list cat ON itl.category_id = cat.id
-        WHERE trs.expiry_date IS NOT NULL AND trs.expiry_date != '' AND trs.expiry_date <= ?
+        WHERE trs.expiry_date IS NOT NULL AND trs.quantity > 0 AND trs.expiry_date != '' AND trs.expiry_date <= ?
         ORDER BY trs.expiry_date ASC
     """, (expiry_limit,))
 
@@ -1316,18 +1347,63 @@ def get_expiring_products(months):
 
     return products
 
-# Funzione per ottenere i prodotti in scadenza per la home page
-def get_expiring_products_for_home(months):
-    # Calcola la data limite in base ai mesi forniti
-    today = datetime.today()
-    expiry_limit = today + timedelta(days=30 * months)
-    debug_print(f"Data limite per la scadenza (Home): {expiry_limit}")
+
+
+
+# Mainpage, calcola il numero dei prodotti che scadono nel mese corrente
+def get_number_expiring_products():
+    import datetime
+    conn = sqlite3.connect(Config.DATABASE_PATH)
+    cursor = conn.cursor()
+
+    # Calcola il primo e l'ultimo giorno del mese corrente
+    current_date = datetime.datetime.now()
+    first_day_of_month = current_date.replace(day=1)  # Primo giorno del mese
+    last_day_of_month = (first_day_of_month + datetime.timedelta(days=32)).replace(day=1) - datetime.timedelta(days=1)  # Ultimo giorno del mese
+
+    # Formatta le date in formato 'YYYY-MM-DD'
+    first_day_str = first_day_of_month.strftime('%Y-%m-%d')
+    last_day_str = last_day_of_month.strftime('%Y-%m-%d')
+
+    # Debug: stampa le date calcolate
+    print(f"Intervallo di date: {first_day_str} - {last_day_str}")
+
+    # Query per contare i prodotti in scadenza nel mese corrente
+    query = """
+        SELECT COUNT(*)
+        FROM transaction_fact
+        WHERE quantity > 0 AND expiry_date BETWEEN ? AND ?
+    """
+    cursor.execute(query, (first_day_str, last_day_str))
+    count = cursor.fetchone()[0]
+
+    # Debug: stampa il risultato della query
+    print(f"Numero di prodotti trovati: {count}")
+
+    conn.close()
+    return count
+
+
+# Funzione per ottenere i prodotti in scadenza nel mese corrente per la home page
+def get_expiring_products_for_home():
+
+    import datetime
+   # Calcola il primo e l'ultimo giorno del mese corrente
+    current_date = datetime.datetime.now()
+    first_day_of_month = current_date.replace(day=1)  # Primo giorno del mese
+    last_day_of_month = (first_day_of_month + datetime.timedelta(days=32)).replace(day=1) - datetime.timedelta(days=1)  # Ultimo giorno del mese
+
+    # Formatta le date in formato 'YYYY-MM-DD'
+    first_day_str = first_day_of_month.strftime('%Y-%m-%d')
+    last_day_str = last_day_of_month.strftime('%Y-%m-%d')
+
+    debug_print(f"Data limite per la scadenza (Home): {first_day_str},  {last_day_str}")
     
     conn = sqlite3.connect(Config.DATABASE_PATH)
     c = conn.cursor()
 
     # Query ottimizzata per recuperare solo le colonne necessarie
-    c.execute("""
+    query = """
         SELECT 
             dim.name, 
             dim.barcode,
@@ -1336,11 +1412,11 @@ def get_expiring_products_for_home(months):
         FROM transaction_fact trs
         INNER JOIN product_dim dim ON dim.id = trs.product_key
         WHERE trs.expiry_date IS NOT NULL 
-          AND trs.expiry_date != '' 
-          AND trs.expiry_date <= ?
+          AND trs.quantity > 0
+          AND trs.expiry_date BETWEEN ? AND ?
         ORDER BY trs.expiry_date ASC
-    """, (expiry_limit,))
-
+    """
+    c.execute(query, (first_day_str, last_day_str))
     rows = c.fetchall()
     conn.close()
 
@@ -1383,44 +1459,6 @@ def get_week_date_range(week_number):
     return start_date, end_date
 
 
-
-
-
-
-
-
-# Mainpage, calcola il numero dei prodotti che scadono nel mese corrente
-def get_number_expiring_products():
-    import datetime
-    conn = sqlite3.connect(Config.DATABASE_PATH)
-    cursor = conn.cursor()
-
-    # Calcola il primo e l'ultimo giorno del mese corrente
-    current_date = datetime.datetime.now()
-    first_day_of_month = current_date.replace(day=1)  # Primo giorno del mese
-    last_day_of_month = (first_day_of_month + datetime.timedelta(days=32)).replace(day=1) - datetime.timedelta(days=1)  # Ultimo giorno del mese
-
-    # Formatta le date in formato 'YYYY-MM-DD'
-    first_day_str = first_day_of_month.strftime('%Y-%m-%d')
-    last_day_str = last_day_of_month.strftime('%Y-%m-%d')
-
-    # Debug: stampa le date calcolate
-    print(f"Intervallo di date: {first_day_str} - {last_day_str}")
-
-    # Query per contare i prodotti in scadenza nel mese corrente
-    query = """
-        SELECT COUNT(*)
-        FROM transaction_fact
-        WHERE expiry_date BETWEEN ? AND ?
-    """
-    cursor.execute(query, (first_day_str, last_day_str))
-    count = cursor.fetchone()[0]
-
-    # Debug: stampa il risultato della query
-    print(f"Numero di prodotti trovati: {count}")
-
-    conn.close()
-    return count
 
 #Mainpage, Funzione per ottenere i prodotti esauriti
 def get_out_of_stock_products():
@@ -1499,7 +1537,7 @@ def get_critical_stock_count():
         FROM (
                 SELECT tf.barcode, SUM(quantity) as tot
                 FROM transaction_fact tf
-                JOIN inventory i ON tf.barcode = i.barcode
+                JOIN product_settings i ON tf.barcode = i.barcode
                 GROUP BY tf.barcode
                 HAVING tot < i.security_quantity
              )
@@ -1530,7 +1568,7 @@ def get_critical_stock():
                 SUM(quantity) as tot
         FROM transaction_fact tf
         JOIN product_dim dim ON tf.barcode = dim.barcode
-        JOIN inventory inv ON tf.barcode = inv.barcode
+        JOIN product_settings inv ON tf.barcode = inv.barcode
         GROUP BY tf.barcode
         HAVING tot < inv.security_quantity  
         ORDER BY dim.name ASC
@@ -1670,29 +1708,81 @@ def get_budget():
 
 
 # Funzione per calcolare il livello di priorità in base alla stagione
-def get_priority_level(product_type, product_seasons):
+def get_priority_level(barcode, necessity_level, product_seasons):
     seasons_circle = ['primavera', 'estate', 'autunno', 'inverno']
-    debug_print("get_priority_level - product_type: ", product_type, "product_seasons: ", product_seasons)
+    debug_print("get_priority_level - necessity_level: ", necessity_level, "product_seasons: ", product_seasons)
 
-    if not product_type:
+    product = get_product_inventory_by_barcode(barcode)
+    debug_print("get_priority_level - Product: ", product)
+
+        # Coalesce manuale:
+    if not necessity_level:
+        necessity_level = product.get('necessity_level', None)
+    if not product_seasons:
+        product_seasons = product.get('season', '') 
+
+    if not necessity_level:
         return 3
 
-    tipo = product_type.lower()
+    necessity = necessity_level.lower()
 
     # 1. Indispensabile → priorità 1 fissa
-    if tipo == 'indispensabile':
-        return 1
+    if necessity == 'indispensabile':
+     try:
+        quantity = int(product.get("quantity_in_inventory", 0))
+        security_quantity = int(product.get("security_quantity", 0))
+        reorder_point = int(product.get("reorder_point", 0))
+
+        if quantity <= security_quantity:
+            return 1  # Crisi: sotto la soglia minima
+        elif quantity < reorder_point:
+            return 2  # In zona "attenzione"
+        elif quantity == reorder_point:
+            return 3  # Siamo al punto di riordino, ma non è urgente
+        else:
+            return 4  # Abbiamo abbondanza, può aspettare
+     except Exception as e:
+        debug_print("Errore nel calcolo priorità indispensabile:", e)
+        return 1  # In caso di dubbi, trattiamolo come urgente
+    
 
     # 2. Utile → priorità 2 fissa
-    if tipo == 'utile':
-        return 2
+    if necessity == 'utile':
+        try:
+            quantity = int(product.get("quantity_in_inventory", 0))
+            security_quantity = int(product.get("security_quantity", 0))
+            reorder_point = int(product.get("reorder_point", 0))
+
+            if quantity <= security_quantity:
+                return 3  # attenzione: sta finendo
+            elif quantity < reorder_point:
+                return 4  # ancora abbondante, ma occhio
+            else:
+                return 5  # abbondanza, può aspettare
+        except Exception as e:
+            debug_print("Errore nel calcolo priorità utile:", e)
+            return 3  # fallback a priorità attenzione
+
 
     # 3. Occasionale → priorità 4 fissa (bassa)
-    if tipo == 'occasionale':
-        return 4
+    if necessity == 'occasionale':
+        try:
+            quantity = int(product.get("quantity_in_inventory", 0))
+            security_quantity = int(product.get("security_quantity", 0))
+            reorder_point = int(product.get("reorder_point", 0))
+
+            if quantity <= security_quantity:
+                return 4  # poco, serve attenzione bassa
+            elif quantity < reorder_point:
+                return 5  # abbondante, bassissima priorità
+            else:
+                return 6  # super abbondante, praticamente ignorabile
+        except Exception as e:
+            debug_print("Errore nel calcolo priorità occasionale:", e)
+            return 4  # fallback priorità base
 
     # 4. Stagionale → dipende dalla stagione
-    if tipo == 'stagionale':
+    if necessity == 'stagionale':
         month = datetime.now().month
         if month in [3, 4, 5]:
             current_season = 'primavera'
@@ -1712,54 +1802,14 @@ def get_priority_level(product_type, product_seasons):
                 season_index = seasons_circle.index(season)
                 distance = min((season_index - curr_index) % 4, (curr_index - season_index) % 4)
                 if distance == 0:
-                    distances.append(3)  # Stagione corrente → priorità 3
+                    distances.append(1)  # Stagione corrente → priorità 3
                 elif distance == 1:
-                    distances.append(4)  # Vicina → priorità 4
+                    distances.append(2)  # Vicina → priorità 4
                 else:
-                    distances.append(5)  # Lontana → ignorabile per ora
+                    distances.append(3)  # Lontana → ignorabile per ora
 
         return min(distances) if distances else 5
 
     # Fallback
     return 3
 
-
-
-# Funzione per ottenere l'inventario avanzato
-def get_inventory_advanced():
-    conn = sqlite3.connect(Config.DATABASE_PATH)
-    conn.row_factory = sqlite3.Row
-    cur = conn.cursor()
-
-    cur.execute("""
-        SELECT pd.image, pd.barcode, pd.name, eo.product_type, eo.seasons, eo.priority_level
-        FROM inventory i
-        JOIN product_dim pd ON i.barcode = pd.barcode
-        LEFT JOIN inventory_advanced_options eo ON i.barcode = eo.barcode
-    """)
-    rows = cur.fetchall()
-    conn.close()
-
-    # Costruisci la lista dei prodotti senza ricalcolare la priorità
-    inventory_advanced = [dict(row) for row in rows]
-
-    debug_print("get_inventory_advanced - Products: ", inventory_advanced)
-    return inventory_advanced
-
-# Funzione per cambiare le opzioni di spesa
-def update_inventory_advanced_options(barcode, product_type, seasons):
-    conn = sqlite3.connect(Config.DATABASE_PATH)
-    cur = conn.cursor()
-    priorituy_level = get_priority_level(product_type, seasons)
-    debug_print("update_inventory_advanced_options: ", barcode, product_type, seasons, priorituy_level)
-    cur.execute("""
-        INSERT INTO inventory_advanced_options (barcode, product_type, seasons, priority_level)
-        VALUES (?, ?, ?, ?)
-        ON CONFLICT(barcode) DO UPDATE SET
-            product_type=excluded.product_type,
-            seasons=excluded.seasons,
-            priority_level=excluded.priority_level
-    """, (barcode, product_type, seasons, priorituy_level))
-
-    conn.commit()
-    conn.close()
