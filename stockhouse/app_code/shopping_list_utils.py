@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta, date
 import sqlite3
-from stockhouse.app_code.models import get_week_date_range
+from stockhouse.app_code.models import get_week_date_range, upsert_expense
 from config import Config  # usa il path corretto se è diverso
 from stockhouse.utils import debug_print
 
@@ -86,19 +86,55 @@ def is_last_week_with_25(week_number):
     return any(day >= 25 for day in range(start_date.day, end_date.day + 1))
 
 
+def get_spesa_per_decade():
+    conn = sqlite3.connect(Config.DATABASE_PATH)
+    cursor = conn.cursor()
+
+    spese = []
+    current_month = datetime.today().strftime("%Y-%m")
+
+    for decade in ['D1', 'D2', 'D3']:
+        cursor.execute("""
+            SELECT IFNULL(SUM(amount), 0) FROM expenses_fact
+            WHERE strftime('%Y-%m', shopping_date) = ? AND decade_number = ?
+        """, (current_month, decade))
+        totale = cursor.fetchone()[0]
+        spese.append(totale)
+
+    conn.close()
+    return spese
+
+
 def get_budget_info():
     conn = sqlite3.connect(Config.DATABASE_PATH)
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
 
-    cursor.execute("SELECT budget, budget_ins_date FROM budget_config ORDER BY id DESC LIMIT 1")
+    cursor.execute("""
+        SELECT budget, perc_decade_1, perc_decade_2, perc_decade_3, note 
+        FROM budget_config 
+        ORDER BY id DESC LIMIT 1
+    """)
     row = cursor.fetchone()
     conn.close()
 
     if row:
-        return float(row['budget']), row['budget_ins_date']
+        return {
+            'budget': float(row['budget']),
+            'decade1': int(row['perc_decade_1']),
+            'decade2': int(row['perc_decade_2']),
+            'decade3': int(row['perc_decade_3']),
+            'note': row['note']
+        }
     else:
-        return 0, None
+        return {
+            'budget': 0,
+            'decade1': 0,
+            'decade2': 0,
+            'decade3': 0,
+            'note': ''
+        }
+
     
 
 def get_total_spesa_corrente():
@@ -129,40 +165,6 @@ def get_current_week():
     return week_number
 
 
-# Funzione per generare la lista della spesa mensile
-def generate_monthly_shopping_list():
-    today = datetime.today().date()
-    current_month = today.strftime("%Y-%m")
-    debug_print(f"Generazione lista spesa mensile per: {current_month}")
-
-    conn = sqlite3.connect(Config.DATABASE_PATH)
-    conn.row_factory = sqlite3.Row
-    cursor = conn.cursor()
-
-    # Controlla se ci sono già dati per questo mese
-    cursor.execute("""
-        SELECT COUNT(*) as count FROM shopping_list
-        WHERE strftime('%Y-%m', insert_date) = ?
-    """, (current_month,))
-    result = cursor.fetchone()
-
-    if result['count'] > 0:
-        debug_print("⚠️ La lista per questo mese è già stata generata. Nessuna azione necessaria.")
-        conn.close()
-        return
-
-    debug_print("✅ Nessuna lista trovata per il mese corrente. Procedo con la generazione...")
-
-    # Genera per ogni decade, passando il parametro
-    for decade in ["D1", "D2", "D3"]:
-        debug_print(f"Generazione lista per {decade}...")
-        items, _ = get_shopping_list_data(save_to_db=True, conn=conn, cursor=cursor, decade=decade)
-        debug_print(f"✔️ Inseriti {len(items)} prodotti per la {decade}")
-
-    conn.commit()
-    conn.close()
-    debug_print("🎯 Lista spesa mensile completata con successo.")
-
 
 def parse_quantity(value):
     try:
@@ -180,9 +182,6 @@ def get_shopping_list_data(save_to_db=False, conn=None, cursor=None, decade=None
     
     debug_print("get_shopping_list_data, save_to_db:", save_to_db, "decade:", decade)
 
-
-    # deve chiamare update_inventory_advanced_options(barcode, product_type, seasons)
-
     external_connection = False
     if conn is None or cursor is None:
         conn = sqlite3.connect(Config.DATABASE_PATH, timeout=10)
@@ -194,18 +193,17 @@ def get_shopping_list_data(save_to_db=False, conn=None, cursor=None, decade=None
     decade = decade or get_current_decade()
     debug_print(f"📆 Decade corrente/elaborata: {decade}")
 
-    # Recupera il budget totale dal DB
-    cursor.execute("SELECT budget FROM budget_config LIMIT 1")
-    row = cursor.fetchone()
-    monthly_budget = row["budget"] if row else 0
+    # Recupera le info di budget dal DB
+    budget_info = get_budget_info()
+    monthly_budget = budget_info['budget']
 
-    # Percentuali budget per decade
+    # Percentuali budget per decade prese da DB
     if decade == "D1":
-        budget = monthly_budget * 0.15
+        budget = monthly_budget * (budget_info['decade1'] / 100)
     elif decade == "D2":
-        budget = monthly_budget * 0.30
+        budget = monthly_budget * (budget_info['decade2'] / 100)
     else:
-        budget = monthly_budget * 0.55
+        budget = monthly_budget * (budget_info['decade3'] / 100)
 
     debug_print(f"💰 Budget disponibile per la {decade}: {budget:.2f}")
 
@@ -218,7 +216,7 @@ def get_shopping_list_data(save_to_db=False, conn=None, cursor=None, decade=None
                 stock.total_quantity  AS quantity,
                 i.reorder_point, i.min_quantity, i.max_quantity, i.security_quantity,
                 pd.name, pd.shop, tf.price,
-                adv.product_type, adv.priority_level,
+                i.necessity_level, i.priority_level,
                 MAX(tf.expiry_date) as expiry_date,
                 MAX(tf.ins_date) as ins_date
             FROM product_settings i
@@ -230,7 +228,6 @@ def get_shopping_list_data(save_to_db=False, conn=None, cursor=None, decade=None
                 ) AS stock ON i.barcode = stock.barcode
             JOIN transaction_fact tf ON i.barcode = tf.barcode
             JOIN product_dim pd ON i.barcode = pd.barcode
-            JOIN inventory_advanced_options adv ON i.barcode = adv.barcode
             WHERE 
                 i.max_quantity > 0
                 AND pd.item NOT LIKE '%Frutta'
@@ -241,7 +238,7 @@ def get_shopping_list_data(save_to_db=False, conn=None, cursor=None, decade=None
             HAVING 
                 stock.total_quantity < i.reorder_point
                 OR stock.total_quantity <= i.security_quantity
-            ORDER BY adv.priority_level ASC, tf.price ASC
+            ORDER BY i.priority_level ASC, tf.price ASC
         """
     elif decade == "D1": 
         # Prima decade: prodotti freschi e indispensabili
@@ -251,7 +248,8 @@ def get_shopping_list_data(save_to_db=False, conn=None, cursor=None, decade=None
                 stock.total_quantity AS quantity,
                 i.reorder_point, i.min_quantity, i.max_quantity, i.security_quantity,
                 pd.name, pd.shop, tf.price,
-                adv.product_type, adv.priority_level
+                i.necessity_level, i.priority_level,
+                MIN(tf.ins_date) as ins_date
             FROM product_settings i
             JOIN(
                 SELECT barcode, SUM(quantity) AS total_quantity
@@ -261,16 +259,15 @@ def get_shopping_list_data(save_to_db=False, conn=None, cursor=None, decade=None
             ) AS stock ON i.barcode = stock.barcode
             JOIN transaction_fact tf ON i.barcode = tf.barcode
             JOIN product_dim pd ON i.barcode = pd.barcode
-            JOIN inventory_advanced_options adv ON i.barcode = adv.barcode
             WHERE i.max_quantity > 0
             AND (pd.item LIKE '%Frutta' OR pd.item LIKE '%Verdura') -- prodotti freschi
             GROUP BY i.barcode
             HAVING (
-                (adv.product_type = 'Indispensabile' AND stock.total_quantity <= i.security_quantity)
+                (i.necessity_level = 'Indispensabile' AND stock.total_quantity <= i.security_quantity)
                 OR
                 (pd.category LIKE '%Alimenti freschi' AND stock.total_quantity < i.min_quantity)
             )
-            ORDER BY adv.priority_level ASC, tf.price ASC
+            ORDER BY i.priority_level ASC, ins_date ASC, tf.price ASC
         """
     else:
         # Seconda decade: prodotti freschi e indispensabili e utilo avendo piu budget
@@ -280,7 +277,8 @@ def get_shopping_list_data(save_to_db=False, conn=None, cursor=None, decade=None
             stock.total_quantity AS quantity,
             i.reorder_point, i.min_quantity, i.max_quantity, i.security_quantity,
             pd.name, pd.shop, tf.price,
-            adv.product_type, adv.priority_level
+            i.necessity_level, i.priority_level,
+            MIN(tf.ins_date) as ins_date
             FROM product_settings i
             JOIN (
             SELECT barcode, SUM(quantity) AS total_quantity
@@ -290,17 +288,16 @@ def get_shopping_list_data(save_to_db=False, conn=None, cursor=None, decade=None
             ) AS stock ON i.barcode = stock.barcode
             JOIN transaction_fact tf ON i.barcode = tf.barcode
             JOIN product_dim pd ON i.barcode = pd.barcode
-            JOIN inventory_advanced_options adv ON i.barcode = adv.barcode
             WHERE i.max_quantity > 0
             GROUP BY i.barcode
             HAVING (
-            (adv.product_type = 'Indispensabile' AND stock.total_quantity <= i.reorder_point)
+            (i.necessity_level = 'Indispensabile' AND stock.total_quantity <= i.reorder_point)
             OR
-            (adv.product_type = 'Utile' AND stock.total_quantity < i.min_quantity)
+            (i.necessity_level = 'Utile' AND stock.total_quantity < i.min_quantity)
             OR
             (pd.category LIKE "%Alimenti Freschi" AND stock.total_quantity < i.min_quantity)
             )
-            ORDER BY adv.priority_level ASC, tf.price ASC;
+            ORDER BY i.priority_level ASC, ins_date ASC, tf.price ASC;
         """
 
 
@@ -323,14 +320,14 @@ def get_shopping_list_data(save_to_db=False, conn=None, cursor=None, decade=None
         min_q = parse_quantity(row["min_quantity"])
         sec_q = parse_quantity(row["security_quantity"])
         reorder_point = parse_quantity(row["reorder_point"])
-        product_type = row["product_type"]
+        necessity_level = row["necessity_level"]
         quantity_to_buy = 1
         reason = ""
 
-        if product_type == "Indispensabile" and quantity < sec_q:
+        if necessity_level == "Indispensabile" and quantity < sec_q:
             quantity_to_buy = max(sec_q - quantity, 1)
             reason = "Sotto scorta"
-        elif product_type == "Fresco" and quantity < min_q:
+        elif necessity_level == "Stagionale" and quantity < min_q:
             quantity_to_buy = max(min_q - quantity, 1)
             reason = "Da consumare"
         elif max_q > quantity and quantity <= reorder_point:
@@ -339,11 +336,12 @@ def get_shopping_list_data(save_to_db=False, conn=None, cursor=None, decade=None
   
 
         product_cost = quantity_to_buy * price
-        if total_cost + product_cost > budget:
-            debug_print("❌ Raggiunto il limite di budget")
-            break
-
-        total_cost += product_cost
+        if total_cost + product_cost <= budget:
+            within_budget = 1
+            total_cost += product_cost
+        else:
+            within_budget = 0
+        
 
         item = {
             "barcode": barcode,
@@ -352,33 +350,70 @@ def get_shopping_list_data(save_to_db=False, conn=None, cursor=None, decade=None
             "shop": shop,
             "reason": reason,
             "price": price,
-            "decade_number": decade
+            "decade_number": decade,
+            "within_budget": within_budget
         }
         items.append(item)
 
-        if shop:
-            shop_totals.setdefault(shop, 0)
-            shop_totals[shop] += product_cost
+
 
     debug_print("save_to_db, decade:", decade)
 
     if save_to_db:
-        cursor.execute("DELETE FROM shopping_list WHERE decade_number = ?", (decade,))
-        for item in items:
+        cursor.execute("DELETE FROM shopping_list WHERE decade_number != ?", (decade,))
+    for item in items:
+        # Controlla se il record è già presente per la stessa decade e barcode
+        cursor.execute("""
+            SELECT 1 FROM shopping_list 
+            WHERE barcode = ? AND decade_number = ?
+        """, (item["barcode"], item["decade_number"]))
+        exists = cursor.fetchone()
+
+        if not exists:
             cursor.execute("""
                 INSERT INTO shopping_list (
                     barcode, product_name, quantity_to_buy,
-                    shop, reason, price, decade_number, insert_date
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, DATE('now'))
+                    shop, reason, price, decade_number, insert_date, within_budget
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, DATE('now'), ?)
             """, (
                 item["barcode"], item["product_name"], item["quantity_to_buy"],
-                item["shop"], item["reason"], item["price"], item["decade_number"]
+                item["shop"], item["reason"], item["price"], item["decade_number"], item["within_budget"]
             ))
+        else:
+            # Se già presente, aggiorna quantità, prezzo e within_budget
+            cursor.execute("""
+                UPDATE shopping_list SET
+                    quantity_to_buy = ?,
+                    price = ?,
+                    within_budget = ?,
+                    insert_date = DATE('now')
+                WHERE barcode = ? AND decade_number = ?
+            """, (
+                item["quantity_to_buy"],
+                item["price"],
+                item["within_budget"],
+                item["barcode"],
+                item["decade_number"]
+            ))
+
         conn.commit()
+
+    # Recupera tutti gli elementi della lista della spesa
+    cursor.execute("SELECT * FROM shopping_list")
+    items = cursor.fetchall() 
+
+    shop_totals = {}
+    for item in items:
+        shop = item["shop"]  # oppure item['shop'] se items è una lista di dict
+        product_cost = item["price"] * item["quantity_to_buy"]
+        if shop:
+            shop_totals.setdefault(shop, 0)
+            shop_totals[shop] += product_cost
 
     if external_connection:
         conn.close()
 
+    debug_print(f"🛒 Lista della spesa per la {decade} generata con {len(items)} prodotti, totale: {total_cost:.2f}€")
     return items, shop_totals
 
 
@@ -460,3 +495,73 @@ def get_suggested_products():
             })
 
     return suggested
+
+# Funzione per processare la coda della lista della spesa
+def process_shopping_queue():
+    debug_print("Processo la coda della lista della spesa...")
+    conn = sqlite3.connect(Config.DATABASE_PATH)
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT * FROM shopping_queue ORDER BY id ASC")
+    rows = cursor.fetchall()
+
+    debug_print(f"Trovate {len(rows)} righe nella coda della lista della spesa.")
+
+    for row in rows:
+        queue_id = row[0]
+        product_name = row[1]
+        quantity = row[2]
+        price = row[3]
+        expiry = row[4]
+        shop = row[5]
+        ins_date = row[6]
+
+        debug_print(f"[INFO] Elaboro riga {queue_id}: {product_name}, Quantità: {quantity}, Prezzo: {price}, Scadenza: {expiry}, Negozio: {shop}")
+
+        # Lookup in product_dim
+        product_name_trimmed = product_name.strip()
+        cursor.execute("SELECT id, barcode FROM product_dim WHERE TRIM(name) = ?", (product_name_trimmed,))
+        result = cursor.fetchone()
+
+        if not result:
+            debug_print(f"[WARNING] Prodotto non trovato in product_dim: {product_name}. Riga ignorata.")
+            continue
+
+        product_key, barcode = result
+
+        # Inserimento in transaction_fact
+        cursor.execute("""
+            INSERT INTO transaction_fact (
+                product_key, barcode, price, quantity, consumed_quantity, ins_date,
+                consume_date, expiry_date, status
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            product_key,
+            barcode,
+            price,
+            quantity,
+            0,
+            ins_date,
+            None,
+            expiry,
+            "in stock"
+        ))
+
+        # Rimuove dalla coda
+        cursor.execute("DELETE FROM shopping_queue WHERE id = ?", (queue_id,))
+        print(f"[INFO] Riga {queue_id} processata e rimossa dalla coda.")
+
+        # Rimuove dalla lista della spesa
+        cursor.execute("DELETE FROM shopping_list WHERE barcode = ?", (barcode,))
+        print(f"[INFO] Prodotto {product_name} rimosso dalla lista della spesa.")
+
+        # Aggiorna expenses_fact
+        selected_decade = get_current_decade()
+        amount = round(float(price) * int(quantity), 2)
+        upsert_expense(cursor, ins_date, selected_decade, shop, amount)
+
+    # Esegui commit e chiudi connessione **una volta sola**
+    conn.commit()
+    conn.close()
+
+  
