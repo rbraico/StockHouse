@@ -100,27 +100,36 @@ def init_db():
         CREATE TABLE IF NOT EXISTS budget_config (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             budget INTEGER,  
+            perc_decade_1 INTEGER DEFAULT 0,  -- Percentuale del budget da spendere nella prima decade del mese  
+            perc_decade_2 INTEGER DEFAULT 0,  -- Percentuale del budget da spendere nella seconda decade del mese  
+            perc_decade_3 INTEGER DEFAULT 0,  -- Percentuale del budget da spendere nella terza decade del mese
             note TEXT,
-            budget_ins_date TEXT,
-            bilancio_precedente INTEGER
+            last_update TEXT DEFAULT (strftime('%Y-%m-%d %H:%M:%S'))  -- Data dell'ultimo aggiornamento 
             )
     """)
     conn.commit()
 
-
+    # ✅ CREA TABELLA TRANSACTION_FACT che contiene le transazioni dei prodotti
     c.execute("""
-        CREATE TABLE IF NOT EXISTS inventory_advanced_options (
+        CREATE TABLE IF NOT EXISTS transaction_fact (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            barcode TEXT UNIQUE REFERENCES product_settings(barcode),
-            product_type TEXT, 
-            seasons TEXT, 
-            priority_level INTEGER -- Valore da 1 (alta priorita`) a 3 (bassa priorita`) viene settato in automatico, funzione di product_type e seasons
-            )
+            product_key INTEGER,
+            barcode TEXT,
+            price REAL,
+            quantity INTEGER,
+            consumed_quantity INTEGER DEFAULT 0,  
+            ins_date TEXT,
+            consume_date TEXT,
+            expiry_date TEXT,
+            status TEXT,
+            FOREIGN KEY (product_key) REFERENCES product_dim(id)
+        )
     """)
-
     conn.commit()
 
 
+
+    # ✅ CREA TABELLA SHOPPING_LIST che contiene la lista della spesa
     c.execute("""
         CREATE TABLE IF NOT EXISTS shopping_list (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -132,13 +141,40 @@ def init_db():
             price REAL,
             decade_number TEXT,
             insert_date DATE,
+            within_budget INTEGER DEFAULT 0,  -- 0=false, 1=true
             FOREIGN KEY (barcode) REFERENCES product_dim(barcode)
         )
     """)
 
     conn.commit()
 
+    # ✅ CREA TABELLA EXPENSES_FACT che contiene la la somma delle spese per giorno e negozio
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS expenses_fact (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            shopping_date DATE,            
+            decade_number TEXT,
+            shop TEXT,
+            amount REAL
+        )
+    """)
 
+    conn.commit()
+
+  # ✅ CREA TABELLA shopping_queue usata come coda di comunicazione con shoppy
+    c.execute("""  
+        CREATE TABLE IF NOT EXISTS shopping_queue (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            product_name TEXT NOT NULL,
+            quantity INTEGER,
+            price REAL,
+            expiry TEXT,
+            shop TEXT,
+            timestamp TEXT
+        )
+   """)
+
+    conn.commit()
 
     conn.close()
 
@@ -1226,16 +1262,16 @@ def get_all_items():
     return items
 
 
-def add_transaction_fact(product_key, barcode, price, quantity, ins_date, consume_date, expiry_date, status):
+def add_transaction_fact(product_key, barcode, price, quantity, consumed_quantity, ins_date, consume_date, expiry_date, status):
 
-    debug_print("add_transaction_fact: ", product_key ,barcode, price, quantity, ins_date, consume_date, expiry_date, status)
+    debug_print("add_transaction_fact: ", product_key ,barcode, price, quantity, consumed_quantity, ins_date, consume_date, expiry_date, status)
 
     conn = sqlite3.connect(Config.DATABASE_PATH)
     c = conn.cursor()
     c.execute("""
-        INSERT INTO transaction_fact (product_key, barcode, price, quantity, ins_date, consume_date, expiry_date, status)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    """, (product_key, barcode, price, quantity, ins_date, consume_date, expiry_date, status
+        INSERT INTO transaction_fact (product_key, barcode, price, quantity, consumed_quantity, ins_date, consume_date, expiry_date, status)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (product_key, barcode, price, quantity, consumed_quantity, ins_date, consume_date, expiry_date, status
           ))
     conn.commit()
     conn.close()
@@ -1255,17 +1291,27 @@ def update_transaction_fact(id, price, quantity, expiry_date, ins_date):
     conn.close()
 
   
-def update_transaction_fact_consumed(id, quantity, ins_date, expiry_date, consume_date, status):
-    debug_print("update_transaction_fact_consumed:", id, quantity, ins_date, expiry_date, consume_date, status)
+def update_transaction_fact_consumed(id, ins_date, expiry_date):
+    debug_print("update_transaction_fact_consumed:", id, ins_date, expiry_date)
 
     conn = sqlite3.connect(Config.DATABASE_PATH)
     c = conn.cursor()
 
     c.execute("""
         UPDATE transaction_fact
-        SET quantity=?, consume_date=?, status=?
-        WHERE id=? AND ins_date=? AND expiry_date=?
-    """, (quantity, consume_date, status, id, ins_date, expiry_date))
+        SET
+            consumed_quantity = COALESCE(consumed_quantity, 0) + 1,
+            status = CASE
+                WHEN quantity = COALESCE(consumed_quantity, 0) + 1 THEN 'out of stock'
+                ELSE status
+            END,
+            consume_date = CASE
+                WHEN quantity = COALESCE(consumed_quantity, 0) + 1 THEN DATE('now')
+                WHEN quantity < COALESCE(consumed_quantity, 0) + 1 THEN NULL
+                ELSE consume_date
+            END
+        WHERE id = ? AND ins_date = ? AND expiry_date = ?
+    """, (id, ins_date, expiry_date))
 
     conn.commit()
     conn.close()
@@ -1643,9 +1689,8 @@ def get_monthly_consumed_statistics():
 
 
 # Budget - Setta il budget mensile. La tabella prevede un solo record
-def upsert_budget(id, budget, note):
+def upsert_budget(id, budget, perc_decade_1, perc_decade_2, perc_decade_3, note):
     
-    budget_insert_date = datetime.now().strftime("%Y-%m-%d")
     debug_print("upsert_budget:", id, budget, note)
 
     conn = sqlite3.connect(Config.DATABASE_PATH)
@@ -1658,20 +1703,20 @@ def upsert_budget(id, budget, note):
  
     if record_exists:
         # Se il record esiste, esegui l'UPDATE
-        debug_print("Record esistente, esegui l'UPDATE")
+        debug_print("Record esistente, esegui l'UPDATE", id, budget, perc_decade_1, perc_decade_2, perc_decade_3, note)
         cur.execute("""
             UPDATE budget_config
-            SET budget = ?, note = ?, budget_ins_date = CURRENT_DATE
+            SET budget = ?, perc_decade_1 = ?, perc_decade_2 = ?, perc_decade_3 = ?, note = ?
             WHERE id = ?
-        """, (budget, note, id)
+        """, (budget, perc_decade_1, perc_decade_2, perc_decade_3, note, id)
         )
     else:
         # Se il record non esiste, esegui l'INSERT
         debug_print("Record non esistente, esegui l'INSERT")
         cur.execute("""
-            INSERT INTO budget_config (id, budget, note, budget_ins_date, bilancio_precedente)
-            VALUES (?, ?, ?, CURRENT_DATE, 0)
-        """, (id, budget, note)
+            INSERT INTO budget_config (id, budget, perc_decade_1, perc_decade_2, perc_decade_3, note)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (id, budget, perc_decade_1, perc_decade_2, perc_decade_3, note)
         )
  
     conn.commit()
@@ -1687,7 +1732,7 @@ def get_budget():
     cur = conn.cursor()
 
     # Verifica se il record esiste
-    cur.execute("SELECT budget, note, budget_ins_date FROM budget_config WHERE id = ?", (id,))
+    cur.execute("SELECT budget, perc_decade_1, perc_decade_2, perc_decade_3, note, last_update FROM budget_config WHERE id = ?", (id,))
     row = cur.fetchone()
 
     conn.close()
@@ -1695,8 +1740,11 @@ def get_budget():
     if row:
         budget = {
             "budget": row[0],
-            "note": row[1],
-            "budget_ins_date": row[2]
+            "perc_decade_1": row[1],
+            "perc_decade_2": row[2],
+            "perc_decade_3": row[3],
+            "note": row[4],
+            "last_update": row[5]
         }
     else:
         budget = None  # oppure puoi restituire un dizionario vuoto
@@ -1813,3 +1861,34 @@ def get_priority_level(barcode, necessity_level, product_seasons):
     # Fallback
     return 3
 
+# Funzione per inserire o aggiornare un record di spesa
+def upsert_expense(cursor, shopping_date, decade_number, shop, amount):
+
+    debug_print("upsert_expense:", shopping_date, decade_number, shop, amount)
+    
+    # Step 1: cancella record con shopping_date più vecchia di 1 anno
+    cursor.execute("""
+        DELETE FROM expenses_fact
+        WHERE shopping_date < date('now', '-1 year')
+    """)
+
+    # Step 2: verifica se esiste già un record per quella data, decade e shop
+    cursor.execute("""
+        SELECT id, amount FROM expenses_fact
+        WHERE shopping_date = ? AND decade_number = ? AND shop = ?
+    """, (shopping_date, decade_number, shop))
+    row = cursor.fetchone()
+    if row:
+        # Se esiste, aggiorna amount sommando il nuovo valore
+        cursor.execute("""
+            UPDATE expenses_fact
+            SET amount = amount + ?
+            WHERE id = ?
+        """, (amount, row[0]))
+    else:
+        # Altrimenti inserisci un nuovo record
+        cursor.execute("""
+            INSERT INTO expenses_fact (shopping_date, decade_number, shop, amount)
+            VALUES (?, ?, ?, ?)
+        """, (shopping_date, decade_number, shop, amount))
+    

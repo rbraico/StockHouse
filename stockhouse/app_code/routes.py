@@ -6,7 +6,7 @@ from stockhouse.app_code.models import add_product_dim, add_transaction_fact, de
                        get_number_expiring_products, get_out_of_stock_count, get_critical_stock_count, get_monthly_consumed_count, \
                        get_week_date_range, get_product_by_name_and_dates, get_expiring_products_for_home, get_out_of_stock_products, get_critical_stock, get_monthly_consumed_statistics, \
                        upsert_budget, get_budget, update_inventory_mean_usage_time, get_unconsumed_products_full_list,  \
-                       get_unique_unconsumed_record, clean_old_transactions, update_reorder_frequency
+                       get_unique_unconsumed_record, clean_old_transactions, update_reorder_frequency,upsert_expense
 from stockhouse.app_code.models import add_shop, update_shop, delete_shop  
 from stockhouse.app_code.models import add_category, get_all_categories, update_category, delete_category, get_all_items, update_item, delete_item
 import sqlite3
@@ -22,14 +22,15 @@ from stockhouse.app_code.shopping_list_utils import (
     get_week_date_range,
     is_last_week_with_25,
     get_shopping_list_data,
+    get_spesa_per_decade,
     get_budget_info,
-    get_total_spesa_corrente,
+    process_shopping_queue,
     get_reorder_count_from_shopping_list,
     get_reorder_total_cost,
     get_suggested_products,
-    generate_monthly_shopping_list,
     get_current_decade,
     format_decade_label)
+from calendar import month_name
 
 main = Blueprint('main', __name__)
 
@@ -157,8 +158,6 @@ def generate_md5(barcode, ins_date, index):
 @main.route('/index', methods=["GET", "POST"])
 def index():
     
-    
-    debug_print("⚡ Routes: Funzione index() chiamata!")  # 🔍 Controllo se la funzione viene eseguita
     debug_print(f" Routes: Metodo richiesta: {request.method}")  # 🔍 Controllo se arriva POST o GET
     new_product = None
     if request.method == "POST":
@@ -170,6 +169,7 @@ def index():
         shop = request.form.get("shop")
         price = request.form.get("price")
         quantity = int(request.form.get("quantity"))
+        consumed_quantity = 0
         category = request.form.get("category")
         item = request.form.get("item")
         expiry_date = request.form.get("expiry_date")
@@ -205,6 +205,7 @@ def index():
                 name = data["name"]
                 brand = data["brand"]
                 quantity = quantity if quantity else data["quantity"]  # ✅ Mantiene il valore inserito, a meno che non sia vuoto
+                consumed_quantity = 0  # Inizializza a 0 se non esiste
                 image = data.get("image", None)
                 debug_print("index -> POST 4", barcode,name,brand,shop,price,quantity,category,item )
 
@@ -260,8 +261,22 @@ def index():
            product_key = prodotto_esistente["id"]    
  
         # Salva la tranasazione
-        add_transaction_fact(product_key, barcode, price, quantity, ins_date, consume_date, expiry_date, status)
+        add_transaction_fact(product_key, barcode, price, quantity, consumed_quantity, ins_date, consume_date, expiry_date, status)
         flash("Prodotto aggiunto o aggiornato!", "success")
+
+        # Aggiorna exspenses_fact
+        selected_decade = get_current_decade()
+        price = float(price)
+        quantity = int(quantity)
+        amount = price * quantity
+        rounded_amount = round(amount, 2)  # Arrotonda a 2 decimali
+
+        conn = sqlite3.connect(Config.DATABASE_PATH)
+        cursor = conn.cursor()
+        upsert_expense(cursor, ins_date, selected_decade, shop, rounded_amount)  
+        conn.commit()
+        conn.close()
+         
 
         # Prepara un dizionario con i dati del prodotto appena inserito
         new_product = {
@@ -271,6 +286,7 @@ def index():
             "shop": shop,
             "price": price,
             "quantity": quantity,
+            "consumed_quantity": consumed_quantity,
             "category": category,
             "item": item,
             "expiry_date": expiry_date 
@@ -452,18 +468,7 @@ def consumed_product():
 
     debug_print("Route: /consumed_product/", id, product_key, barcode, quantity, ins_date, expiry_date)
 
-    if quantity > 1:
-        new_quantity = quantity - 1
-        new_status = "in stock"
-        consume_date = None 
-    else:
-        new_quantity = 0
-        new_status = "out of stock"
-        consume_date = datetime.now().strftime("%Y-%m-%d")
-
-    debug_print("Route 1: /consumed_product/",id, new_quantity, ins_date, expiry_date, consume_date, new_status)    
-
-    update_transaction_fact_consumed(id, new_quantity, ins_date, expiry_date, consume_date, new_status)
+    update_transaction_fact_consumed(id, ins_date, expiry_date)
 
     #Registra il consumo in consume_fact
     insert_consumed_fact (product_key, barcode, ins_date, expiry_date)
@@ -472,11 +477,19 @@ def consumed_product():
     conn = sqlite3.connect(Config.DATABASE_PATH)
     cur = conn.cursor()
     cur.execute("""
-        SELECT COALESCE(SUM(quantity), 0)
+        SELECT SUM(quantity - COALESCE(consumed_quantity, 0)) 
         FROM transaction_fact
         WHERE barcode = ? AND status = 'in stock'
     """, (barcode,))
     total_quantity = cur.fetchone()[0]
+    
+    if total_quantity == 0:
+        new_status = 'out of stock'
+        consume_date = datetime.date.today() 
+    else:
+        new_status = 'in stock'
+        consume_date = None
+    
     conn.close()
 
 
@@ -757,65 +770,78 @@ def home_out_of_stock_products():
     })
 
 
+# Questa funzione restituisce la decade corrente in base alla data odierna
+def get_decade_period_label(decade_code):
+    today = datetime.today()
+    month = today.month
+    year = today.year
+    month_label = month_name[month]
 
-
+    if decade_code == "D1":
+        return f"1 {month_label} - 10 {month_label} {year}"
+    elif decade_code == "D2":
+        return f"11 {month_label} - 20 {month_label} {year}"
+    else:
+        return f"21 {month_label} - 31 {month_label} {year}"
+    
 # Questa route serve per visualizzare la lista della spesa
 @main.route('/shopping_list')
 def shopping_list():
-    # Legge il numero della decade dal parametro GET
-    decade_param = request.args.get('decade')
-    debug_print("shopping_list decade_param: ", decade_param)
-
-    # Se non specificata, usa la decade corrente
-    selected_decade = decade_param or get_current_decade()
+    # Usa la decade corrente
+    selected_decade = get_current_decade()
     debug_print("Decade selezionata: ", selected_decade)
 
-    # Verifica se la lista mensile è già stata generata
+    # Verifica se esistono già record per la decade corrente
     conn = sqlite3.connect(Config.DATABASE_PATH)
     cursor = conn.cursor()
     current_month = datetime.today().strftime("%Y-%m")
-    cursor.execute("SELECT COUNT(*) FROM shopping_list WHERE strftime('%Y-%m', insert_date) = ?", (current_month,))
+
+    cursor.execute("""
+        SELECT COUNT(*) FROM shopping_list 
+        WHERE strftime('%Y-%m', insert_date) = ? AND decade_number = ?
+    """, (current_month, selected_decade))
+
     already_generated = cursor.fetchone()[0] > 0
     conn.close()
 
-    debug_print("shopping_list - Lista mensile già generata: ", already_generated)
-    if not already_generated:
-        debug_print("Lista mensile non trovata. Generazione in corso...")
-        generate_monthly_shopping_list()
-    else:
-        debug_print("Lista mensile già generata.")
+    debug_print("Record già presenti per la decade selezionata: ", already_generated)
 
-    # Recupera i dati della lista spesa per la decade selezionata
+    # In ogni caso, prova a generare (ma la funzione evita duplicati)
     debug_print("Recupero dati della lista spesa per la decade selezionata: ", selected_decade)
     items, shop_totals = get_shopping_list_data(save_to_db=True, decade=selected_decade)
 
     # Recupera i prodotti suggeriti
     suggested_items = get_suggested_products()
 
-    # Dropdown delle decadi (fisso)
-    decades = [
-        ("D1", "1ª Decade (1-10)"),
-        ("D2", "2ª Decade (11-20)"),
-        ("D3", "3ª Decade (21-31)")
-    ]
+    # Etichetta con periodo (es. "1 - 10 Marzo")
+    period_label = get_decade_period_label(selected_decade)
 
-    # Recupera budget, spesa effettuata, residuo
-    budget, budget_date = get_budget_info()
-    spesa_corrente = get_total_spesa_corrente()
+    # Recupera info budget e percentuali decadi
+    budget_record = get_budget_info()
+
+    # Recupera spesa parziale per decade dalla nuova tabella expenses_fact
+    spesa_decade = get_spesa_per_decade()
+
+    # Calcolo totale speso e residuo
+    budget = float(budget_record['budget']) 
+    spesa_corrente = sum(spesa_decade)
     budget_residuo = round(budget - spesa_corrente, 2)
+
 
     return render_template(
         'shopping_list.html',
         items=items,
         shop_totals=shop_totals,
-        decades=decades,
         selected_decade=selected_decade,
         suggested_items=suggested_items,
+        budget_record=budget_record,
+        spesa_decade=spesa_decade,
         budget=budget,
         spesa_corrente=spesa_corrente,
-        budget_residuo=budget_residuo
+        budget_residuo=budget_residuo,
+        current_decade=selected_decade,
+        period_label=period_label
     )
-
 
 
 @main.route('/shopping_list/add_selected', methods=['POST'])
@@ -854,19 +880,23 @@ def add_selected_products():
                 ) AS tf ON pd.barcode = tf.barcode
                 WHERE pd.barcode = ?
             """, (barcode,))
-
+ 
+    
             row = cursor.fetchone()
             if not row:
                 continue  # se il barcode non esiste in product_dim, salta
      
             # Inserisce nella lista
             try:
-                week_number = get_current_week()
+                current_decade = get_current_decade(datetime.today())
+
+                debug_print("add_selected_products - Inserimento nella lista:", barcode, row["name"], row["shop"], row["price"], current_decade)
                 cursor.execute("""
-                    INSERT INTO shopping_list (barcode, product_name, quantity_to_buy, shop, reason, price, week_number) )
-                    VALUES (?, ?, ?, ?, ?, ?)
-                """, (barcode, row["name"], 1, row["shop"], "Sotto scorta", row["price"], week_number))
-                 
+                    INSERT INTO shopping_list (
+                        barcode, product_name, quantity_to_buy, shop, reason, price, decade_number
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                """, (barcode, row["name"], 1, row["shop"], "Sotto scorta", row["price"], current_decade))
+
             except Exception as insert_error:
                 debug_print("❌ Errore durante INSERT:", str(insert_error))
 
@@ -876,12 +906,15 @@ def add_selected_products():
         cursor.execute("""
             SELECT barcode, product_name, quantity_to_buy, shop, reason, price
             FROM shopping_list
+            WHERE decade_number = ?  
             ORDER BY shop, product_name
-        """)
+        """,(current_decade,))
 
         updated_items = cursor.fetchall()
         conn.close()
-  
+
+        debug_print("add_selected_products - Lista aggiornata:", updated_items)
+        print([dict(row) for row in updated_items])
         return render_template('shopping_list_table.html', items=updated_items)
 
     except Exception as e:
@@ -1023,14 +1056,20 @@ def reorder_total_cost():
     debug_print("reorder_total_cost: ", total_cost)
     return jsonify({"reorder_total_cost": total_cost})
 
+# Budget - Questa route serve per visualizzare e gestire il budget
 @main.route('/budget', methods=["GET", "POST"])
 def budget():
  
      if request.method == "POST":
         budget = request.form.get("budget", "").strip()
+        perc_decade_1 = request.form.get("decade1", "").strip()
+        perc_decade_2 = request.form.get("decade2", "").strip()
+        perc_decade_3 = request.form.get("decade3", "").strip()
         note = request.form.get("note", "").strip()
+        debug_print("budget - Dati ricevuti: ", budget, perc_decade_1, perc_decade_2, perc_decade_3, note)
+
         if budget:
-            upsert_budget(1, budget, note)
+            upsert_budget(1, budget, perc_decade_1, perc_decade_2, perc_decade_3, note)
             flash("budget salvato con successo!", "success")
         else:
             flash("Inserisci il budget", "error")
@@ -1064,3 +1103,10 @@ def get_current_shopping_list():
     debug_print("get_current_shopping_list - Items: ", items)
     
     return jsonify(items)
+
+# Questa route serve per attivare il controllo della coda di acquisto
+@main.route('/trigger_queue_check', methods=['POST'])
+def trigger_queue_check():
+    debug_print("trigger_queue_check - Inizio processo coda acquisto")
+    process_shopping_queue()
+    return jsonify({"status": "ok"})
