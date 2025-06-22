@@ -418,7 +418,7 @@ def get_all_products():
             dim.name, 
             dim.brand, 
             dim.shop, 
-            trs.price, 
+            trs.price,
             cat.name AS category, 
             itl.name AS item,
             trs.quantity,
@@ -437,13 +437,13 @@ def get_all_products():
             ps.priority_level,
             ps.user_override,                   
             dim.image
-        FROM transaction_fact trs
-        INNER JOIN product_dim dim ON dim.id = trs.product_key
+        FROM product_dim dim
+        LEFT JOIN  transaction_fact trs ON dim.id = trs.product_key
         LEFT JOIN item_list itl ON dim.item = itl.name
         LEFT JOIN category_list cat ON itl.category_id = cat.id
         LEFT JOIN product_settings ps ON dim.barcode = ps.barcode
-        WHERE trs.consume_date IS NULL
-        ORDER BY dim.name
+        group by dim.barcode
+        order by dim.name
     """)
 
     rows = c.fetchall()
@@ -724,90 +724,69 @@ def get_product_inventory():
 
     # La query da eseguire
     query = """
-        WITH latest_transactions AS (
-            -- Prendo tutte le transazioni e gli associo il barcode
+            WITH inventory_data AS (
+                SELECT
+                    pd.barcode,
+                    pd.name,
+                    pd.brand,
+                    pd.shop,
+                    pd.item,
+                    c.name AS category,
+                    pd.image,
+                    tf.price,
+                    tf.ins_date,
+                    tf.consume_date,
+                    tf.expiry_date,
+                    (tf.quantity - tf.consumed_quantity) AS quantity_remaining
+                FROM transaction_fact tf
+                JOIN product_dim pd ON tf.product_key = pd.id
+                LEFT JOIN item_list i ON pd.item = i.name
+                LEFT JOIN category_list c ON i.category_id = c.id
+                WHERE (tf.quantity - tf.consumed_quantity) > 0
+            ),
+            aggregated_inventory AS (
+                SELECT
+                    barcode,
+                    name,
+                    brand,
+                    shop,
+                    item,
+                    category,
+                    MAX(image) AS image,
+                    MAX(price) AS price,
+                    MIN(ins_date) AS ins_date,
+                    NULL AS consume_date, -- Placeholder per avere la colonna
+                    MIN(expiry_date) AS expiry_date,
+                    SUM(quantity_remaining) AS quantity_in_inventory
+                FROM inventory_data
+                GROUP BY barcode, name, brand, shop, item, category
+            )
             SELECT 
-                tf.*,
-                p.barcode,
-                ROW_NUMBER() OVER (
-                    PARTITION BY p.barcode   -- Attenzione: adesso partiziono per BARCODE, non per product_key!
-                    ORDER BY tf.ins_date DESC
-                ) AS rn
-            FROM transaction_fact tf
-            LEFT JOIN product_dim p ON tf.product_key = p.id
-        ),
-
-        ranked_products AS (
-            -- Ora costruisco la lista di prodotti prendendo solo l'ultima transazione per ogni barcode
-            SELECT 
-                p.id,
-                p.name,
-                p.barcode,
-                p.brand,
-                p.shop,
-                p.item,
-                c.name AS category,
-                p.image,
-                tf.price,
-                tf.quantity,
-                tf.ins_date,
-                tf.consume_date,
-                tf.expiry_date,
-                tf.status
-            FROM product_dim p
-            LEFT JOIN item_list i ON p.item = i.name
-            LEFT JOIN category_list c ON i.category_id = c.id
-            LEFT JOIN latest_transactions tf ON p.barcode = tf.barcode
-            WHERE tf.rn = 1
-        )
-
-        SELECT 
-            p.barcode,
-            p.name,
-            p.brand,
-            p.shop,
-            p.price,
-            p.item,
-            p.category,
-            p.ins_date,
-            p.consume_date,
-            p.expiry_date,
-            p.status,
-            
-            -- Modificato: ora sommo la quantità reale a magazzino, non conto le righe!
-            (
-                SELECT COALESCE(SUM(tf2.quantity), 0)
-                FROM transaction_fact tf2
-                LEFT JOIN product_dim pd2 ON tf2.product_key = pd2.id
-                WHERE pd2.barcode = p.barcode
-                AND tf2.consume_date IS NULL
-            ) AS quantity_in_inventory,
-            (p.price * (
-                SELECT COALESCE(SUM(tf2.quantity), 0)
-                FROM transaction_fact tf2
-                LEFT JOIN product_dim pd2 ON tf2.product_key = pd2.id
-                WHERE pd2.barcode = p.barcode
-                AND tf2.consume_date IS NULL
-            )) AS total_value,
-
-            p.image,
-
-            -- Parametri inventory dalla tabella 'inventory'
-            s.min_quantity,
-            s.max_quantity,
-            s.security_quantity,
-            s.reorder_point,
-            s.mean_usage_time,
-            s.reorder_frequency,
-            s.user_override,
-            s.necessity_level,
-            s.season
-        FROM ranked_products p
-        LEFT JOIN product_settings s ON s.barcode = p.barcode
-        WHERE 
-            quantity_in_inventory > 0
-        ORDER BY p.barcode;
-
+                ai.barcode,
+                ai.name,
+                ai.brand,
+                ai.shop,
+                ai.price,
+                ai.item,
+                ai.category,
+                ai.ins_date,
+                ai.consume_date,
+                ai.expiry_date,
+                ai.quantity_in_inventory,
+                (ai.price * ai.quantity_in_inventory) AS total_value,
+                ai.image,
+                s.min_quantity,
+                s.max_quantity,
+                s.security_quantity,
+                s.reorder_point,
+                s.mean_usage_time,
+                s.reorder_frequency,
+                s.user_override,
+                s.necessity_level,
+                s.season
+            FROM aggregated_inventory ai
+            LEFT JOIN product_settings s ON s.barcode = ai.barcode
+            ORDER BY ai.barcode;
     """
     # Esegui la query
     cur.execute(query)
@@ -835,19 +814,19 @@ def get_product_inventory():
             "ins_date": row[7],
             "consume_date": row[8],
             "expiry_date": row[9],
-            "status": row[10],
-            "quantity_in_inventory": row[11],
-            "total_value": row[12],
-            "image": row[13],
-            "min_quantity": row[14],
-            "max_quantity": row[15],
-            "security_quantity": row[16],
-            "reorder_point": row[17],
-            "mean_usage_time": row[18],
-            "reorder_frequency": row[19],
-            "user_override": row[20],
-            "necessity_level": row[21],
-            "season": row[22]
+            # "status": row[10],  # Non è più necessario, ora calcoliamo quantity_in_inventory
+            "quantity_in_inventory": row[10],
+            "total_value": row[11],
+            "image": row[12],
+            "min_quantity": row[13],
+            "max_quantity": row[14],
+            "security_quantity": row[15],
+            "reorder_point": row[16],
+            "mean_usage_time": row[17],
+            "reorder_frequency": row[18],
+            "user_override": row[19],
+            "necessity_level": row[20],
+            "season": row[21]
         }
         for row in rows
     ]
