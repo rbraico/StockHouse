@@ -30,6 +30,7 @@ from stockhouse.app_code.shopping_list_utils import (
     get_suggested_products,
     get_current_decade,
     format_decade_label)
+import calendar
 from calendar import month_name
 
 main = Blueprint('main', __name__)
@@ -38,7 +39,9 @@ main = Blueprint('main', __name__)
 @main.route('/')
 def homepage():
     decade_number = get_current_decade()
+    debug_print(f"Decade number: {decade_number}")
     current_decade_label = format_decade_label(decade_number)
+    debug_print(f"Current decade: {current_decade_label}")
     return render_template('home.html', current_decade=current_decade_label)
 
 
@@ -776,13 +779,14 @@ def get_decade_period_label(decade_code):
     month = today.month
     year = today.year
     month_label = month_name[month]
+    last_day = calendar.monthrange(year, month)[1]
 
     if decade_code == "D1":
         return f"1 {month_label} - 10 {month_label} {year}"
     elif decade_code == "D2":
         return f"11 {month_label} - 20 {month_label} {year}"
     else:
-        return f"21 {month_label} - 31 {month_label} {year}"
+        return f"21 {month_label} - {last_day} {month_label} {year}"
     
 # Questa route serve per visualizzare la lista della spesa
 @main.route('/shopping_list')
@@ -827,6 +831,7 @@ def shopping_list():
     spesa_corrente = sum(spesa_decade)
     budget_residuo = round(budget - spesa_corrente, 2)
 
+    debug_print("Spesa corrente: ", [dict(item) for item in items])
 
     return render_template(
         'shopping_list.html',

@@ -3,7 +3,7 @@ import sqlite3
 from stockhouse.app_code.models import get_week_date_range, upsert_expense
 from config import Config  # usa il path corretto se è diverso
 from stockhouse.utils import debug_print
-
+import calendar
 
 
 # Funzione per calcolare il numero della decade corrente
@@ -17,15 +17,22 @@ def get_current_decade(today=None):
     else:
         return "D3"
 
+def format_decade_label(decade_number, year=None, month=None):
+    # decade_number: "D1", "D2", "D3"
+    if year is None or month is None:
+        today = datetime.today()
+        year = today.year
+        month = today.month
 
-def format_decade_label(decade_number):
+    # Calcola l'ultimo giorno del mese (gestisce anche anni bisestili)
+    last_day = calendar.monthrange(year, month)[1]
+
     labels = {
-        1: "1ª Decade (1-10)",
-        2: "2ª Decade (11-20)",
-        3: "3ª Decade (21-31)"
+        "D1": f"1ª Decade (1-10)",
+        "D2": f"2ª Decade (11-20)",
+        "D3": f"3ª Decade (21-{last_day})"
     }
     return labels.get(decade_number, "Decade sconosciuta")
-
 
 # Funzione per calcolare il budget per la decade corrente
 def get_budget_for_decade(total_budget, decade):
@@ -325,15 +332,21 @@ def get_shopping_list_data(save_to_db=False, conn=None, cursor=None, decade=None
         reason = ""
 
         if necessity_level == "Indispensabile" and quantity < sec_q:
-            quantity_to_buy = max(sec_q - quantity, 1)
-            reason = "Sotto scorta"
+            if decade == "D3":
+                quantity_to_buy = max(max_q - quantity, 1)
+                reason = "Reintegro scorte"
+            else:
+                quantity_to_buy = max(sec_q - quantity, 1)
+                reason = "Sotto scorta"
+            debug_print(f"Prodotto {product_name} è Indispensabile, sotto scorta: {quantity} < {sec_q}")
         elif necessity_level == "Stagionale" and quantity < min_q:
             quantity_to_buy = max(min_q - quantity, 1)
             reason = "Da consumare"
+            debug_print(f"Prodotto {product_name} è Stagionale, da consumare: {quantity} < {min_q}")
         elif max_q > quantity and quantity <= reorder_point:
             quantity_to_buy = max(max_q - quantity, 1)
             reason = "Reintegro scorte"
-  
+            debug_print(f"Prodotto {product_name} è in Reintegro scorte: {quantity} < {reorder_point}")
 
         product_cost = quantity_to_buy * price
         if total_cost + product_cost <= budget:
@@ -341,7 +354,8 @@ def get_shopping_list_data(save_to_db=False, conn=None, cursor=None, decade=None
             total_cost += product_cost
         else:
             within_budget = 0
-        
+
+        debug_print(f"Prodotto: {product_name}, Quantità da acquistare: {quantity_to_buy}, Ragione: {reason}, Prezzo unitario: {price:.2f}€, Costo totale: {product_cost:.2f}€, Budget rimanente: {budget - total_cost:.2f}€")
 
         item = {
             "barcode": barcode,
@@ -354,6 +368,7 @@ def get_shopping_list_data(save_to_db=False, conn=None, cursor=None, decade=None
             "within_budget": within_budget
         }
         items.append(item)
+        debug_print(f"Aggiunto prodotto alla lista della spesa: {item}")
 
 
 
@@ -404,6 +419,8 @@ def get_shopping_list_data(save_to_db=False, conn=None, cursor=None, decade=None
 
     shop_totals = {}
     for item in items:
+        debug_print(f"Elaboro prodotto: {item['product_name']}, Ragione: {item['reason']}, Quantità da acquistare: {item['quantity_to_buy']}, Prezzo unitario: {item['price']:.2f}€")
+
         shop = item["shop"]  # oppure item['shop'] se items è una lista di dict
         product_cost = item["price"] * item["quantity_to_buy"]
         if shop:
@@ -414,6 +431,7 @@ def get_shopping_list_data(save_to_db=False, conn=None, cursor=None, decade=None
         conn.close()
 
     debug_print(f"🛒 Lista della spesa per la {decade} generata con {len(items)} prodotti, totale: {total_cost:.2f}€")
+    debug_print(f"Totali per negozio: {items}")
     return items, shop_totals
 
 

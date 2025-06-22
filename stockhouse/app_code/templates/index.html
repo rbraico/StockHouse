@@ -425,19 +425,19 @@
             <td class="priority-cell">{{ product.priority_level or "-" }}</td>
             <td>
               <input type="number"  min="0" class="form-control form-control-sm inline-edit" data-field="min_quantity"
-                value="{{ product.min_quantity or '' }}">
+                 value="{{ product.min_quantity if product.min_quantity is not none else '' }}">
             </td>
             <td>
               <input type="number"  min="0" class="form-control form-control-sm inline-edit" data-field="max_quantity"
-                value="{{ product.max_quantity or '' }}">
+                value="{{ product.max_quantity if product.max_quantity is not none else '' }}">
             </td>
             <td>
               <input type="number"  min="0" class="form-control form-control-sm inline-edit" data-field="security_quantity"
-                value="{{ product.security_quantity or '' }}">
+                value="{{ product.security_quantity if product.security_quantity is not none else '' }}">
             </td>
             <td>
               <input type="number"  min="0" class="form-control form-control-sm inline-edit" data-field="reorder_point"
-                value="{{ product.reorder_point or '' }}">
+                value="{{ product.reorder_point if product.reorder_point is not none else '' }}">
             </td>
             <td>
               <input type="number"  min="0" class="form-control form-control-sm inline-edit mean-usage" data-field="mean_usage_time"
@@ -610,17 +610,18 @@ document.addEventListener("DOMContentLoaded", function () {
       };
 
       // Soft check logico
+      let warning = "";
       if (Number(data.min_quantity) > Number(data.max_quantity)) {
-        alert("La scorta minima deve essere inferiore alla scorta massima.");
-        return;
+        warning += "La scorta minima è maggiore della scorta massima.\n";
       }
       if (Number(data.security_quantity) >= Number(data.max_quantity)) {
-        alert("La scorta di sicurezza deve essere inferiore alla scorta massima.");
-        return;
+        warning += "La scorta di sicurezza è maggiore o uguale alla scorta massima.\n";
       }
       if (Number(data.reorder_point) >= Number(data.max_quantity)) {
-        alert("Il punto di riordino deve essere inferiore alla scorta massima.");
-        return;
+        warning += "Il punto di riordino è maggiore o uguale alla scorta massima.\n";
+      }
+      if (warning) {
+        alert("Attenzione:\n" + warning + "Il salvataggio verrà comunque effettuato.");
       }
 
       fetch('/products/update_inline', {
@@ -691,14 +692,11 @@ document.addEventListener("DOMContentLoaded", function () {
   // --- FILTRAGGIO TABELLA ---
   function filterTable() {
     const nameVal = document.getElementById('filterNameList').value;
-    const necessityVal = document.getElementById('filterNecessityList').value;
 
     document.querySelectorAll('#list-table tbody tr').forEach(row => {
-      const name = row.children[1].textContent.trim();        // Colonna Nome
-      const necessity = row.children[2].textContent.trim();   // Colonna Necessity
+      const name = row.children[1].textContent.trim(); // Colonna Nome
       let show = true;
       if (nameVal && name !== nameVal) show = false;
-      if (necessityVal && necessity !== necessityVal) show = false;
       row.style.display = show ? '' : 'none';
     });
   }
@@ -708,7 +706,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
   // Event listeners
   document.getElementById('filterNameList').addEventListener('change', filterTable);
-  document.getElementById('filterNecessityList').addEventListener('change', filterTable);
+
 });
 </script>
 
