@@ -385,6 +385,7 @@ def get_shopping_list_data(save_to_db=False, conn=None, cursor=None, decade=None
         exists = cursor.fetchone()
 
         if not exists:
+            debug_print(f"Prodotto {item['product_name']} non presente, lo aggiungo alla lista della spesa.")
             cursor.execute("""
                 INSERT INTO shopping_list (
                     barcode, product_name, quantity_to_buy,
@@ -395,6 +396,7 @@ def get_shopping_list_data(save_to_db=False, conn=None, cursor=None, decade=None
                 item["shop"], item["reason"], item["price"], item["decade_number"], item["within_budget"]
             ))
         else:
+            debug_print(f"Prodotto {item['product_name']} già presente, lo aggiorno nella lista della spesa.")
             # Se già presente, aggiorna quantità, prezzo e within_budget
             cursor.execute("""
                 UPDATE shopping_list SET
