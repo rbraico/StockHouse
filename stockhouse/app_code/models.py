@@ -1312,6 +1312,15 @@ def insert_consumed_fact (id, barcode, ins_date, expiry_date):
     conn.close()   
 
 
+def delete_from_shopping_list(barcode):
+    conn = sqlite3.connect(Config.DATABASE_PATH)
+    c = conn.cursor()
+    debug_print("delete_from_shopping_list: ", barcode)
+    c.execute("DELETE FROM shopping_list WHERE barcode = ?", (barcode,))
+    conn.commit()
+    conn.close()
+
+
 def get_expiring_products(months):
     # Calcola la data limite in base ai mesi forniti
     today = datetime.today()
@@ -1341,7 +1350,7 @@ def get_expiring_products(months):
         INNER JOIN product_dim dim ON dim.id = trs.product_key
         LEFT JOIN item_list itl ON dim.item = itl.name
         LEFT JOIN category_list cat ON itl.category_id = cat.id
-        WHERE trs.expiry_date IS NOT NULL AND trs.quantity > 0 AND trs.expiry_date != '' AND trs.expiry_date <= ?
+        WHERE trs.status = "in stock" AND trs.expiry_date IS NOT NULL AND trs.quantity > 0 AND trs.expiry_date != '' AND trs.expiry_date <= ?
         ORDER BY trs.expiry_date ASC
     """, (expiry_limit,))
 
@@ -1371,6 +1380,7 @@ def get_expiring_products(months):
     ]
 
     return products
+
 
 
 

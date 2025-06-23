@@ -6,7 +6,7 @@ from stockhouse.app_code.models import add_product_dim, add_transaction_fact, de
                        get_number_expiring_products, get_out_of_stock_count, get_critical_stock_count, get_monthly_consumed_count, \
                        get_week_date_range, get_product_by_name_and_dates, get_expiring_products_for_home, get_out_of_stock_products, get_critical_stock, get_monthly_consumed_statistics, \
                        upsert_budget, get_budget, update_inventory_mean_usage_time, get_unconsumed_products_full_list,  \
-                       get_unique_unconsumed_record, clean_old_transactions, update_reorder_frequency,upsert_expense
+                       get_unique_unconsumed_record, clean_old_transactions, update_reorder_frequency,upsert_expense, delete_from_shopping_list
 from stockhouse.app_code.models import add_shop, update_shop, delete_shop  
 from stockhouse.app_code.models import add_category, get_all_categories, update_category, delete_category, get_all_items, update_item, delete_item
 import sqlite3
@@ -274,6 +274,10 @@ def index():
         amount = price * quantity
         rounded_amount = round(amount, 2)  # Arrotonda a 2 decimali
 
+        # Se il prodotto è stato aggiunto alla lista della spesa, lo rimuoviamo
+        debug_print("index -> delete_from_shopping_list: ", barcode)
+        delete_from_shopping_list(barcode)
+
         conn = sqlite3.connect(Config.DATABASE_PATH)
         cursor = conn.cursor()
         upsert_expense(cursor, ins_date, selected_decade, shop, rounded_amount)  
@@ -297,7 +301,7 @@ def index():
 
     # 💡 Se la richiesta è GET, semplicemente carichiamo la pagina
     products      = get_all_products()
-    debug_print("ALL PRODUCTS: ", products)
+    #debug_print("ALL PRODUCTS: ", products)
     shops         = get_all_shops()
     #debug_print("ALL SHOPS: ", shops)
     categories    = get_all_categories()
