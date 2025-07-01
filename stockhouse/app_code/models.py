@@ -412,38 +412,38 @@ def get_all_products():
     c = conn.cursor()
     
     c.execute("""
-        SELECT 
-            trs.id, 
-            dim.barcode,
-            dim.name, 
-            dim.brand, 
-            dim.shop, 
-            trs.price,
-            cat.name AS category, 
-            itl.name AS item,
-            trs.quantity,
-            trs.ins_date, 
-            trs.consume_date, 
-            trs.expiry_date, 
-            trs.status,  
-            ps.necessity_level,
-            ps.season,
-            ps.min_quantity,
-            ps.max_quantity,
-            ps.security_quantity,
-            ps.reorder_point,
-            ps.mean_usage_time,
-            ps.reorder_frequency,
-            ps.priority_level,
-            ps.user_override,                   
-            dim.image
-        FROM product_dim dim
-        LEFT JOIN  transaction_fact trs ON dim.id = trs.product_key
-        LEFT JOIN item_list itl ON dim.item = itl.name
-        LEFT JOIN category_list cat ON itl.category_id = cat.id
-        LEFT JOIN product_settings ps ON dim.barcode = ps.barcode
-        group by dim.barcode
-        order by dim.name
+            SELECT 
+                trs.id, 
+                dim.barcode,
+                dim.name, 
+                dim.brand, 
+                dim.shop, 
+                trs.price,
+                cat.name AS category, 
+                itl.name AS item,
+                trs.quantity,
+                trs.ins_date, 
+                trs.consume_date, 
+                trs.expiry_date, 
+                trs.status,  
+                ps.necessity_level,
+                ps.season,
+                ps.min_quantity,
+                ps.max_quantity,
+                ps.security_quantity,
+                ps.reorder_point,
+                ps.mean_usage_time,
+                ps.reorder_frequency,
+                ps.priority_level,
+                ps.user_override,                   
+                dim.image
+            FROM product_dim dim
+            LEFT JOIN transaction_fact trs ON dim.id = trs.product_key
+            LEFT JOIN item_list itl ON dim.item = itl.name
+            LEFT JOIN category_list cat ON itl.category_id = cat.id
+            LEFT JOIN product_settings ps ON dim.barcode = ps.barcode
+            WHERE trs.ins_date >= DATE('now', '-60 days')
+            ORDER BY dim.name, trs.ins_date DESC
     """)
 
     rows = c.fetchall()
@@ -1103,7 +1103,7 @@ def upsert_inventory(data):
         cur.execute("""
             UPDATE product_settings
             SET min_quantity = ?, max_quantity = ?, security_quantity = ?, reorder_point = ?, 
-                mean_usage_time = ?, reorder_frequency = ?, user_override = ?
+                mean_usage_time = ?, reorder_frequency = ?, user_override = ?, necessity_level = ?
             WHERE barcode = ?
         """, (
             to_int_or_none(data['min_quantity']),
@@ -1113,15 +1113,18 @@ def upsert_inventory(data):
             to_int_or_none(data['mean_usage_time']),
             to_int_or_none(data['reorder_frequency']),
             data['user_override'],
+            data['necessity_level'],     
             data['barcode']
         ))
 
     else:
         # Se il record non esiste, esegui l'INSERT
         cur.execute("""
-            INSERT INTO product_settings (product_key, barcode, min_quantity, max_quantity, security_quantity, reorder_point,
-                                    mean_usage_time, reorder_frequency, user_override)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO product_settings (
+                product_key, barcode, min_quantity, max_quantity, security_quantity, reorder_point,
+                mean_usage_time, reorder_frequency, user_override, necessity_level
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             product_key,
             data['barcode'],
@@ -1131,8 +1134,10 @@ def upsert_inventory(data):
             to_int_or_none(data['reorder_point']),
             to_int_or_none(data['mean_usage_time']),
             to_int_or_none(data['reorder_frequency']),
-            data['user_override']
+            data['user_override'],
+            data['necessity_level']  # 👈 aggiunto qui
         ))
+
 
 
     conn.commit()
