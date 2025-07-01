@@ -254,7 +254,7 @@ def get_shopping_list_data(save_to_db=False, conn=None, cursor=None, decade=None
                 i.barcode,
                 COALESCE(stock.total_quantity, 0) AS quantity,
                 i.reorder_point, i.min_quantity, i.max_quantity, i.security_quantity,
-                pd.name, pd.shop, tf_min.price,
+                pd.name, pd.shop, tf_min.price, pd.category,
                 i.necessity_level, i.priority_level,
                 tf_min.ins_date
             FROM product_settings i
@@ -274,15 +274,21 @@ def get_shopping_list_data(save_to_db=False, conn=None, cursor=None, decade=None
                 FROM transaction_fact
                 GROUP BY barcode
             ) tf_min ON i.barcode = tf_min.barcode
-            WHERE i.max_quantity > 0
+            WHERE i.max_quantity > 0 AND i.priority_level=1
             AND (
                 (i.necessity_level = 'Indispensabile' AND COALESCE(stock.total_quantity, 0) <= i.security_quantity)
                 OR
-                (pd.category LIKE '%Alimenti freschi' AND COALESCE(stock.total_quantity, 0) < i.min_quantity)
+                (pd.category LIKE '%Alimenti freschi%' AND COALESCE(stock.total_quantity, 0) < i.min_quantity)
                 OR
-                (pd.category LIKE '%Alimenti Congelati' AND COALESCE(stock.total_quantity, 0) < i.min_quantity)
+                (pd.category LIKE '%Alimenti Congelati%' AND COALESCE(stock.total_quantity, 0) < i.min_quantity)
             )
-            ORDER BY i.priority_level ASC, tf_min.ins_date ASC, tf_min.price ASC
+            ORDER BY 
+                CASE 
+                    WHEN 1 = 1 AND (pd.category LIKE '%Alimenti freschi%' OR pd.category LIKE '%Alimenti Congelati%') THEN 0
+                    ELSE i.priority_level
+                END ASC,
+                tf_min.ins_date ASC,
+                tf_min.price ASC
         """
     else:
         # Seconda decade: prodotti freschi e indispensabili e utilo avendo piu budget
@@ -424,7 +430,7 @@ def get_shopping_list_data(save_to_db=False, conn=None, cursor=None, decade=None
         conn.commit()
 
     # Recupera tutti gli elementi della lista della spesa
-    cursor.execute("SELECT * FROM shopping_list")
+    cursor.execute("SELECT * FROM shopping_list WHERE within_budget = 1")
     items = cursor.fetchall() 
 
     shop_totals = {}
