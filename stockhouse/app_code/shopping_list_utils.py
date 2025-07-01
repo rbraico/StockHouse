@@ -252,29 +252,37 @@ def get_shopping_list_data(save_to_db=False, conn=None, cursor=None, decade=None
         query = """
             SELECT 
                 i.barcode,
-                stock.total_quantity AS quantity,
+                COALESCE(stock.total_quantity, 0) AS quantity,
                 i.reorder_point, i.min_quantity, i.max_quantity, i.security_quantity,
-                pd.name, pd.shop, tf.price,
+                pd.name, pd.shop, tf_min.price,
                 i.necessity_level, i.priority_level,
-                MIN(tf.ins_date) as ins_date
+                tf_min.ins_date
             FROM product_settings i
-            JOIN(
-                SELECT barcode, SUM(quantity) AS total_quantity
+            LEFT JOIN (
+                SELECT barcode, 
+                    SUM(CASE 
+                            WHEN status = 'in stock' THEN quantity
+                            WHEN status = 'consumed' THEN -quantity
+                            ELSE 0
+                        END) AS total_quantity
                 FROM transaction_fact
-                WHERE status = 'in stock'
                 GROUP BY barcode
-            ) AS stock ON i.barcode = stock.barcode
-            JOIN transaction_fact tf ON i.barcode = tf.barcode
+            ) stock ON i.barcode = stock.barcode
             JOIN product_dim pd ON i.barcode = pd.barcode
+            LEFT JOIN (
+                SELECT barcode, MIN(ins_date) AS ins_date, MIN(price) AS price
+                FROM transaction_fact
+                GROUP BY barcode
+            ) tf_min ON i.barcode = tf_min.barcode
             WHERE i.max_quantity > 0
-            AND (pd.item LIKE '%Frutta' OR pd.item LIKE '%Verdura') -- prodotti freschi
-            GROUP BY i.barcode
-            HAVING (
-                (i.necessity_level = 'Indispensabile' AND stock.total_quantity <= i.security_quantity)
+            AND (
+                (i.necessity_level = 'Indispensabile' AND COALESCE(stock.total_quantity, 0) <= i.security_quantity)
                 OR
-                (pd.category LIKE '%Alimenti freschi' AND stock.total_quantity < i.min_quantity)
+                (pd.category LIKE '%Alimenti freschi' AND COALESCE(stock.total_quantity, 0) < i.min_quantity)
+                OR
+                (pd.category LIKE '%Alimenti Congelati' AND COALESCE(stock.total_quantity, 0) < i.min_quantity)
             )
-            ORDER BY i.priority_level ASC, ins_date ASC, tf.price ASC
+            ORDER BY i.priority_level ASC, tf_min.ins_date ASC, tf_min.price ASC
         """
     else:
         # Seconda decade: prodotti freschi e indispensabili e utilo avendo piu budget
