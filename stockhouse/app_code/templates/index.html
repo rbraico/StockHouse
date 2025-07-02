@@ -97,6 +97,7 @@
 </style> 
 
 
+
 <!-- Crea le 3 tab -->
 <ul class="nav nav-tabs" id="categoryTabs" role="tablist">
   <li class="nav-item" role="presentation">
@@ -262,78 +263,164 @@
   </div>
 
   <!-- Seconda tab: Modifica/Rimuovi Prodotto -->
-  <div class="tab-pane fade" id="manage" role="tabpanel">
-    <div class="table-container" style="max-height: 600px; overflow-y: auto; border: 1px solid #dee2e6;">
-      <table class="table table-striped custom-table">
-        <thead style="position: sticky; top: 0; background-color: #f8f9fa; z-index: 1;">
-          <tr>
-            <th>Immagine</th>
-            <th>
-              Nome
-              <select id="filter-name" onchange="filterTable()">
-                <option value="">Tutti</option>
-                {% set names = products | map(attribute='name') | unique | sort %}
-                {% for name in names %}
-                  <option value="{{ name }}">{{ name }}</option>
-                {% endfor %}
-              </select>
-            </th>
-            <th>Negozio</th>
-            <th>Prezzo</th>
-            <th>Quantita</th>
-            <th>
-              Categoria
-              <select id="filter-category" onchange="filterTable()">
-                <option value="">Tutti</option>
-                {% set categories = products | map(attribute='category') | unique | sort %}
-                {% for category in categories %}
-                  <option value="{{ category }}">{{ category }}</option>
-                {% endfor %}
-              </select>
-            </th>
-            <th>
-              Articolo
-              <select id="filter-item" onchange="filterTable()">
-                <option value="">Tutti</option>
-                {% set items = products | map(attribute='item') | unique | sort %}
-                {% for item in items %}
-                  <option value="{{ item }}">{{ item }}</option>
-                {% endfor %}
-              </select>
-            </th>
-            <th>Inserito il</th>
-            <th>Scadenza</th>
-            <th>Azioni</th>
-          </tr>
-        </thead>
-        <tbody id="product-table-body">
-          {% for product in products %}
-          <tr>
-            <td>
-              {% if product.image %}
-                <img src="{{ product.image }}" alt="Immagine prodotto" width="50">
-              {% else %}
-                N/A
-              {% endif %}
-            </td>
-            <td>{{ product.name }}</td>
-            <td>{{ product.shop }}</td>
-            <td>{{ product.price }} €</td>
-            <td>{{ product.quantity }}</td>
-            <td>{{ product.category }}</td>
-            <td>{{ product.item }}</td>
-            <td>{{ product.ins_date }}</td>
-            <td>{{ product.expiry_date if product.expiry_date else 'N/A' }}</td>
-            <td>
-              <a href="{{ url_for('main.edit_product', name=product.name, ins_date=product.ins_date) }}" class="btn btn-sm btn-warning">✏️ Modifica</a>
-              <a href="{{ url_for('main.delete_product', id=product.id) }}" class="btn btn-sm btn-danger" onclick="return confirm('Sei sicuro di voler eliminare questo negozio?');">❌ Elimina</a>
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+<div class="tab-pane fade" id="manage" role="tabpanel">
+  <div class="table-container" style="max-height: 600px; overflow-y: auto; border: 1px solid #dee2e6;">
+    <table class="table table-striped custom-table">
+      <thead style="position: sticky; top: 0; background-color: #f8f9fa; z-index: 1;">
+        <tr>
+          <th>Immagine</th>
+          <th>
+            Nome
+            <select id="filter-name" onchange="filterTable()">
+              <option value="">Tutti</option>
+              {% set names = products | map(attribute='name') | unique | sort %}
+              {% for name in names %}
+                <option value="{{ name }}">{{ name }}</option>
+              {% endfor %}
+            </select>
+          </th>
+
+          <th>
+            Categoria
+            <select id="filter-category" onchange="filterTable()">
+              <option value="">Tutti</option>
+              {% set categories = products | map(attribute='category') | unique | sort %}
+              {% for category in categories %}
+                <option value="{{ category }}">{{ category }}</option>
+              {% endfor %}
+            </select>
+          </th>
+          <th>
+            Articolo
+            <select id="filter-item" onchange="filterTable()">
+              <option value="">Tutti</option>
+              {% set items = products | map(attribute='item') | unique | sort %}
+              {% for item in items %}
+                <option value="{{ item }}">{{ item }}</option>
+              {% endfor %}
+            </select>
+          </th>
+          <th>Azioni</th>
+        </tr>
+      </thead>
+      <tbody id="product-table-body">
+        {% for product in products %}
+        <tr>
+          <td>
+            {% if product.image %}
+              <img src="{{ product.image }}" alt="Immagine prodotto" width="50">
+            {% else %}
+              N/A
+            {% endif %}
+          </td>
+          <td>{{ product.name }}</td>
+          <td>{{ product.category }}</td>
+          <td>{{ product.item }}</td>
+          <td>
+            <a href="#" class="btn btn-sm btn-warning edit-row-btn" data-barcode="{{ product.barcode }}" data-name="{{ product.name }}">✏️ Modifica</a>
+            <a href="#" class="btn btn-sm btn-danger delete-row-btn" data-barcode="{{ product.barcode }}" data-name="{{ product.name }}">❌ Elimina</a>
+         </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Modale per selezionare la data di inserimento -->
+  <div class="modal fade" id="editInsDateModal" tabindex="-1" aria-labelledby="editInsDateModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="editInsDateModalLabel">Seleziona data di inserimento</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Chiudi"></button>
+        </div>
+        <div class="modal-body">
+          <select id="editInsDateSelect" class="form-select"></select>
+        </div>
+        <div class="modal-footer">
+          <button type="button" id="confirmEditInsDateBtn" class="btn btn-primary">Conferma</button>
+        </div>
+      </div>
     </div>
   </div>
+</div>
+
+<!-- Questo script ripopola la tab2 quando viene selezionata-->
+<script>
+document.getElementById('manage-tab').addEventListener('click', function(e) {
+  // Se non siamo già sulla tab "manage", ricarica la pagina con il parametro tab=manage
+  if (!window.location.search.includes('tab=manage')) {
+    window.location.href = window.location.pathname + '?tab=manage';
+  }
+});
+</script>
+
+
+
+<!-- questo script Riempie il filtro modale per inserire ins_date nella seconda tab -->
+<script>
+document.querySelectorAll('.edit-row-btn').forEach(function(button) {
+  button.addEventListener('click', function(e) {
+    e.preventDefault();
+    const barcode = button.dataset.barcode;
+    const name = button.dataset.name;
+    fetch(`/products/ins_dates?barcode=${encodeURIComponent(barcode)}`)
+      .then(res => res.json())
+      .then(dates => {
+        const select = document.getElementById('editInsDateSelect');
+        select.innerHTML = '';
+        dates.forEach(date => {
+          select.innerHTML += `<option value="${date}">${date}</option>`;
+        });
+        select.dataset.barcode = barcode;
+        select.dataset.name = name;
+        const modal = new bootstrap.Modal(document.getElementById('editInsDateModal'));
+        modal.show();
+      });
+  });
+});
+
+document.getElementById('confirmEditInsDateBtn').addEventListener('click', function() {
+  const select = document.getElementById('editInsDateSelect');
+  const barcode = select.dataset.barcode;
+  const name = select.dataset.name;
+  const ins_date = select.value;
+  const action = select.dataset.action || 'edit';
+
+  if (action === 'delete') {
+    // Vai alla route di eliminazione con i parametri scelti
+    window.location.href = `/delete_product/${encodeURIComponent(barcode)}/${encodeURIComponent(ins_date)}`;
+  } else {
+    // Vai alla pagina di modifica con i parametri scelti
+    window.location.href = `/edit/${encodeURIComponent(barcode)}/${encodeURIComponent(ins_date)}`;
+  }
+});
+</script>
+
+<!-- Questo script serve per applicare il filtro su ins_date per il tasto Elimina --->
+<script>
+document.querySelectorAll('.delete-row-btn').forEach(function(button) {
+  button.addEventListener('click', function(e) {
+    e.preventDefault();
+    const barcode = button.dataset.barcode;
+    const name = button.dataset.name;
+    fetch(`/products/ins_dates?barcode=${encodeURIComponent(barcode)}`)
+      .then(res => res.json())
+      .then(dates => {
+        const select = document.getElementById('editInsDateSelect');
+        select.innerHTML = '';
+        dates.forEach(date => {
+          select.innerHTML += `<option value="${date}">${date}</option>`;
+        });
+        select.dataset.barcode = barcode;
+        select.dataset.name = name;
+        select.dataset.action = 'delete'; // <--- aggiungi questa riga
+        const modal = new bootstrap.Modal(document.getElementById('editInsDateModal'));
+        modal.show();
+      });
+  });
+});
+</script>
 
 <script>
   function filterTable() {
@@ -358,6 +445,32 @@
     });
   }
 </script>
+
+<!-- ... il resto della tua pagina ... -->
+
+<script>
+  // Al caricamento della pagina controlla se ?tab=manage è nella URL e attiva la tab
+  document.addEventListener('DOMContentLoaded', function () {
+    const urlParams = new URLSearchParams(window.location.search);
+    const tabParam = urlParams.get('tab');
+    if (tabParam === 'manage') {
+      const triggerEl = document.querySelector('#manage-tab');
+      if (triggerEl) {
+        const tab = new bootstrap.Tab(triggerEl);
+        tab.show();
+      }
+    }
+  });
+
+  // Mantieni anche lo script che fa il redirect quando clicchi la tab
+  document.getElementById('manage-tab').addEventListener('click', function(e) {
+    if (!window.location.search.includes('tab=manage')) {
+      window.location.href = window.location.pathname + '?tab=manage';
+    }
+  });
+</script>
+
+
 
  <!-- terza tab - ⚙️ Impostazioni di prodotto -->
   <div class="tab-pane fade" id="list" role="tabpanel" aria-labelledby="list-tab">
@@ -708,6 +821,32 @@ document.addEventListener("DOMContentLoaded", function () {
   document.getElementById('filterNameList').addEventListener('change', filterTable);
 
 });
+</script>
+
+<script>
+  // Questo script attiva dinamicamente la tab corretta in base al valore 'active_tab' passato dal backend.
+  // Se 'active_tab' è 'add' si apre la tab "Aggiungi Prodotto"
+  // Se 'active_tab' è 'manage' si apre la tab "Modifica/Rimuovi Prodotto"
+  // Se 'active_tab' è 'list' si apre la tab "Impostazioni di prodotto"
+  // Di default viene aperta la tab "Aggiungi Prodotto" se non viene passato nulla.
+
+  document.addEventListener('DOMContentLoaded', function () {
+    const activeTab = "{{ active_tab|default('add') }}"; // Valore passato dal backend o 'add' di default
+
+    let triggerEl;
+    if (activeTab === 'manage') {
+      triggerEl = document.querySelector('#manage-tab');
+    } else if (activeTab === 'list') {
+      triggerEl = document.querySelector('#list-tab');
+    } else {
+      triggerEl = document.querySelector('#add-tab');
+    }
+
+    if (triggerEl) {
+      const tab = new bootstrap.Tab(triggerEl);
+      tab.show();
+    }
+  });
 </script>
 
 

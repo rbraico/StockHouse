@@ -312,18 +312,18 @@ def index():
                         shops=shops,
                         categories=categories,
                         items=items,
-                        new_product=new_product)
+                        new_product=new_product,
+                        active_tab='add')
 
-@main.route('/delete_product/<int:id>')
-def delete_product(id):
-    #debug_print("delete_product: " , id)
 
-    delete_product_from_db(id)
 
-    flash("prodotto eliminato.", "success")
-
-    # Redirect alla lista dei prodotti
+# Questa route viene chiamata quando si clicca sul pulsante Elimina Prodotto dalla pagina di gestione dei prodotti
+@main.route('/delete_product/<barcode>/<ins_date>')
+def delete_product(barcode, ins_date):
+    delete_product_from_db(barcode, ins_date)
+    flash("Prodotto eliminato.", "success")
     return redirect(url_for('main.index') + '#manage')
+
 
 # ✅ Nuova route per la lista prodotti nel magazzino
 @main.route('/inventory')
@@ -384,23 +384,33 @@ def update_products_inline():
     # Recupera il nuovo livello di priorità
     return jsonify(success=True, priority_level=priority_level if 'priority_level' in locals() else None, barcode=barcode)
 
+# Questa route serve per visualizzare il filtro modale dell'ins_date nella seconda tab dei prodotti
+@main.route('/products/ins_dates')
+def get_ins_dates():
+    barcode = request.args.get('barcode')
+    conn = sqlite3.connect(Config.DATABASE_PATH)
+    conn.row_factory = sqlite3.Row
+    cur = conn.cursor()
+    cur.execute("SELECT DISTINCT tf.ins_date FROM product_dim pd JOIN transaction_fact tf ON pd.barcode=tf.barcode WHERE pd.barcode = ?", (barcode,))
+    ins_dates = [row['ins_date'] for row in cur.fetchall()]
+    conn.close()
+    return jsonify(ins_dates)
 
-
-@main.route("/edit/<name>/<ins_date>", methods=["GET", "POST"])
+@main.route("/edit/<barcode>/<ins_date>", methods=["GET", "POST"])
 #La procedura viene chiamata da Prodotti--> Modifica/Rimuovi Prodotta al momento del click sul pulsaante Modifica
 # Il metodo GET serve a riempire il form con i dati relativi il prodotto selezionato
 # Il metodo POST serve per attivare la modifica nel Database
-def edit_product(name, ins_date):
+def edit_product(barcode, ins_date):
     # Recupera i dettagli del prodotto dal database per il form di modifica
-    #debug_print("edit_product: ", name, ins_date)
-    #debug_print("requested method: ", request.method)
+    debug_print("edit_product: ", barcode, ins_date)
+    debug_print("requested method: ", request.method)
 
-    product    = lookup_products_by_name_ins_date(name,ins_date)
+    product    = lookup_products_by_name_ins_date(barcode,ins_date)
     id = product["id"]
     shop_list  = get_all_shops()
     items = get_all_items()
     #debug_print("requested method: ", product)
-    #debug_print("edit product intero record: ", product)
+    debug_print("edit product intero record: ", product)
 
     if request.method == "POST":
         # Modifica i dati del prodotto
