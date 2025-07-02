@@ -38,7 +38,7 @@
               <!-- Colonna per il form -->
               <div class="col-md-6">
                   <!-- Modulo di modifica prodotto -->
-                  <form method="POST" action="{{ url_for('main.edit_product', name=product.name, ins_date=product.ins_date) }}">
+                  <form method="POST" action="{{ url_for('main.edit_product', barcode=product.barcode, ins_date=product.ins_date) }}">
                       <!-- Barcode -->
                       <div class="row mb-2 align-items-center">
                           <div class="col-2">

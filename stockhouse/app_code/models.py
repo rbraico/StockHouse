@@ -284,7 +284,7 @@ def lookup_products_by_name(name):
     else:
         return {"found": False}
     
-def lookup_products_by_name_ins_date(name, ins_date):
+def lookup_products_by_name_ins_date(barcode, ins_date):
     conn = sqlite3.connect(Config.DATABASE_PATH)
     cursor = conn.cursor()
     
@@ -305,17 +305,10 @@ def lookup_products_by_name_ins_date(name, ins_date):
         FROM product_dim p
         LEFT JOIN item_list i ON p.item = i.name
         LEFT JOIN category_list c ON i.category_id = c.id
-        LEFT JOIN (
-            SELECT tf1.product_key, tf1.barcode, tf1.price, tf1.quantity, tf1.ins_date, tf1.expiry_date
-            FROM transaction_fact tf1
-            JOIN (
-                SELECT product_key, MAX(ins_date) AS max_date
-                FROM transaction_fact
-                GROUP BY product_key
-            ) tf2 ON tf1.product_key = tf2.product_key AND tf1.ins_date = tf2.max_date
-        ) tf ON p.id = tf.product_key
-        WHERE p.name = ? AND tf.ins_date = ?
-    """, (name, ins_date))
+        LEFT JOIN transaction_fact tf ON p.id = tf.product_key AND DATE(tf.ins_date) = ?
+        WHERE p.barcode = ?
+    """, (ins_date, barcode))
+
 
     prodotto = cursor.fetchone()
     conn.close()
@@ -392,16 +385,11 @@ def update_product_dim(id, name, brand, shop, category, item):
     conn.commit()
     conn.close()
 
-def delete_product_from_db(id):
-    debug_print("delete_product: ", id)
-    # Connessione al database
+def delete_product_from_db(barcode, ins_date):
+    debug_print("delete_product: ", barcode, ins_date)
     conn = sqlite3.connect(Config.DATABASE_PATH)
     cur = conn.cursor()
-
-    # Query per eliminare il prodotto con il dato md5
-    cur.execute("DELETE FROM transaction_fact WHERE id = ?", (id,))
-
-    # Commit e chiusura della connessione
+    cur.execute("DELETE FROM transaction_fact WHERE barcode = ? AND ins_date = ?", (barcode, ins_date))
     conn.commit()
     conn.close()
 
@@ -438,11 +426,11 @@ def get_all_products():
                 ps.user_override,                   
                 dim.image
             FROM product_dim dim
-            LEFT JOIN transaction_fact trs ON dim.id = trs.product_key
+            JOIN transaction_fact trs ON dim.id = trs.product_key
             LEFT JOIN item_list itl ON dim.item = itl.name
             LEFT JOIN category_list cat ON itl.category_id = cat.id
             LEFT JOIN product_settings ps ON dim.barcode = ps.barcode
-            WHERE trs.ins_date >= DATE('now', '-60 days')
+            GROUP BY dim.barcode
             ORDER BY dim.name, trs.ins_date DESC
     """)
 

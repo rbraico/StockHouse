@@ -362,12 +362,15 @@ def get_shopping_list_data(save_to_db=False, conn=None, cursor=None, decade=None
             reason = "Reintegro scorte"
             debug_print(f"Prodotto {product_name} è in Reintegro scorte: {quantity} < {reorder_point}")
 
+        
         product_cost = quantity_to_buy * price
-        if total_cost + product_cost <= budget:
+        # lascia un 20% di margine sul budget
+        if total_cost + product_cost <= (budget - (budget * 0.20)):
             within_budget = 1
             total_cost += product_cost
         else:
             within_budget = 0
+
 
         debug_print(f"Prodotto: {product_name}, Quantità da acquistare: {quantity_to_buy}, Ragione: {reason}, Prezzo unitario: {price:.2f}€, Costo totale: {product_cost:.2f}€, Budget rimanente: {budget - total_cost:.2f}€")
 
