@@ -214,118 +214,41 @@ def get_shopping_list_data(save_to_db=False, conn=None, cursor=None, decade=None
 
     debug_print(f"💰 Budget disponibile per la {decade}: {budget:.2f}")
 
-    # Query specifica per decade
-    if decade == "D3":
-        # Ultima decade: reintegro scorte a lunga conservazione o ad alta priorità
-        query = """
-            SELECT 
-                i.barcode,
-                stock.total_quantity  AS quantity,
-                i.reorder_point, i.min_quantity, i.max_quantity, i.security_quantity,
-                pd.name, pd.shop, tf.price,
-                i.necessity_level, i.priority_level,
-                MAX(tf.expiry_date) as expiry_date,
-                MAX(tf.ins_date) as ins_date
-            FROM product_settings i
-            JOIN (
-                SELECT barcode, SUM(quantity) AS total_quantity
-                FROM transaction_fact
-                WHERE status = 'in stock'
-                GROUP BY barcode
-                ) AS stock ON i.barcode = stock.barcode
-            JOIN transaction_fact tf ON i.barcode = tf.barcode
-            JOIN product_dim pd ON i.barcode = pd.barcode
-            WHERE 
-                i.max_quantity > 0
-                AND pd.item NOT LIKE '%Frutta'
-                AND pd.item NOT LIKE '%Verdura'
-                AND (JULIANDAY(tf.expiry_date) - JULIANDAY(tf.ins_date)) > 30
-                AND tf.ins_date >= date('now', '-6 months')
-            GROUP BY i.barcode
-            HAVING 
-                stock.total_quantity < i.reorder_point
-                OR stock.total_quantity <= i.security_quantity
-            ORDER BY i.priority_level ASC, tf.price ASC
-        """
-    elif decade == "D1": 
-        # Prima decade: prodotti freschi e indispensabili
-        query = """
-            SELECT 
-                i.barcode,
-                COALESCE(stock.total_quantity, 0) AS quantity,
-                i.reorder_point, i.min_quantity, i.max_quantity, i.security_quantity,
-                pd.name, pd.shop, tf_min.price, pd.category,
-                i.necessity_level, i.priority_level,
-                tf_min.ins_date
-            FROM product_settings i
-            LEFT JOIN (
-                SELECT barcode, 
-                    SUM(CASE 
-                            WHEN status = 'in stock' THEN quantity
-                            WHEN status = 'consumed' THEN -quantity
-                            ELSE 0
-                        END) AS total_quantity
-                FROM transaction_fact
-                GROUP BY barcode
-            ) stock ON i.barcode = stock.barcode
-            JOIN product_dim pd ON i.barcode = pd.barcode
-            LEFT JOIN (
-                SELECT barcode, MIN(ins_date) AS ins_date, MIN(price) AS price
-                FROM transaction_fact
-                GROUP BY barcode
-            ) tf_min ON i.barcode = tf_min.barcode
-            WHERE i.max_quantity > 0 AND i.priority_level=1
-            AND (
-                (i.necessity_level = 'Indispensabile' AND COALESCE(stock.total_quantity, 0) <= i.security_quantity)
-                OR
-                (pd.category LIKE '%Alimenti freschi%' AND COALESCE(stock.total_quantity, 0) < i.min_quantity)
-                OR
-                (pd.category LIKE '%Alimenti Congelati%' AND COALESCE(stock.total_quantity, 0) < i.min_quantity)
-            )
-            ORDER BY 
-                CASE 
-                    WHEN 1 = 1 AND (pd.category LIKE '%Alimenti freschi%' OR pd.category LIKE '%Alimenti Congelati%') THEN 0
-                    ELSE i.priority_level
-                END ASC,
-                tf_min.ins_date ASC,
-                tf_min.price ASC
-        """
-    else:
-        # Seconda decade: prodotti freschi e indispensabili e utilo avendo piu budget
-        query = """
-            SELECT
+    query = """
+        SELECT 
             i.barcode,
-            stock.total_quantity AS quantity,
+            COALESCE(stock.total_quantity, 0) AS quantity,
             i.reorder_point, i.min_quantity, i.max_quantity, i.security_quantity,
-            pd.name, pd.shop, tf.price,
+            pd.name, pd.shop, tf.price, pd.category,
             i.necessity_level, i.priority_level,
             MIN(tf.ins_date) as ins_date
-            FROM product_settings i
-            JOIN (
-            SELECT barcode, SUM(quantity) AS total_quantity
+        FROM product_settings i
+        LEFT JOIN (
+            SELECT 
+                barcode,
+                SUM(quantity) - COALESCE(SUM(consumed_quantity), 0) AS total_quantity
             FROM transaction_fact
-            WHERE status = 'in stock'
             GROUP BY barcode
-            ) AS stock ON i.barcode = stock.barcode
-            JOIN transaction_fact tf ON i.barcode = tf.barcode
-            JOIN product_dim pd ON i.barcode = pd.barcode
-            WHERE i.max_quantity > 0
-            GROUP BY i.barcode
-            HAVING (
-            (i.necessity_level = 'Indispensabile' AND stock.total_quantity <= i.reorder_point)
+        ) AS stock ON i.barcode = stock.barcode
+        LEFT JOIN transaction_fact tf ON i.barcode = tf.barcode
+        LEFT JOIN product_dim pd ON i.barcode = pd.barcode
+        WHERE i.max_quantity > 0
+        AND (pd.category LIKE '%Alimenti freschi' OR pd.item LIKE '%Alimenti Congelati')
+        GROUP BY i.barcode
+        HAVING (
+            (i.necessity_level = 'Indispensabile' AND COALESCE(stock.total_quantity, 0) <= i.security_quantity)
             OR
-            (i.necessity_level = 'Utile' AND stock.total_quantity < i.min_quantity)
-            OR
-            (pd.category LIKE "%Alimenti Freschi" AND stock.total_quantity < i.min_quantity)
-            )
-            ORDER BY i.priority_level ASC, ins_date ASC, tf.price ASC;
+            (pd.category LIKE '%Alimenti freschi' AND COALESCE(stock.total_quantity, 0) < i.min_quantity)
+                OR
+            (pd.category LIKE '%Alimenti Congelati' AND COALESCE(stock.total_quantity, 0) < i.min_quantity)
+        )
+        ORDER BY i.priority_level ASC, ins_date ASC, tf.price ASC;
         """
-
-
-
 
     cursor.execute(query)
     rows = cursor.fetchall()
+
+    debug_print(f"Query eseguita, trovati {len(rows)} prodotti per la {decade}, save_to_db: {save_to_db}")
 
     items = []
     shop_totals = {}
@@ -336,6 +259,7 @@ def get_shopping_list_data(save_to_db=False, conn=None, cursor=None, decade=None
         product_name = row["name"]
         shop = row["shop"]
         price = row["price"] or 0
+        category = row["category"]
         quantity = parse_quantity(row["quantity"])
         max_q = parse_quantity(row["max_quantity"])
         min_q = parse_quantity(row["min_quantity"])
@@ -345,7 +269,10 @@ def get_shopping_list_data(save_to_db=False, conn=None, cursor=None, decade=None
         quantity_to_buy = 1
         reason = ""
 
-        if necessity_level == "Indispensabile" and quantity < sec_q:
+        if "Alimenti freschi" in category:
+            quantity_to_buy = max(max_q - quantity, 1)
+            reason = "Acquisto abituale alimento fresco"
+        elif necessity_level == "Indispensabile" and quantity < sec_q:
             if decade == "D3":
                 quantity_to_buy = max(max_q - quantity, 1)
                 reason = "Reintegro scorte"
@@ -353,14 +280,11 @@ def get_shopping_list_data(save_to_db=False, conn=None, cursor=None, decade=None
                 quantity_to_buy = max(sec_q - quantity, 1)
                 reason = "Sotto scorta"
             debug_print(f"Prodotto {product_name} è Indispensabile, sotto scorta: {quantity} < {sec_q}")
-        elif necessity_level == "Stagionale" and quantity < min_q:
-            quantity_to_buy = max(min_q - quantity, 1)
-            reason = "Da consumare"
-            debug_print(f"Prodotto {product_name} è Stagionale, da consumare: {quantity} < {min_q}")
         elif max_q > quantity and quantity <= reorder_point:
             quantity_to_buy = max(max_q - quantity, 1)
             reason = "Reintegro scorte"
-            debug_print(f"Prodotto {product_name} è in Reintegro scorte: {quantity} < {reorder_point}")
+            debug_print(f"Prodotto {product_name} è in Reintegro scorte: {quantity} <= {reorder_point}")
+
 
         
         product_cost = quantity_to_buy * price
@@ -393,44 +317,44 @@ def get_shopping_list_data(save_to_db=False, conn=None, cursor=None, decade=None
 
     if save_to_db:
         cursor.execute("DELETE FROM shopping_list WHERE decade_number != ?", (decade,))
-    for item in items:
-        # Controlla se il record è già presente per la stessa decade e barcode
-        cursor.execute("""
-            SELECT 1 FROM shopping_list 
-            WHERE barcode = ? AND decade_number = ?
-        """, (item["barcode"], item["decade_number"]))
-        exists = cursor.fetchone()
-
-        if not exists:
-            debug_print(f"Prodotto {item['product_name']} non presente, lo aggiungo alla lista della spesa.")
+        for item in items:
+            # Controlla se il record è già presente per la stessa decade e barcode
             cursor.execute("""
-                INSERT INTO shopping_list (
-                    barcode, product_name, quantity_to_buy,
-                    shop, reason, price, decade_number, insert_date, within_budget
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, DATE('now'), ?)
-            """, (
-                item["barcode"], item["product_name"], item["quantity_to_buy"],
-                item["shop"], item["reason"], item["price"], item["decade_number"], item["within_budget"]
-            ))
-        else:
-            debug_print(f"Prodotto {item['product_name']} già presente, lo aggiorno nella lista della spesa.")
-            # Se già presente, aggiorna quantità, prezzo e within_budget
-            cursor.execute("""
-                UPDATE shopping_list SET
-                    quantity_to_buy = ?,
-                    price = ?,
-                    within_budget = ?,
-                    insert_date = DATE('now')
+                SELECT 1 FROM shopping_list 
                 WHERE barcode = ? AND decade_number = ?
-            """, (
-                item["quantity_to_buy"],
-                item["price"],
-                item["within_budget"],
-                item["barcode"],
-                item["decade_number"]
-            ))
+            """, (item["barcode"], item["decade_number"]))
+            exists = cursor.fetchone()
 
-        conn.commit()
+            if not exists:
+                debug_print(f"Prodotto {item['product_name']} non presente, lo aggiungo alla lista della spesa.")
+                cursor.execute("""
+                    INSERT INTO shopping_list (
+                        barcode, product_name, quantity_to_buy,
+                        shop, reason, price, decade_number, insert_date, within_budget
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, DATE('now'), ?)
+                """, (
+                    item["barcode"], item["product_name"], item["quantity_to_buy"],
+                    item["shop"], item["reason"], item["price"], item["decade_number"], item["within_budget"]
+                ))
+            else:
+                debug_print(f"Prodotto {item['product_name']} già presente, lo aggiorno nella lista della spesa.")
+                # Se già presente, aggiorna quantità, prezzo e within_budget
+                cursor.execute("""
+                    UPDATE shopping_list SET
+                        quantity_to_buy = ?,
+                        price = ?,
+                        within_budget = ?,
+                        insert_date = DATE('now')
+                    WHERE barcode = ? AND decade_number = ?
+                """, (
+                    item["quantity_to_buy"],
+                    item["price"],
+                    item["within_budget"],
+                    item["barcode"],
+                    item["decade_number"]
+                ))
+
+            conn.commit()
 
     # Recupera tutti gli elementi della lista della spesa
     cursor.execute("SELECT * FROM shopping_list WHERE within_budget = 1")
