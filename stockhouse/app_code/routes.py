@@ -11,7 +11,7 @@ from stockhouse.app_code.models import add_shop, update_shop, delete_shop
 from stockhouse.app_code.models import add_category, get_all_categories, update_category, delete_category, get_all_items, update_item, delete_item
 import sqlite3
 import hashlib
-from datetime import datetime, timedelta
+from datetime import datetime, date
 from config import Config  # usa il path corretto se è diverso
 from flask import send_from_directory
 import os
@@ -908,13 +908,16 @@ def add_selected_products():
             # Inserisce nella lista
             try:
                 current_decade = get_current_decade(datetime.today())
+                within_budget = 1 # E` stato aggiunto manualmente, quindi lo si vuole comprare`
+                current_date = datetime.today().date()
+                reason_to_add = "Aggiunto manualmente"
 
                 debug_print("add_selected_products - Inserimento nella lista:", barcode, row["name"], row["shop"], row["price"], current_decade)
                 cursor.execute("""
                     INSERT INTO shopping_list (
-                        barcode, product_name, quantity_to_buy, shop, reason, price, decade_number
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
-                """, (barcode, row["name"], 1, row["shop"], "Sotto scorta", row["price"], current_decade))
+                        barcode, product_name, quantity_to_buy, shop, reason, price, decade_number, insert_date, within_budget
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (barcode, row["name"], 1, row["shop"], reason_to_add, row["price"], current_decade, current_date, within_budget))
 
             except Exception as insert_error:
                 debug_print("❌ Errore durante INSERT:", str(insert_error))
@@ -925,7 +928,7 @@ def add_selected_products():
         cursor.execute("""
             SELECT barcode, product_name, quantity_to_buy, shop, reason, price
             FROM shopping_list
-            WHERE decade_number = ?  
+            WHERE within_budget=1 AND decade_number = ?  
             ORDER BY shop, product_name
         """,(current_decade,))
 
