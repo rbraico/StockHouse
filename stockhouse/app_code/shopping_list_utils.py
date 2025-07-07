@@ -202,16 +202,25 @@ def get_shopping_list_data(save_to_db=False, conn=None, cursor=None, decade=None
 
     # Recupera le info di budget dal DB
     budget_info = get_budget_info()
+    spesa_decade = get_spesa_per_decade()
+
+    budget = float(budget_info['budget']) 
+    debug_print(f"💰 Budget totale: {budget:.2f}€")
+    spesa_corrente = sum(spesa_decade)
+    debug_print(f"💰 Spesa corrente per la {decade}: {spesa_corrente:.2f}€")
     monthly_budget = budget_info['budget']
 
     # Percentuali budget per decade prese da DB
     if decade == "D1":
-        budget = monthly_budget * (budget_info['decade1'] / 100)
+        budget = monthly_budget * (budget_info['decade1'] / 100) - spesa_corrente
     elif decade == "D2":
-        budget = monthly_budget * (budget_info['decade2'] / 100)
+        budget = monthly_budget * (budget_info['decade2'] / 100) - spesa_corrente
     else:
-        budget = monthly_budget * (budget_info['decade3'] / 100)
+        budget = monthly_budget * (budget_info['decade3'] / 100) - spesa_corrente
 
+    # Lascia un 20% di margine sul budget per spesa libera
+    budget = (budget - (budget * 0.20))
+ 
     debug_print(f"💰 Budget disponibile per la {decade}: {budget:.2f}")
 
     query = """
@@ -288,15 +297,19 @@ def get_shopping_list_data(save_to_db=False, conn=None, cursor=None, decade=None
 
         
         product_cost = quantity_to_buy * price
+        total_cost += product_cost
+
+        debug_print(f"Hei Budget disponibie: {budget}, Prodotto: {product_name}, Quantità da acquistare: {quantity_to_buy}, Prezzo unitario: {price:.2f}€, Costo totale: {product_cost:.2f}€, Spesa corrente: {total_cost:.2f}€")
+
         # lascia un 20% di margine sul budget
-        if total_cost + product_cost <= (budget - (budget * 0.20)):
+        if product_cost <= budget:
             within_budget = 1
-            total_cost += product_cost
+            budget = budget - product_cost
         else:
             within_budget = 0
 
 
-        debug_print(f"Prodotto: {product_name}, Quantità da acquistare: {quantity_to_buy}, Ragione: {reason}, Prezzo unitario: {price:.2f}€, Costo totale: {product_cost:.2f}€, Budget rimanente: {budget - total_cost:.2f}€")
+        debug_print(f"Prodotto: {product_name}, within_budget: {within_budget},  Quantità da acquistare: {quantity_to_buy}, Ragione: {reason}, Prezzo unitario: {price:.2f}€, Costo totale: {product_cost:.2f}€, Budget rimanente: {budget - total_cost:.2f}€")
 
         item = {
             "barcode": barcode,
@@ -316,18 +329,19 @@ def get_shopping_list_data(save_to_db=False, conn=None, cursor=None, decade=None
     debug_print("save_to_db, decade:", decade)
 
     if save_to_db:
-        cursor.execute("DELETE FROM shopping_list WHERE decade_number != ?", (decade,))
-        for item in items:
-            # Controlla se il record è già presente per la stessa decade e barcode
-            cursor.execute("""
-                SELECT 1 FROM shopping_list 
-                WHERE barcode = ? AND decade_number = ?
-            """, (item["barcode"], item["decade_number"]))
-            exists = cursor.fetchone()
+        cursor.execute("""
+                        DELETE FROM shopping_list 
+                        WHERE decade_number != ? 
+                        OR reason != 'Aggiunto manualmente'
+                    """, (decade,)
+                    )
 
-            if not exists:
-                debug_print(f"Prodotto {item['product_name']} non presente, lo aggiungo alla lista della spesa.")
-                cursor.execute("""
+        for item in items:
+            # Salta l'inserimento se non è nel budget
+            if item["within_budget"] == 0:
+               continue
+
+            cursor.execute("""
                     INSERT INTO shopping_list (
                         barcode, product_name, quantity_to_buy,
                         shop, reason, price, decade_number, insert_date, within_budget
@@ -336,24 +350,7 @@ def get_shopping_list_data(save_to_db=False, conn=None, cursor=None, decade=None
                     item["barcode"], item["product_name"], item["quantity_to_buy"],
                     item["shop"], item["reason"], item["price"], item["decade_number"], item["within_budget"]
                 ))
-            else:
-                debug_print(f"Prodotto {item['product_name']} già presente, lo aggiorno nella lista della spesa.")
-                # Se già presente, aggiorna quantità, prezzo e within_budget
-                cursor.execute("""
-                    UPDATE shopping_list SET
-                        quantity_to_buy = ?,
-                        price = ?,
-                        within_budget = ?,
-                        insert_date = DATE('now')
-                    WHERE barcode = ? AND decade_number = ?
-                """, (
-                    item["quantity_to_buy"],
-                    item["price"],
-                    item["within_budget"],
-                    item["barcode"],
-                    item["decade_number"]
-                ))
-
+ 
             conn.commit()
 
     # Recupera tutti gli elementi della lista della spesa
@@ -372,6 +369,9 @@ def get_shopping_list_data(save_to_db=False, conn=None, cursor=None, decade=None
 
     if external_connection:
         conn.close()
+
+    # Se il refresh è stato richiesto, aggiorna lo stato
+    set_refresh_needed(False)
 
     debug_print(f"🛒 Lista della spesa per la {decade} generata con {len(items)} prodotti, totale: {total_cost:.2f}€")
     debug_print(f"Totali per negozio: {items}")
@@ -525,4 +525,25 @@ def process_shopping_queue():
     conn.commit()
     conn.close()
 
+# Nuove funzioni per il refresh della shopping list
+def set_refresh_needed(value=True):
+    debug_print(f"set_refresh_needed: Imposto refresh_needed a {value}")
+    conn = sqlite3.connect(Config.DATABASE_PATH)
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO system_state (key, value)
+        VALUES (?, ?)
+        ON CONFLICT(key) DO UPDATE SET value=excluded.value
+    """, ("shopping_list_refresh_needed", '1' if value else '0'))
+    conn.commit()
+    conn.close()
+
+def is_refresh_needed():
+    debug_print("is_refresh_needed: Controllo se il refresh è necessario")
+    conn = sqlite3.connect(Config.DATABASE_PATH)
+    cursor = conn.cursor()
+    cursor.execute("SELECT value FROM system_state WHERE key = ?", ("shopping_list_refresh_needed",))
+    result = cursor.fetchone()
+    conn.close()
+    return result and result[0] == '1'
   

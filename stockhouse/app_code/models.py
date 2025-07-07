@@ -176,6 +176,16 @@ def init_db():
 
     conn.commit()
 
+  # ✅ CREA TABELLA shopping_queue usata come coda di comunicazione con shoppy
+    c.execute("""  
+        CREATE TABLE IF NOT EXISTS system_state (
+            key TEXT PRIMARY KEY,
+            value TEXT DEFAULT "1"
+        )
+   """)
+
+    conn.commit()
+
     conn.close()
 
 import sqlite3

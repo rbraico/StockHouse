@@ -345,17 +345,6 @@
   </div>
 </div>
 
-<!-- Questo script ripopola la tab2 quando viene selezionata-->
-<script>
-document.getElementById('manage-tab').addEventListener('click', function(e) {
-  // Se non siamo già sulla tab "manage", ricarica la pagina con il parametro tab=manage
-  if (!window.location.search.includes('tab=manage')) {
-    window.location.href = window.location.pathname + '?tab=manage';
-  }
-});
-</script>
-
-
 
 <!-- questo script Riempie il filtro modale per inserire ins_date nella seconda tab -->
 <script>
@@ -427,14 +416,14 @@ document.querySelectorAll('.delete-row-btn').forEach(function(button) {
     const nameFilter = document.getElementById("filter-name").value.toLowerCase();
     const categoryFilter = document.getElementById("filter-category").value.toLowerCase();
     const itemFilter = document.getElementById("filter-item").value.toLowerCase();
-    
+
     const rows = document.querySelectorAll("#product-table-body tr");
-    
+
     rows.forEach(row => {
       const name = row.cells[1].textContent.toLowerCase();
-      const category = row.cells[5].textContent.toLowerCase();
-      const item = row.cells[6].textContent.toLowerCase();
-      
+      const category = row.cells[2].textContent.toLowerCase();
+      const item = row.cells[3].textContent.toLowerCase();
+
       if ((nameFilter === "" || name.includes(nameFilter)) &&
           (categoryFilter === "" || category.includes(categoryFilter)) &&
           (itemFilter === "" || item.includes(itemFilter))) {
@@ -462,12 +451,7 @@ document.querySelectorAll('.delete-row-btn').forEach(function(button) {
     }
   });
 
-  // Mantieni anche lo script che fa il redirect quando clicchi la tab
-  document.getElementById('manage-tab').addEventListener('click', function(e) {
-    if (!window.location.search.includes('tab=manage')) {
-      window.location.href = window.location.pathname + '?tab=manage';
-    }
-  });
+
 </script>
 
 
@@ -823,31 +807,6 @@ document.addEventListener("DOMContentLoaded", function () {
 });
 </script>
 
-<script>
-  // Questo script attiva dinamicamente la tab corretta in base al valore 'active_tab' passato dal backend.
-  // Se 'active_tab' è 'add' si apre la tab "Aggiungi Prodotto"
-  // Se 'active_tab' è 'manage' si apre la tab "Modifica/Rimuovi Prodotto"
-  // Se 'active_tab' è 'list' si apre la tab "Impostazioni di prodotto"
-  // Di default viene aperta la tab "Aggiungi Prodotto" se non viene passato nulla.
-
-  document.addEventListener('DOMContentLoaded', function () {
-    const activeTab = "{{ active_tab|default('add') }}"; // Valore passato dal backend o 'add' di default
-
-    let triggerEl;
-    if (activeTab === 'manage') {
-      triggerEl = document.querySelector('#manage-tab');
-    } else if (activeTab === 'list') {
-      triggerEl = document.querySelector('#list-tab');
-    } else {
-      triggerEl = document.querySelector('#add-tab');
-    }
-
-    if (triggerEl) {
-      const tab = new bootstrap.Tab(triggerEl);
-      tab.show();
-    }
-  });
-</script>
 
 
 

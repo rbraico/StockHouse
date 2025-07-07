@@ -29,7 +29,9 @@ from stockhouse.app_code.shopping_list_utils import (
     get_reorder_total_cost,
     get_suggested_products,
     get_current_decade,
-    format_decade_label)
+    format_decade_label,
+    set_refresh_needed,
+    is_refresh_needed)
 import calendar
 from calendar import month_name
 
@@ -256,6 +258,7 @@ def index():
 
             # Il nome e`comunque quello impostato nel form! 
             name = request.form["name"]
+            debug_print("index -> add_product_dim: ", barcode, name, brand, shop, category, item, image_browser_path)
             add_product_dim(barcode, name, brand, shop, category, item, image_browser_path)
 
         # Ottiene ID del prodotto
@@ -277,6 +280,8 @@ def index():
         # Se il prodotto è stato aggiunto alla lista della spesa, lo rimuoviamo
         debug_print("index -> delete_from_shopping_list: ", barcode)
         delete_from_shopping_list(barcode)
+        # Aggiorna lo stato del refresh che verra eseguito all'apertura della pagina shopping_list che puo avvenire anche da Shoppy
+        set_refresh_needed(True)
 
         conn = sqlite3.connect(Config.DATABASE_PATH)
         cursor = conn.cursor()
@@ -301,7 +306,7 @@ def index():
 
     # 💡 Se la richiesta è GET, semplicemente carichiamo la pagina
     products      = get_all_products()
-    #debug_print("ALL PRODUCTS: ", products)
+    debug_print("ALL PRODUCTS: ", products)
     shops         = get_all_shops()
     #debug_print("ALL SHOPS: ", shops)
     categories    = get_all_categories()
@@ -337,7 +342,6 @@ def list_inventory():
     debug_print ("Show_Product in inventory: ", products)
 
     return render_template("inventory.html", products=products)
-
 
 
 # Questa procedura viene chiamata dal metodo POST dopo aver cliccato sul pulsante Modifica Parametri di Magazzino
@@ -805,42 +809,25 @@ def get_decade_period_label(decade_code):
 # Questa route serve per visualizzare la lista della spesa
 @main.route('/shopping_list')
 def shopping_list():
-    # Usa la decade corrente
     selected_decade = get_current_decade()
     debug_print("Decade selezionata: ", selected_decade)
 
-    # Verifica se esistono già record per la decade corrente
-    conn = sqlite3.connect(Config.DATABASE_PATH)
-    cursor = conn.cursor()
-    current_month = datetime.today().strftime("%Y-%m")
+    refresh_needed = 1  #is_refresh_needed()
+    debug_print("Flag refresh_needed: ", refresh_needed)
 
-    cursor.execute("""
-        SELECT COUNT(*) FROM shopping_list 
-        WHERE strftime('%Y-%m', insert_date) = ? AND decade_number = ?
-    """, (current_month, selected_decade))
+    if refresh_needed:
+        debug_print("⚠️ Rigenerazione necessaria. Ricreo la shopping_list.")
+        items, shop_totals = get_shopping_list_data(save_to_db=True, decade=selected_decade)
+        set_refresh_needed(False)
+    else:
+        debug_print("✅ Nessuna rigenerazione. Uso la lista salvata.")
+        items, shop_totals = get_shopping_list_data(save_to_db=False, decade=selected_decade)
 
-    already_generated = cursor.fetchone()[0] > 0
-    conn.close()
-
-    debug_print("Record già presenti per la decade selezionata: ", already_generated)
-
-    # In ogni caso, prova a generare (ma la funzione evita duplicati)
-    debug_print("Recupero dati della lista spesa per la decade selezionata: ", selected_decade)
-    items, shop_totals = get_shopping_list_data(save_to_db=True, decade=selected_decade)
-
-    # Recupera i prodotti suggeriti
     suggested_items = get_suggested_products()
-
-    # Etichetta con periodo (es. "1 - 10 Marzo")
     period_label = get_decade_period_label(selected_decade)
-
-    # Recupera info budget e percentuali decadi
     budget_record = get_budget_info()
-
-    # Recupera spesa parziale per decade dalla nuova tabella expenses_fact
     spesa_decade = get_spesa_per_decade()
 
-    # Calcolo totale speso e residuo
     budget = float(budget_record['budget']) 
     spesa_corrente = sum(spesa_decade)
     budget_residuo = round(budget - spesa_corrente, 2)
@@ -861,6 +848,7 @@ def shopping_list():
         current_decade=selected_decade,
         period_label=period_label
     )
+
 
 
 @main.route('/shopping_list/add_selected', methods=['POST'])
@@ -1132,3 +1120,15 @@ def trigger_queue_check():
     debug_print("trigger_queue_check - Inizio processo coda acquisto")
     process_shopping_queue()
     return jsonify({"status": "ok"})
+
+# Questa route viene chiamata da Shoppy e serve per aggiornare la lista della spesa prima che sShoppy possa visualizzarla
+@main.route("/api/shopping_list/refresh", methods=["POST"])
+def api_refresh_shopping_list():
+    selected_decade = get_current_decade()
+
+    if is_refresh_needed():
+        items, shop_totals = get_shopping_list_data(save_to_db=True, decade=selected_decade)
+        set_refresh_needed(False)
+        return jsonify({"status": "refreshed", "items_updated": len(items)})
+    else:
+        return jsonify({"status": "no_refresh_needed"})

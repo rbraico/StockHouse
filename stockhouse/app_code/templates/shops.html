@@ -98,7 +98,11 @@
           <td>{{ shop[2] }}</td>
           <td>
             <a href="{{ url_for('main.edit_shop', shop_id=shop[0]) }}" class="btn btn-sm btn-warning">✏️ Modifica</a>
-            <a href="{{ url_for('main.delete_shop_route', shop_id=shop[0]) }}" class="btn btn-sm btn-danger" onclick="return confirm('Sei sicuro di voler eliminare questo negozio?');">❌ Elimina</a>
+            <form action="{{ url_for('main.delete_shop_route', shop_id=shop[0]) }}" method="POST" style="display:inline;">
+              <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Sei sicuro di voler eliminare questo negozio?');">
+                ❌ Elimina
+              </button>
+            </form>
           </td>
         </tr>
         {% endfor %}
