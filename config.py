@@ -64,5 +64,8 @@ class Config:
 
         return "http://localhost:8123/local/stockhouse_images"
         
+
+
+
     # Inizializzazione statica
     DATABASE_PATH = get_database_path.__func__()
