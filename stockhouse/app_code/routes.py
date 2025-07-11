@@ -1162,8 +1162,8 @@ def api_refresh_shopping_list():
 def shopping_receipt():
     data = request.get_json()
 
-    print("🛒 Carrello ricevuto da Node-RED:")
-    print(data)
+    debug_print("🛒 Carrello ricevuto da Node-RED:")
+    debug_print(data)
 
     # TODO: qui puoi salvare i dati nel DB se vuoi
 
