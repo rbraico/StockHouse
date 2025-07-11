@@ -1,0 +1,12 @@
+<ul class="list-group list-group-flush">
+    {% for store, total in shop_totals.items() %}
+    <li class="list-group-item d-flex justify-content-between align-items-center">
+        {{ store }}
+        <span>€ {{ '%.2f'|format(total) }}</span>
+    </li>
+    {% else %}
+    <li class="list-group-item text-center text-muted">
+        Nessun negozio selezionato.
+    </li>
+    {% endfor %}
+</ul>

@@ -66,7 +66,7 @@
     <!-- Riga 2 -->
     <div class="row mb-4">
         <!-- Colonna 1: Totale per negozio -->
-        <div class="col-md-6">
+        <div class="col-md-6" id="shopTotalsContainer">
             <div class="card">
                 <div class="card-header bg-primary text-white">
                     🏪 Totale Spesa per Negozio
@@ -87,6 +87,7 @@
                 </div>
             </div>
         </div>
+
 
         <!-- Colonna 2: Riepilogo budget -->
         <div class="col-md-6">
@@ -172,10 +173,11 @@
         });
 
         if (response.ok) {
-            // aggiorna la lista della spesa
-            const updatedHTML = await response.text();
-            document.getElementById('shoppingListContainer').innerHTML = updatedHTML;
-
+            const data = await response.json();
+            // Aggiorna lista della spesa
+            document.getElementById('shoppingListContainer').innerHTML = data.shopping_list_html;
+            // Aggiorna totali per negozio
+            document.getElementById('shopTotalsContainer').innerHTML = data.shop_totals_html;
         }
     });
 </script>
