@@ -850,7 +850,6 @@ def shopping_list():
     )
 
 
-
 @main.route('/shopping_list/add_selected', methods=['POST'])
 def add_selected_products():
     try:
@@ -887,16 +886,15 @@ def add_selected_products():
                 ) AS tf ON pd.barcode = tf.barcode
                 WHERE pd.barcode = ?
             """, (barcode,))
- 
-    
+
             row = cursor.fetchone()
             if not row:
                 continue  # se il barcode non esiste in product_dim, salta
-     
+
             # Inserisce nella lista
             try:
                 current_decade = get_current_decade(datetime.today())
-                within_budget = 1 # E` stato aggiunto manualmente, quindi lo si vuole comprare`
+                within_budget = 1 # E` stato aggiunto manualmente, quindi lo si vuole comprare
                 current_date = datetime.today().date()
                 reason_to_add = "Aggiunto manualmente"
 
@@ -918,19 +916,44 @@ def add_selected_products():
             FROM shopping_list
             WHERE within_budget=1 AND decade_number = ?  
             ORDER BY shop, product_name
-        """,(current_decade,))
+        """, (current_decade,))
 
         updated_items = cursor.fetchall()
+        updated_items = [dict(row) for row in updated_items]
+
+        # Calcolo totali per negozio
+        shop_totals = {}
+        for item in updated_items:
+            shop = item.get("shop")
+            if not shop:
+                continue
+            product_cost = item["price"] * item["quantity_to_buy"]
+            shop_totals.setdefault(shop, 0)
+            shop_totals[shop] += product_cost
+
         conn.close()
 
         debug_print("add_selected_products - Lista aggiornata:", updated_items)
-        print([dict(row) for row in updated_items])
-        return render_template('shopping_list_table.html', items=updated_items)
+        debug_print("add_selected_products - Totali per negozio:", shop_totals)
+        print(updated_items)
+        print(shop_totals)
+
+        #return render_template('shopping_list_table.html', items=updated_items, shop_totals=shop_totals)
+        return jsonify({
+            'shopping_list_html': render_template('shopping_list_table.html', items=updated_items),
+            'shop_totals_html': render_template('shop_totals.html', shop_totals=shop_totals)
+        })
+    
+        
 
     except Exception as e:
         conn.rollback()
         print("❌ Errore nella route add_selected_products:", str(e))
         return "Errore interno", 500
+
+
+
+
 
 
 #Mainpage - Calcola il numero dei prodotti in scadenza
@@ -1132,3 +1155,22 @@ def api_refresh_shopping_list():
         return jsonify({"status": "refreshed", "items_updated": len(items)})
     else:
         return jsonify({"status": "no_refresh_needed"})
+    
+
+#Route per la gestione degli scontrini
+@main.route('/api/stockhouse/shopping_receipt', methods=['POST'])
+def shopping_receipt():
+    data = request.get_json()
+
+    print("🛒 Carrello ricevuto da Node-RED:")
+    print(data)
+
+    # TODO: qui puoi salvare i dati nel DB se vuoi
+
+    return jsonify({
+        "status": "ok",
+        "message": "Dati ricevuti correttamente",
+        "store": data.get("store_info", {}),
+        "items": len(data.get("products", []))
+    }), 200
+    

@@ -142,7 +142,57 @@ def get_budget_info():
             'note': ''
         }
 
+
+# Funzione per ottenere il budget corrente per la decade specificata
+def get_budget_decade_corrente(decade=None):
+
+    debug_print(f"📆 get_budget_decade_corrente: Decade richiesta: {decade}")
     
+    # Recupera le info di budget dal DB
+    budget_info = get_budget_info()
+    budget_del_mese = float(budget_info['budget']) 
+    debug_print(f"💰 Budget totale: {budget_del_mese:.2f}€")
+
+    # Calcola il budget previsto per ogni decade
+    budget_per_decade = {
+        "D1": budget_del_mese * float(budget_info['decade1']) / 100,
+        "D2": budget_del_mese * float(budget_info['decade2']) / 100,
+        "D3": budget_del_mese * float(budget_info['decade3']) / 100
+    }
+
+    # Recupera la spesa effettiva per ogni decade
+    spesa_decade = get_spesa_per_decade()
+    spesa_per_decade = {
+        "D1": spesa_decade[0],
+        "D2": spesa_decade[1],
+        "D3": spesa_decade[2]
+    }
+
+    # Calcolo del budget corrente con taglio prudenziale del 20%
+    budget_corrente = budget_per_decade[decade] * 0.80
+    spesa_corrente = spesa_per_decade[decade]
+
+    # Calcolo del bilancio precedente solo per D2 e D3
+    bilancio_precedente = 0
+    if decade == "D2":
+        bilancio_precedente = budget_per_decade["D1"] - spesa_per_decade["D1"]
+    elif decade == "D3":
+        bilancio_precedente = budget_per_decade["D2"] - spesa_per_decade["D2"]
+
+    # Budget disponibile = budget corrente - spesa corrente + eventuale avanzo precedente
+    budget_disponibile = budget_corrente - spesa_corrente + bilancio_precedente
+
+    debug_print(
+        f"📆 get_budget_per_decade_corrente: Decade: {decade}, "
+        f"Budget corrente (80%): {budget_corrente:.2f}, "
+        f"Spesa corrente: {spesa_corrente:.2f}, "
+        f"Bilancio precedente: {bilancio_precedente:.2f}, "
+        f"➡️ Budget disponibile: {budget_disponibile:.2f}"
+    )
+
+    return budget_disponibile
+
+
 
 def get_total_spesa_corrente():
     conn = sqlite3.connect(Config.DATABASE_PATH)
@@ -201,25 +251,7 @@ def get_shopping_list_data(save_to_db=False, conn=None, cursor=None, decade=None
     debug_print(f"📆 Decade corrente/elaborata: {decade}")
 
     # Recupera le info di budget dal DB
-    budget_info = get_budget_info()
-    spesa_decade = get_spesa_per_decade()
-
-    budget = float(budget_info['budget']) 
-    debug_print(f"💰 Budget totale: {budget:.2f}€")
-    spesa_corrente = sum(spesa_decade)
-    debug_print(f"💰 Spesa corrente per la {decade}: {spesa_corrente:.2f}€")
-    monthly_budget = budget_info['budget']
-
-    # Percentuali budget per decade prese da DB
-    if decade == "D1":
-        budget = monthly_budget * (budget_info['decade1'] / 100) - spesa_corrente
-    elif decade == "D2":
-        budget = monthly_budget * (budget_info['decade2'] / 100) - spesa_corrente
-    else:
-        budget = monthly_budget * (budget_info['decade3'] / 100) - spesa_corrente
-
-    # Lascia un 20% di margine sul budget per spesa libera
-    budget = (budget - (budget * 0.20))
+    budget = get_budget_decade_corrente(decade)
  
     debug_print(f"💰 Budget disponibile per la {decade}: {budget:.2f}")
 
