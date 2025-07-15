@@ -1,12 +1,20 @@
-<ul class="list-group list-group-flush">
-    {% for store, total in shop_totals.items() %}
-    <li class="list-group-item d-flex justify-content-between align-items-center">
-        {{ store }}
-        <span>€ {{ '%.2f'|format(total) }}</span>
-    </li>
-    {% else %}
-    <li class="list-group-item text-center text-muted">
-        Nessun negozio selezionato.
-    </li>
-    {% endfor %}
-</ul>
+<div class="card">
+    <div class="card-header bg-primary text-white">
+        🏪 Totale Spesa per Negozio
+    </div>
+    <div style="max-height: 180px; overflow-y: auto;">
+        <ul class="list-group list-group-flush">
+            {% for store, total in shop_totals.items() %}
+            <li class="list-group-item d-flex justify-content-between align-items-center">
+                {{ store }}
+                <span>€ {{ '%.2f'|format(total) }}</span>
+            </li>
+            {% else %}
+            <li class="list-group-item text-center text-muted">
+                Nessun negozio selezionato.
+            </li>
+            {% endfor %}
+        </ul>
+    </div>
+</div>
+

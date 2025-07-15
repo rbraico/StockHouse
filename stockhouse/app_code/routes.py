@@ -31,9 +31,13 @@ from stockhouse.app_code.shopping_list_utils import (
     get_current_decade,
     format_decade_label,
     set_refresh_needed,
-    is_refresh_needed)
+    is_refresh_needed,
+    remove_from_shopping_lst)
 import calendar
 from calendar import month_name
+import json
+import re
+import traceback
 
 main = Blueprint('main', __name__)
 
@@ -1160,17 +1164,104 @@ def api_refresh_shopping_list():
 #Route per la gestione degli scontrini
 @main.route('/api/stockhouse/shopping_receipt', methods=['POST'])
 def shopping_receipt():
-    data = request.get_json()
+    try:
+        raw_data = request.get_json()
+        print("📥 RAW DATA ricevuto:", raw_data, flush=True)
 
-    debug_print("🛒 Carrello ricevuto da Node-RED:")
-    debug_print(data)
+        # Se i dati arrivano come stringa dentro 'text'
+        if isinstance(raw_data, dict) and 'text' in raw_data:
+            # Rimuovi eventuali ```json e ```
+            clean_text = re.sub(r"^```json\n?|```$", "", raw_data['text'].strip())
+            data = json.loads(clean_text)
+        else:
+            # Altrimenti considera già un JSON valido
+            data = raw_data
 
-    # TODO: qui puoi salvare i dati nel DB se vuoi
+        print("🛒 Dati decodificati:", flush=True)
+        print(data, flush=True)
 
-    return jsonify({
-        "status": "ok",
-        "message": "Dati ricevuti correttamente",
-        "store": data.get("store_info", {}),
-        "items": len(data.get("products", []))
-    }), 200
+        # Puoi anche salvarli su DB o altro...
+        return jsonify({
+            "status": "ok",
+            "message": "Dati ricevuti correttamente",
+            "store": data.get("negozio", {}),
+            "items": len(data.get("prodotti", []))
+        }), 200
+
+    except Exception as e:
+        print("❌ Errore nella route shopping_receipt:", str(e))
+        return jsonify({
+            "status": "error",
+            "message": "Formato JSON errato"
+        }), 400
     
+@main.route('/shopping_list/remove_selected', methods=['POST'])
+def remove_selected():
+    """
+    Route per rimuovere i prodotti selezionati dalla lista della spesa.
+
+    - Riceve via POST un JSON con una lista di barcode da rimuovere.
+    - Chiama la funzione `remove_from_shopping_lst(barcodes)` per aggiornare il database.
+    - Ricarica la lista aggiornata dei prodotti da acquistare, filtrando quelli ancora "within_budget" 
+      e appartenenti alla decade corrente, ordinandoli per negozio e nome prodotto.
+    - Calcola i totali della spesa per ogni negozio, moltiplicando prezzo per quantità.
+    - Renderizza dinamicamente tramite template HTML sia la tabella aggiornata della lista della spesa
+      che quella dei totali per negozio.
+    - Restituisce un JSON con gli HTML aggiornati per consentire un refresh fluido del frontend senza ricaricare la pagina.
+    - Gestisce eventuali errori ritornando un JSON con messaggio di errore e codice 500.
+    """
+
+    data = request.get_json()
+    barcodes = data.get('barcodes', [])
+
+    if not barcodes:
+        return jsonify({"error": "Nessun barcode ricevuto"}), 400
+
+    try:
+        remove_from_shopping_lst(barcodes)
+
+        conn = sqlite3.connect(Config.DATABASE_PATH, timeout=10)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        current_decade = get_current_decade(datetime.today())
+
+        # Prendi i prodotti filtrati per decade corrente e ordina come in add_selected
+        items = cursor.execute("""
+            SELECT barcode, product_name, quantity_to_buy, shop, reason, price
+            FROM shopping_list
+            WHERE within_budget = 1 AND decade_number = ?
+            ORDER BY shop, product_name
+        """, (current_decade,)).fetchall()
+
+        items = [dict(row) for row in items]
+
+        # Calcola i totali per negozio moltiplicando prezzo * quantità
+        shop_totals_raw = cursor.execute("""
+            SELECT shop, SUM(price * quantity_to_buy) as total
+            FROM shopping_list
+            WHERE within_budget = 1 AND decade_number = ?
+            GROUP BY shop
+            ORDER BY shop                             
+        """, (current_decade,)).fetchall()
+
+        shop_totals = {row['shop']: row['total'] for row in shop_totals_raw}
+
+        conn.close()
+
+        shopping_list_html = render_template('shopping_list_table.html', items=items)
+        shop_totals_html = render_template('shop_totals.html', shop_totals=shop_totals)
+
+        return jsonify({
+            "success": True,
+            "shopping_list_html": shopping_list_html,
+            "shop_totals_html": shop_totals_html
+        })
+
+    except Exception as e:
+        print(traceback.format_exc())
+        return jsonify({"error": str(e)}), 500
+
+    
+
+

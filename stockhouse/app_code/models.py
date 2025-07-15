@@ -186,6 +186,36 @@ def init_db():
 
     conn.commit()
 
+  # ✅ CREA TABELLA product_alias usata per la identificazione dei prodotti acquistati dagli scontrini
+    c.execute("""  
+        CREATE TABLE IF NOT EXISTS product_alias (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            alias_name TEXT NOT NULL,
+            normalized_alias TEXT NOT NULL,
+            product_id INTEGER NOT NULL,
+            source TEXT DEFAULT 'manual', -- es: 'receipt', 'manual', 'learned'
+            confidence_score REAL DEFAULT 1.0, -- tra 0.0 e 1.0
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT,
+            FOREIGN KEY (product_id) REFERENCES product_dim(id)
+        )
+
+   """)
+    conn.commit()
+
+    # ✅ CREA TABELLA unknown_products usata per contenere i prodotti non identificati e che richiedono intervento umano
+    c.execute("""  
+        CREATE TABLE IF NOT EXISTS unknown_products (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            raw_name TEXT NOT NULL,
+            normalized_name TEXT NOT NULL,
+            insert_date TEXT DEFAULT CURRENT_TIMESTAMP,
+            matched_product_id INTEGER, -- nullable
+            note TEXT
+        )
+    """)
+    conn.commit()
+
     conn.close()
 
 import sqlite3
