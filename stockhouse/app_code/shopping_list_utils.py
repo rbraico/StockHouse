@@ -399,6 +399,9 @@ def get_shopping_list_data(save_to_db=False, conn=None, cursor=None, decade=None
             shop_totals.setdefault(shop, 0)
             shop_totals[shop] += product_cost
 
+    # Ordina per negozio
+    shop_totals = dict(sorted(shop_totals.items(), key=lambda x: x[0].lower()))        
+
     if external_connection:
         conn.close()
 
@@ -578,4 +581,18 @@ def is_refresh_needed():
     result = cursor.fetchone()
     conn.close()
     return result and result[0] == '1'
-  
+
+
+# Funzione per rimuovere prodotti dalla lista della spesa - setta within_budget a 0
+# saranno cancellati definitivamente la prossima decade
+def remove_from_shopping_lst(barcodes):
+    conn = sqlite3.connect(Config.DATABASE_PATH, timeout=10)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+
+    try:
+        for bc in barcodes:
+            cursor.execute("UPDATE shopping_list SET within_budget = 0 WHERE barcode = ?", (bc,))
+        conn.commit()
+    finally:
+        conn.close()

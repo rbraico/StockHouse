@@ -1,15 +1,17 @@
 <table class="table table-hover table-bordered mb-0">
     <thead class="table-primary" style="position: sticky; top: 0; z-index: 1;">
         <tr>
-            <th>Prodotto</th>
-            <th>Quantità</th>
-            <th>Negozio</th>
-            <th>Motivo</th>
+            <th style="width: 50px;">✔</th>
+            <th style="width: 25%;">Prodotto</th>
+            <th style="width: 10%;">Quantità</th>
+            <th style="width: 15%;">Negozio</th>
+            <th style="width: 50%;">Motivo</th>
         </tr>
     </thead>
     <tbody>
         {% for item in items %}
         <tr>
+            <td><input type="checkbox" class="shopping-checkbox" value="{{ item.barcode }}"></td>
             <td>{{ item.product_name }}</td>
             <td>{{ item.quantity_to_buy }}</td>
             <td>{{ item.shop }}</td>
@@ -17,7 +19,7 @@
         </tr>
         {% else %}
         <tr>
-            <td colspan="4" class="text-center text-muted">Nessun prodotto da acquistare per questa settimana.</td>
+            <td colspan="5" class="text-center text-muted">Nessun prodotto da acquistare per questa settimana.</td>
         </tr>
         {% endfor %}
     </tbody>

@@ -46,16 +46,18 @@
                 </div>
             </div>
         </div>
-
         <!-- Lista della Spesa -->
         <div class="col-md-6">
             <div class="card border-primary">
                 <div class="card-header bg-primary text-white">
                     🛒 Lista della Spesa
                 </div>
-                <div class="card-body p-0">
-                    <div class="table-responsive" id="shoppingListContainer" style="max-height: 310px; overflow-y: auto;">
+                <div class="card-body p-0 position-relative">
+                    <div class="table-responsive" id="shoppingListContainer" style="max-height: 250px; overflow-y: auto; padding-bottom: 40px;">
                         {% include 'shopping_list_table.html' %}
+                    </div>
+                    <div class="card-footer text-end">
+                        <button id="deleteSelectedBtn" class="btn btn-danger">🗑️ Rimuovi selezionati</button>
                     </div>
                 </div>
             </div>
@@ -181,5 +183,44 @@
         }
     });
 </script>
+
+<script>
+/*
+ * Quando si clicca il bottone "🗑️ Rimuovi selezionati":
+ * - Recupera tutti i checkbox selezionati nella lista della spesa
+ * - Estrae da ciascun checkbox il valore (che è il barcode)
+ * - Costruisce un JSON con la lista dei barcode
+ * - Invia il JSON in POST alla route Flask /shopping_list/remove_selected
+ * - Quando riceve la risposta con l'HTML aggiornato:
+ *     → Sostituisce la tabella nel DOM senza ricaricare la pagina
+ */    
+document.getElementById('deleteSelectedBtn').addEventListener('click', async function () {
+    const checkboxes = document.querySelectorAll('.shopping-checkbox:checked');
+    const selectedBarcodes = Array.from(checkboxes).map(cb => cb.value);
+
+    if (selectedBarcodes.length === 0) return;
+
+    const response = await fetch('/shopping_list/remove_selected', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ barcodes: selectedBarcodes })
+    });
+
+    if (response.ok) {
+        const data = await response.json();
+
+        // aggiorna la tabella della lista della spesa
+        document.getElementById('shoppingListContainer').innerHTML = data.shopping_list_html;
+
+        // aggiorna i totali per negozio
+        document.getElementById('shopTotalsContainer').innerHTML = data.shop_totals_html;
+
+        console.log("Barcodes rimossi:", selectedBarcodes);
+    } else {
+        alert("Errore durante la rimozione dei prodotti.");
+    }
+});
+</script>
+
 
 {% endblock %}
