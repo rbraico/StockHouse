@@ -7,7 +7,7 @@ from stockhouse.app_code.models import add_product_dim, add_transaction_fact, de
                        get_week_date_range, get_product_by_name_and_dates, get_expiring_products_for_home, get_out_of_stock_products, get_critical_stock, get_monthly_consumed_statistics, \
                        upsert_budget, get_budget, update_inventory_mean_usage_time, get_unconsumed_products_full_list,  \
                        get_unique_unconsumed_record, clean_old_transactions, update_reorder_frequency,upsert_expense, delete_from_shopping_list
-from stockhouse.app_code.models import add_shop, update_shop, delete_shop  
+from stockhouse.app_code.models import add_shop, update_shop, delete_shop, get_unknown_products, delete_unknown_product_by_name, insert_product_alias_if_not_exists  
 from stockhouse.app_code.models import add_category, get_all_categories, update_category, delete_category, get_all_items, update_item, delete_item
 import sqlite3
 import hashlib
@@ -32,6 +32,10 @@ from stockhouse.app_code.shopping_list_utils import (
     format_decade_label,
     set_refresh_needed,
     is_refresh_needed,
+    get_aliases_from_db,
+    fuzzy_match_product,
+    insert_unknown_product,
+    normalize_text,
     remove_from_shopping_lst)
 import calendar
 from calendar import month_name
@@ -284,6 +288,13 @@ def index():
         # Se il prodotto è stato aggiunto alla lista della spesa, lo rimuoviamo
         debug_print("index -> delete_from_shopping_list: ", barcode)
         delete_from_shopping_list(barcode)
+
+        # cancella il prodotto da unknown_products, se presente
+        delete_unknown_product_by_name(name)
+
+        # crea un nuovo alias per il prodotto, se non esiste già
+        insert_product_alias_if_not_exists(name, barcode, shop)
+
         # Aggiorna lo stato del refresh che verra eseguito all'apertura della pagina shopping_list che puo avvenire anche da Shoppy
         set_refresh_needed(True)
 
@@ -1023,30 +1034,57 @@ def monthly_consumed_count():
     debug_print("monthly_consumed_count: ", count)
     return jsonify({"monthly_consumed_count": count})
 
-#Mainpage - Calcola il numero dei prodotti consumati nel mese
-@main.route('/home_consume_statistics')
-def home_consume_statistics():
-    print("[DEBUG] Route /home_consume_statistics chiamata")
-      
-    # Recupera i prodotti per le statistiche sui consumi
-    products = get_monthly_consumed_statistics()
-    debug_print("home_consume_statistics - Prodotti consumati: ", products)
- 
-    # Se non ci sono prodotti, restituisci un messaggio vuoto
-    if not products:
+
+
+#Mainpage - Conta i prodotti non riconosciuti (unknown)
+@main.route('/unknown_products_count')
+def unknown_products_count():
+    print("[DEBUG] Route /unknown_products_count chiamata")
+
+    conn = sqlite3.connect(Config.DATABASE_PATH)
+    cursor = conn.cursor()
+    cursor.execute("SELECT COUNT(*) FROM unknown_products")
+    count = cursor.fetchone()[0]
+    conn.close()
+
+    debug_print("unknown_products_count: ", count)
+    return jsonify({"unknown_products_count": count})
+
+
+@main.route('/unknown_products')
+def unknown_products():
+    print("[DEBUG] Route /unknown_products chiamata")
+    rows = get_unknown_products()
+
+    if not rows:
         return jsonify({
-            "headers": ["Nome", "Inserimento", "Consumato", "Scadenza"],
+            "headers": ["Nome originale", "Nome normalizzato", "Data inserimento", "Prodotto suggerito", "Note"],
             "records": [],
-            "message": "Nessun prodotto esaurito trovato."
+            "message": "Nessun prodotto da confermare."
         })
 
-    # Restituisci i dati come JSON
     return jsonify({
-        "headers": ["Nome", "Inserimento", "Consumato", "Scadenza"],
-        "records": [[p["name"], p["ins_date"], p["consume_date"], p["expiry_date"]] for p in products]
+        "headers": ["Nome originale", "Nome normalizzato", "Data inserimento", "Prodotto suggerito", "Note"],
+        "records": rows
     })
 
 
+@main.route('/unknown/get_all')
+def get_all_unknown_products():
+    """
+    Restituisce tutti i prodotti non riconosciuti scansionati tramite barcode,
+    presenti nella tabella unknown_products.
+    """
+    conn = sqlite3.connect(Config.DATABASE_PATH)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    cursor.execute("""
+            SELECT id, raw_name, shop_name, insert_date
+            FROM unknown_products
+            ORDER BY id DESC
+        """)
+    products = cursor.fetchall()
+    return jsonify([dict(row) for row in products])
 
 
 #Mainpage - Calcola il numero dei prodotti da riordinare
@@ -1161,39 +1199,78 @@ def api_refresh_shopping_list():
         return jsonify({"status": "no_refresh_needed"})
     
 
-#Route per la gestione degli scontrini
 @main.route('/api/stockhouse/shopping_receipt', methods=['POST'])
 def shopping_receipt():
+    # ------------------------------------------------------------------------
+    # MATCHING PRODOTTI CON FUZZY LOGIC + SALVATAGGIO DI PRODOTTI NON RICONOSCIUTI
+    #
+    # Per ogni nome prodotto ricevuto:
+    # - Applichiamo una logica fuzzy confrontando il nome normalizzato con gli alias noti
+    # - Se il livello di confidenza è basso (< 0.75), il prodotto viene considerato "non riconosciuto"
+    # - I prodotti non riconosciuti vengono salvati nella tabella 'unknown_products'
+    #   insieme al nome grezzo, nome normalizzato, product_id suggerito (se presente) e una nota
+    #
+    # Questo approccio permette al sistema di "imparare" nel tempo, 
+    # facilitando la successiva conferma o creazione di alias
+    # ------------------------------------------------------------------------
+
     try:
         raw_data = request.get_json()
-        print("📥 RAW DATA ricevuto:", raw_data, flush=True)
+        print("Headers:", request.headers)
+        print("Raw data:", request.data)
 
-        # Se i dati arrivano come stringa dentro 'text'
+        debug_print("shopping_receipt - Dati grezzi ricevuti:", raw_data)
+        # Parsing come prima (gestisci raw_data['text'] ecc.)
         if isinstance(raw_data, dict) and 'text' in raw_data:
-            # Rimuovi eventuali ```json e ```
             clean_text = re.sub(r"^```json\n?|```$", "", raw_data['text'].strip())
             data = json.loads(clean_text)
         else:
-            # Altrimenti considera già un JSON valido
             data = raw_data
 
-        print("🛒 Dati decodificati:", flush=True)
-        print(data, flush=True)
+        debug_print("shopping_receipt - Dati ricevuti:", data)
 
-        # Puoi anche salvarli su DB o altro...
+        prodotti = data.get("prodotti", [])
+        nomi_prodotti = [p.get("nome_prodotto", "") for p in prodotti]
+
+        # Carica gli alias una volta (modifica il path DB!)
+        shop_name = data.get("negozio", {}).get("nome", "")
+        aliases = get_aliases_from_db(shop_name)
+        if not aliases:
+            debug_print(f"Nessun alias trovato per il negozio '{shop_name}', uso tutti gli alias.")
+            aliases = get_aliases_from_db()  # alias globali
+        
+
+        results = []
+        for nome in nomi_prodotti:
+            product_id, confidence = fuzzy_match_product(nome, aliases)
+            normalized = normalize_text(nome)
+
+            if confidence < 0.75:
+                note = f"Confidenza bassa: {round(confidence * 100)}%"
+                insert_unknown_product(
+                    shop_name,
+                    raw_name=nome,
+                    normalized_name=normalized,
+                    matched_product_id=product_id,
+                    note=note
+                )
+
+            results.append({
+                "nome": nome,
+                "product_id": product_id,
+                "confidence": confidence
+            })
+
+
         return jsonify({
             "status": "ok",
-            "message": "Dati ricevuti correttamente",
-            "store": data.get("negozio", {}),
-            "items": len(data.get("prodotti", []))
-        }), 200
+            "matches": results,
+            "message": f"{len(results)} prodotti elaborati"
+        })
 
     except Exception as e:
-        print("❌ Errore nella route shopping_receipt:", str(e))
-        return jsonify({
-            "status": "error",
-            "message": "Formato JSON errato"
-        }), 400
+        return jsonify({"status": "error", "message": str(e)}), 400
+
     
 @main.route('/shopping_list/remove_selected', methods=['POST'])
 def remove_selected():

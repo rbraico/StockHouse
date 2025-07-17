@@ -94,6 +94,12 @@
   font-size: 14px;
   box-sizing: border-box;
 }
+
+#shop, #item {
+  max-width: 220px; /* o una misura che preferisci */
+  width: 100%; /* per farli occupare tutta la colonna ma entro max-width */
+}
+
 </style> 
 
 
@@ -121,146 +127,163 @@
 <div class="tab-content mt-3">
   
   
-  <!-- Prima tab: Aggiungi Prodotto -->
-  <div class="tab-pane fade show active" id="add" role="tabpanel">
-    <div class="row">
-      <div class="col-md-7">
-        <form method="POST" class="text-start" id="product-form">
-            <br> <!-- Aggiungi qui linee vuote -->
+<!-- Prima tab: Aggiungi Prodotto -->
+<div class="tab-pane fade show active" id="add" role="tabpanel">
+  <div class="row">
+    <!-- Form a sinistra -->
+    <div class="col-md-5">
+      <form method="POST" class="text-start" id="product-form">
+        <br>
+        <!-- Barcode -->
+        <div class="row mb-2 align-items-center">
+          <div class="col-4">
+            <label for="barcode" class="form-label mb-0" style="color: #00008B">Barcode</label>
+          </div>
+          <div class="col-8">
+            <input type="text" class="form-control form-control-sm" id="barcode" name="barcode" required maxlength="25" style="background-color:  #e6f2ff;" onchange="autoFillProduct()" onblur="autoFillProduct()">   
+          </div>
+        </div>
 
-            <!-- Barcode -->
-            <div class="row mb-2 align-items-center">
-                <div class="col-2">
-                  <label for="barcode" class="form-label mb-0" style="color: #00008B" >Barcode</label>
-                </div>
-                <div class="col-5">
-                  <input type="text" class="form-control form-control-sm" id="barcode" name="barcode" required maxlength="25" style="background-color:  #e6f2ff;" onchange="autoFillProduct()" onblur="autoFillProduct()">   
-                </div>
-            </div>
+        <!-- Nome -->
+        <div class="row mb-2 align-items-center">
+          <div class="col-4">
+            <label for="name" class="form-label mb-0" style="color: #00008B">Nome</label>
+          </div>
+          <div class="col-8">
+            <input type="text" class="form-control form-control-sm" id="name" name="name" required maxlength="25" style="background-color:  #e6f2ff;">
+          </div>
+        </div>
 
-            <!-- Nome -->
-            <div class="row mb-2 align-items-center">
-              <div class="col-2">
-                <label for="name" class="form-label mb-0" style="color: #00008B" >Nome</label>
-              </div>
-              <div class="col-5">
-                <input type="text" class="form-control form-control-sm" id="name" name="name" required maxlength="25" style="background-color:  #e6f2ff;">
-              </div>
-            </div>
-        
-            <!-- Marca -->
-            <div class="row mb-2 align-items-center">
-              <div class="col-2">
-                <label for="brand" class="form-label mb-0" style="color: #00008B" >Marca</label>
-              </div>
-              <div class="col-5">
-                <input type="text" class="form-control form-control-sm" id="brand" name="brand" required maxlength="25" style="background-color:  #e6f2ff;">
-              </div>
-            </div>
-        
-            <!-- Negozio -->
-            <div class="row mb-2 align-items-center">
-              <div class="col-2">
-                <label for="shop" class="form-label mb-0" style="color: #00008B" >Negozio</label>
-              </div>
-              <div class="col-5">
-                <select class="form-select form-select-sm" id="shop" name="shop" required style="background-color:  #e6f2ff;">
-                  <option value="">Seleziona un negozio</option>
-                  {% for shop in shops %}
-                    <option value="{{ shop[1] }}">{{ shop[1] }}</option>
-                  {% endfor %}
-                </select>
-              </div>
-            </div>
-        
-            <!-- Prezzo -->
-            <div class="row mb-2 align-items-center">
-              <div class="col-2">
-                <label for="price" class="form-label mb-0" style="color: #00008B" >Prezzo</label>
-              </div>
-              <div class="col-5">
-                <input type="number" step="0.01" class="form-control form-control-sm" id="price" name="price" required style="background-color:  #e6f2ff;">
-              </div>
-            </div>
-        
-            <!-- Quantità dei pezzi acquistati-->
-            <div class="row mb-2 align-items-center">
-              <div class="col-2">
-                <label for="quantity" class="form-label mb-0" style="color: #00008B" >Quantita`</label>
-              </div>
-              <div class="col-5">
-                <input type="number" min="1" class="form-control form-control-sm" id="quantity" name="quantity" required style="background-color:  #e6f2ff;">
-              </div>
-            </div>
+        <!-- Marca -->
+        <div class="row mb-2 align-items-center">
+          <div class="col-4">
+            <label for="brand" class="form-label mb-0" style="color: #00008B">Marca</label>
+          </div>
+          <div class="col-8">
+            <input type="text" class="form-control form-control-sm" id="brand" name="brand" required maxlength="25" style="background-color:  #e6f2ff;">
+          </div>
+        </div>
 
+        <!-- Negozio -->
+        <div class="row mb-2 align-items-center">
+          <div class="col-4">
+            <label for="shop" class="form-label mb-0" style="color: #00008B">Negozio</label>
+          </div>
+          <div class="col-8">
+            <select class="form-select form-select-sm" id="shop" name="shop" required style="background-color:  #e6f2ff;">
+              <option value="">Seleziona un negozio</option>
+              {% for shop in shops %}
+                <option value="{{ shop[1] }}">{{ shop[1] }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
 
- 
-            <!-- Items -->
-            <div class="row mb-2 align-items-center">
-              <div class="col-2">
-                <label for="item" class="form-label mb-0" style="color: #00008B" >Articolo</label>
-              </div>
-              <div class="col-5">
-                <select class="form-select form-select-sm" id="item" name="item" required style="background-color:  #e6f2ff;">
-                  <option value="">Seleziona un tipo di articolo</option>
-                  {% for cat in items %}
-                    <option value="{{ cat[1] }}">{{ cat[1] }}</option>
-                  {% endfor %}
-                </select>
-              </div>
-            </div>
+        <!-- Prezzo -->
+        <div class="row mb-2 align-items-center">
+          <div class="col-4">
+            <label for="price" class="form-label mb-0" style="color: #00008B">Prezzo</label>
+          </div>
+          <div class="col-8">
+            <input type="number" step="0.01" class="form-control form-control-sm" id="price" name="price" required style="background-color:  #e6f2ff;">
+          </div>
+        </div>
 
+        <!-- Quantità -->
+        <div class="row mb-2 align-items-center">
+          <div class="col-4">
+            <label for="quantity" class="form-label mb-0" style="color: #00008B">Quantità</label>
+          </div>
+          <div class="col-8">
+            <input type="number" min="1" class="form-control form-control-sm" id="quantity" name="quantity" required style="background-color:  #e6f2ff;">
+          </div>
+        </div>
 
-            <!-- Scadenza -->
-            <div class="row mb-2 align-items-center">
-              <div class="col-2">
-                <label for="expiry_date" class="form-label mb-0" style="color: #00008B" >Scadenza</label>
-              </div>
-              <div class="col-5">
-                <input type="date" class="form-control form-control-sm" id="expiry_date" name="expiry_date" style="background-color:  #e6f2ff;">
-              </div>
-            </div>
+        <!-- Articolo -->
+        <div class="row mb-2 align-items-center">
+          <div class="col-4">
+            <label for="item" class="form-label mb-0" style="color: #00008B">Articolo</label>
+          </div>
+          <div class="col-8">
+            <select class="form-select form-select-sm" id="item" name="item" required style="background-color:  #e6f2ff;">
+              <option value="">Seleziona un tipo di articolo</option>
+              {% for cat in items %}
+                <option value="{{ cat[1] }}">{{ cat[1] }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
 
-            <!-- Submit -->
-            <button type="submit" class="btn btn-primary mt-2">Aggiungi Prodotto</button>
+        <!-- Scadenza -->
+        <div class="row mb-2 align-items-center">
+          <div class="col-4">
+            <label for="expiry_date" class="form-label mb-0" style="color: #00008B">Scadenza</label>
+          </div>
+          <div class="col-8">
+            <input type="date" class="form-control form-control-sm" id="expiry_date" name="expiry_date" style="background-color:  #e6f2ff;">
+          </div>
+        </div>
 
-        </form>
-      </div>
-      
-      <div class="product-image-frame">
+        <!-- Submit -->
+        <button type="submit" class="btn btn-primary mt-2">Aggiungi Prodotto</button>
+      </form>
+    </div>
+
+    <!-- Immagine al centro -->
+    <div class="col-md-3 d-flex align-items-start justify-content-center">
+      <div class="product-image-frame" style="max-width: 100%;">
         <img id="productImage" src="" alt="Immagine prodotto" style="display: none; max-width: 100%;">
         <p id="image-placeholder" class="text-muted">🔍 Inserisci un barcode per vedere l'immagine.</p>
       </div>
-
     </div>
-    <hr class="my-4">
 
-    {% if new_product %}
-    <h3>Prodotto appena inserito</h3>
-    <table class="table table-bordered mt-3 text-center">
-      <thead>
-        <tr>
-          <th>Nome</th><th>Marca</th><th>Negozio</th><th>Prezzo</th>
-          <th>Quantità</th><th>Categoria</th><th>Item</th><th>Data Scadenza</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td>{{ new_product.name }}</td>
-          <td>{{ new_product.brand }}</td>
-          <td>{{ new_product.shop }}</td>
-          <td>{{ new_product.price }}</td>
-          <td>{{ new_product.quantity }}</td>
-          <td>{{ new_product.category }}</td>
-          <td>{{ new_product.item }}</td>
-          <td>{{ new_product.expiry_date }}</td>
-        </tr>
-      </tbody>
-    </table>
-    {% endif %}
-
-    
+    <!-- Tabella prodotti sconosciuti -->
+    <div class="col-md-4" id="unknown-products-panel" style="display: none;">
+      <h6 class="text-center" style="color: #00008B;">Prodotti Sconosciuti</h6>
+      <div style="overflow-y: auto; max-height: 300px; border: 1px solid #dee2e6; border-radius: 5px;">
+        <table class="table table-sm table-bordered mb-0">
+          <thead style="position: sticky; top: 0; background-color: #f1f1f1;">
+            <tr>
+              <th>Prodotto</th>
+              <th>Negozio</th>
+              <th>Data</th>
+            </tr>
+          </thead>
+          <tbody id="unknown-products-body">
+            <!-- Popolamento dinamico -->
+          </tbody>
+        </table>
+      </div>
+    </div>
   </div>
+
+  <hr class="my-4">
+
+  {% if new_product %}
+  <h3>Prodotto appena inserito</h3>
+  <table class="table table-bordered mt-3 text-center">
+    <thead>
+      <tr>
+        <th>Nome</th><th>Marca</th><th>Negozio</th><th>Prezzo</th>
+        <th>Quantità</th><th>Categoria</th><th>Item</th><th>Data Scadenza</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>{{ new_product.name }}</td>
+        <td>{{ new_product.brand }}</td>
+        <td>{{ new_product.shop }}</td>
+        <td>{{ new_product.price }}</td>
+        <td>{{ new_product.quantity }}</td>
+        <td>{{ new_product.category }}</td>
+        <td>{{ new_product.item }}</td>
+        <td>{{ new_product.expiry_date }}</td>
+      </tr>
+    </tbody>
+  </table>
+  {% endif %}
+</div>
+
 
   <!-- Seconda tab: Modifica/Rimuovi Prodotto -->
 <div class="tab-pane fade" id="manage" role="tabpanel">
@@ -807,6 +830,98 @@ document.addEventListener("DOMContentLoaded", function () {
 });
 </script>
 
+<script>
+  /**
+   * Funzione per caricare i prodotti sconosciuti dalla route Flask
+   * e popolare dinamicamente la tabella HTML presente nella prima tab
+   * della pagina gestione prodotti.
+   * 
+   * Il pannello contenente la tabella (#unknown-products-panel) sarà
+   * mostrato solo se esistono prodotti sconosciuti, altrimenti sarà nascosto.
+   */
+async function loadUnknownProducts() {
+  try {
+    const res = await fetch('/unknown/get_all');
+    const data = await res.json();
+
+    const panel = document.getElementById('unknown-products-panel');
+    const tbody = document.getElementById('unknown-products-body');
+
+    // Elementi form nome
+    const nameInput = document.getElementById('name');
+
+    if (data.length === 0) {
+      // Nascondi pannello unknown e mostra solo input testo normale
+      panel.style.display = 'none';
+
+      // Se c’è un select al posto dell’input, rimettilo input
+      if (nameInput.tagName !== 'INPUT') {
+        // Ricrea input testo
+        const newInput = document.createElement('input');
+        newInput.type = 'text';
+        newInput.className = 'form-control form-control-sm';
+        newInput.id = 'name';
+        newInput.name = 'name';
+        newInput.required = true;
+        newInput.maxLength = 25;
+        newInput.style.backgroundColor = '#e6f2ff';
+
+        nameInput.parentNode.replaceChild(newInput, nameInput);
+      }
+
+      tbody.innerHTML = '';
+      return;
+    }
+
+    // Mostra pannello unknown e popola tabella
+    panel.style.display = 'block';
+    tbody.innerHTML = '';
+    data.forEach(prod => {
+      const row = document.createElement('tr');
+      row.innerHTML = `
+        <td>${prod.raw_name || ''}</td>
+        <td>${prod.shop_name || ''}</td>
+        <td>${prod.insert_date || ''}</td>
+      `;
+      tbody.appendChild(row);
+    });
+
+    // Se ci sono unknown, sostituisci input nome con select
+    if (nameInput.tagName === 'INPUT') {
+      const select = document.createElement('select');
+      select.className = 'form-select form-select-sm';
+      select.id = 'name';
+      select.name = 'name';
+      select.required = true;
+      select.style.backgroundColor = '#e6f2ff';
+
+      // Opzione vuota di default
+      const emptyOption = document.createElement('option');
+      emptyOption.value = '';
+      emptyOption.textContent = 'Seleziona un nome da prodotti sconosciuti';
+      select.appendChild(emptyOption);
+
+      data.forEach(prod => {
+        const option = document.createElement('option');
+        option.value = prod.raw_name;
+        option.textContent = prod.raw_name;
+        select.appendChild(option);
+      });
+
+      nameInput.parentNode.replaceChild(select, nameInput);
+    }
+
+  } catch (error) {
+    console.error('Errore caricamento prodotti sconosciuti:', error);
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  loadUnknownProducts();
+});
+
+
+</script>
 
 
 

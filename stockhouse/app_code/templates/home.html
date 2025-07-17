@@ -40,12 +40,12 @@
   <!-- Seconda riga di informazioni -->
   <div class="row text-center">
     <div class="col-md-4">
-      <div class="info-box" onclick="showRecords('/home_consume_statistics')">
-        <h5>Statistiche di Consumo</h5>
+      <div class="info-box" onclick="showRecords('/unknown_products')">
+        <h5>Prodotti da confermare</h5>
         <p class="text-muted">
-          <strong id="monthly-consumed-count" class="highlighted-number">0</strong>
+          <strong id="unknown-products-count" class="highlighted-number">0</strong>
         </p>
-       </div>
+      </div>
     </div>
     <div class="col-md-4">
       <div class="info-box" onclick="showRecords('/home_reorder_products')">
@@ -228,10 +228,10 @@
 </script>
 
 <script>
-  fetch('/monthly_consumed_count')
+  fetch('/unknown_products_count')
     .then(response => response.json())
     .then(data => {
-      document.getElementById('monthly-consumed-count').textContent = data.monthly_consumed_count;
+      document.getElementById('unknown-products-count').textContent = data.unknown_products_count;
     })
     .catch(error => console.error('Errore nel recupero dei dati:', error));
 </script>
