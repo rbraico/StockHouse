@@ -4,6 +4,7 @@ from stockhouse.app_code.models import get_week_date_range, upsert_expense
 from config import Config  # usa il path corretto se è diverso
 from stockhouse.utils import debug_print
 import calendar
+from rapidfuzz import process, fuzz
 
 
 # Funzione per calcolare il numero della decade corrente
@@ -596,3 +597,46 @@ def remove_from_shopping_lst(barcodes):
         conn.commit()
     finally:
         conn.close()
+
+
+def normalize_text(text):
+    # Funzione base di normalizzazione: minuscole, togli spazi
+    return text.lower().replace(" ", "")
+
+
+def get_aliases_from_db(shop=None):
+    conn = sqlite3.connect(Config.DATABASE_PATH)
+    cursor = conn.cursor()
+    if shop:
+        cursor.execute("SELECT normalized_alias, product_id FROM product_alias WHERE shop = ?", (shop,))
+    else:
+        cursor.execute("SELECT normalized_alias, product_id FROM product_alias")
+    rows = cursor.fetchall()
+    conn.close()
+    return rows
+
+
+def fuzzy_match_product(name, aliases):
+    norm_name = normalize_text(name)
+    choices = [a[0] for a in aliases]  # normalized_alias
+    # Cerca miglior match
+    match = process.extractOne(norm_name, choices, scorer=fuzz.ratio)
+    if match:
+        matched_name, score, index = match
+        debug_print(f"Fuzzy match trovato: {matched_name} con punteggio {score} per '{norm_name}'")
+
+        product_id = aliases[index][1]
+        confidence = score / 100.0
+        return product_id, confidence
+    return None, 0.0        
+
+
+def insert_unknown_product(shop_name, raw_name, normalized_name, matched_product_id=None, note=""):
+    conn = sqlite3.connect(Config.DATABASE_PATH)
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO unknown_products (shop_name, raw_name, normalized_name, matched_product_id, note)
+        VALUES (?, ?, ?, ?, ?)
+    """, (shop_name, raw_name, normalized_name, matched_product_id, note))
+    conn.commit()
+    conn.close()

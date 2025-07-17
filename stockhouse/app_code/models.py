@@ -193,6 +193,7 @@ def init_db():
             alias_name TEXT NOT NULL,
             normalized_alias TEXT NOT NULL,
             product_id INTEGER NOT NULL,
+            shop TEXT NOT NULL,  
             source TEXT DEFAULT 'manual', -- es: 'receipt', 'manual', 'learned'
             confidence_score REAL DEFAULT 1.0, -- tra 0.0 e 1.0
             created_at TEXT DEFAULT CURRENT_TIMESTAMP,
@@ -207,6 +208,7 @@ def init_db():
     c.execute("""  
         CREATE TABLE IF NOT EXISTS unknown_products (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
+            shop_name TEXT NOT NULL,   
             raw_name TEXT NOT NULL,
             normalized_name TEXT NOT NULL,
             insert_date TEXT DEFAULT CURRENT_TIMESTAMP,
@@ -1354,6 +1356,69 @@ def delete_from_shopping_list(barcode):
     conn.close()
 
 
+
+def delete_unknown_product_by_name(name):
+    """
+    Elimina un record dalla tabella 'unknown_products' in base al nome del prodotto.
+    Questa funzione è utile quando un prodotto precedentemente sconosciuto viene 
+    riconosciuto e correttamente inserito nel database dei prodotti principali.
+    """
+    conn = sqlite3.connect(Config.DATABASE_PATH)
+    cursor = conn.cursor()
+    debug_print("delete from unknown_products: ", name)
+    cursor.execute("""
+                    DELETE FROM unknown_products
+                    WHERE raw_name = ?
+                """, (name,))
+    conn.commit()
+    conn.close()
+
+
+
+# Funzione per inserire un alias di prodotto se non esiste già
+def insert_product_alias_if_not_exists(name, barcode, shop):
+  
+    normalized_alias = name.lower().replace(" ", "")
+    debug_print("insert_product_alias_if_not_exists: ", name, "alias:", normalized_alias)
+
+    conn = sqlite3.connect(Config.DATABASE_PATH)
+    cursor = conn.cursor()
+
+    # Recupera il product_id da product_dim
+    cursor.execute("SELECT id FROM product_dim WHERE barcode = ?", (barcode,))
+    result = cursor.fetchone()
+    if result is None:
+        debug_print(f"⚠️ Nessun prodotto trovato con barcode {barcode}")
+        return
+    product_id = result[0]
+
+
+    # Verifica se l'alias esiste già
+    cursor.execute("""
+        SELECT 1 FROM product_alias 
+        WHERE normalized_alias = ? AND product_id = ? AND shop = ?
+    """, (normalized_alias, product_id, shop))
+    if cursor.fetchone():
+        print(f"ℹ️ Alias già esistente: {normalized_alias}")
+        return
+    
+    source = "new product"
+    confidence_score = 1
+
+    # Inserisci nuovo alias
+    cursor.execute("""
+        INSERT INTO product_alias (
+            alias_name, normalized_alias, product_id, shop, source, confidence_score
+        ) VALUES (?, ?, ?, ?, ?, ?)
+    """, (name, normalized_alias, product_id, shop, source, confidence_score))
+    debug_print(f"✅ Alias inserito: {name} ({normalized_alias}) per prodotto ID {product_id}")
+
+    
+    conn.commit()
+    conn.close()
+
+
+
 def get_expiring_products(months):
     # Calcola la data limite in base ai mesi forniti
     today = datetime.today()
@@ -1658,6 +1723,20 @@ def get_critical_stock():
     ]
 
     return products
+
+def get_unknown_products():
+    conn = sqlite3.connect(Config.DATABASE_PATH)
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT raw_name, normalized_name, insert_date, 
+               COALESCE(CAST(matched_product_id AS TEXT), 'N/D'), 
+               COALESCE(note, '')
+        FROM unknown_products
+        ORDER BY insert_date DESC
+    """)
+    rows = cursor.fetchall()
+    conn.close()
+    return rows
 
 # Mainpage, calcola il numero dei prodotti che sono stati consumati nel mese corrente
 def get_monthly_consumed_count():
