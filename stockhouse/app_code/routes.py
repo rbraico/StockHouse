@@ -1203,15 +1203,7 @@ def api_refresh_shopping_list():
 def shopping_receipt():
     # ------------------------------------------------------------------------
     # MATCHING PRODOTTI CON FUZZY LOGIC + SALVATAGGIO DI PRODOTTI NON RICONOSCIUTI
-    #
-    # Per ogni nome prodotto ricevuto:
-    # - Applichiamo una logica fuzzy confrontando il nome normalizzato con gli alias noti
-    # - Se il livello di confidenza è basso (< 0.75), il prodotto viene considerato "non riconosciuto"
-    # - I prodotti non riconosciuti vengono salvati nella tabella 'unknown_products'
-    #   insieme al nome grezzo, nome normalizzato, product_id suggerito (se presente) e una nota
-    #
-    # Questo approccio permette al sistema di "imparare" nel tempo, 
-    # facilitando la successiva conferma o creazione di alias
+    # Estende il salvataggio includendo informazioni come quantità e prezzi.
     # ------------------------------------------------------------------------
 
     try:
@@ -1220,7 +1212,7 @@ def shopping_receipt():
         print("Raw data:", request.data)
 
         debug_print("shopping_receipt - Dati grezzi ricevuti:", raw_data)
-        # Parsing come prima (gestisci raw_data['text'] ecc.)
+
         if isinstance(raw_data, dict) and 'text' in raw_data:
             clean_text = re.sub(r"^```json\n?|```$", "", raw_data['text'].strip())
             data = json.loads(clean_text)
@@ -1230,37 +1222,45 @@ def shopping_receipt():
         debug_print("shopping_receipt - Dati ricevuti:", data)
 
         prodotti = data.get("prodotti", [])
-        nomi_prodotti = [p.get("nome_prodotto", "") for p in prodotti]
-
-        # Carica gli alias una volta (modifica il path DB!)
         shop_name = data.get("negozio", {}).get("nome", "")
-        aliases = get_aliases_from_db(shop_name)
-        if not aliases:
-            debug_print(f"Nessun alias trovato per il negozio '{shop_name}', uso tutti gli alias.")
-            aliases = get_aliases_from_db()  # alias globali
-        
+
+        # Carica alias
+        aliases = get_aliases_from_db(shop_name) or get_aliases_from_db()
 
         results = []
-        for nome in nomi_prodotti:
-            product_id, confidence = fuzzy_match_product(nome, aliases)
-            normalized = normalize_text(nome)
+        for prod in prodotti:
+            nome_grezzo = prod.get("nome", "")
+            traduzione_italiano = prod.get("traduzione_italiano", "")
+            quantita = prod.get("quantita", None)
+            prezzo_unitario = prod.get("prezzo_unitario", None)
+            prezzo_totale = prod.get("prezzo_totale", None)
+
+            # Se quantità è 1 e prezzo_unitario è assente o 0, usa prezzo_totale come prezzo_unitario
+            if quantita == 1 and (prezzo_unitario is None or prezzo_unitario == 0):
+                prezzo_unitario = prezzo_totale
+
+            normalized = normalize_text(nome_grezzo)
+            product_id, confidence = fuzzy_match_product(nome_grezzo, aliases)
 
             if confidence < 0.75:
                 note = f"Confidenza bassa: {round(confidence * 100)}%"
                 insert_unknown_product(
-                    shop_name,
-                    raw_name=nome,
+                    shop_name=shop_name,
+                    raw_name=nome_grezzo,
                     normalized_name=normalized,
                     matched_product_id=product_id,
-                    note=note
+                    note=note,
+                    traduzione_italiano=traduzione_italiano,
+                    quantita=quantita,
+                    prezzo_unitario=prezzo_unitario,
+                    prezzo_totale=prezzo_totale
                 )
 
             results.append({
-                "nome": nome,
+                "nome": nome_grezzo,
                 "product_id": product_id,
                 "confidence": confidence
             })
-
 
         return jsonify({
             "status": "ok",
