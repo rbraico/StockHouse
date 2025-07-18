@@ -631,12 +631,47 @@ def fuzzy_match_product(name, aliases):
     return None, 0.0        
 
 
-def insert_unknown_product(shop_name, raw_name, normalized_name, matched_product_id=None, note=""):
+def insert_unknown_product(
+    shop_name,
+    raw_name,
+    normalized_name,
+    matched_product_id=None,
+    note="",
+    traduzione_italiano=None,
+    quantita=None,
+    prezzo_unitario=None,
+    prezzo_totale=None
+):
+    """
+    Inserisce un prodotto non riconosciuto nella tabella 'unknown_products'.
+    
+    Parametri:
+    - shop_name (str): Nome del negozio dove è stato rilevato il prodotto.
+    - raw_name (str): Nome originale grezzo del prodotto rilevato dallo scontrino.
+    - normalized_name (str): Nome normalizzato (es. minuscole, senza spazi) per matching.
+    - matched_product_id (int|None): ID prodotto suggerito se il matching è riuscito.
+    - note (str): Note aggiuntive, ad esempio livello di confidenza basso.
+    - nome (str|None): Nome "pulito" del prodotto (es. tradotto o corretto).
+    - traduzione_italiano (str|None): Traduzione in italiano del nome prodotto.
+    - quantita (int|None): Quantità acquistata.
+    - prezzo_unitario (float|None): Prezzo unitario. Se assente e quantità = 1, viene impostato uguale al prezzo totale.
+    - prezzo_totale (float|None): Prezzo totale del prodotto.
+
+    Comportamento speciale:
+    Se la quantità è 1 e il prezzo unitario è mancante o zero,
+    la funzione imposta prezzo_unitario uguale a prezzo_totale per evitare dati mancanti.
+
+    Salva tutte queste informazioni nella tabella 'unknown_products'.
+    """
+    
+    debug_print(f"Inserimento prodotto sconosciuto: {raw_name}, Normalizzato: {normalized_name}, traduzione: {traduzione_italiano}, ID suggerito: {matched_product_id}, Quantità: {quantita}, Prezzo unitario: {prezzo_unitario}, Prezzo totale: {prezzo_totale}")                                                                                                                     
+    
     conn = sqlite3.connect(Config.DATABASE_PATH)
     cursor = conn.cursor()
     cursor.execute("""
-        INSERT INTO unknown_products (shop_name, raw_name, normalized_name, matched_product_id, note)
-        VALUES (?, ?, ?, ?, ?)
-    """, (shop_name, raw_name, normalized_name, matched_product_id, note))
+        INSERT INTO unknown_products 
+        (shop_name, raw_name, normalized_name, matched_product_id,  traduzione_italiano, quantita, prezzo_unitario, prezzo_totale, note)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (shop_name, raw_name, normalized_name, matched_product_id, traduzione_italiano, quantita, prezzo_unitario, prezzo_totale, note))
     conn.commit()
     conn.close()

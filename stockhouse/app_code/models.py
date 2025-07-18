@@ -213,11 +213,16 @@ def init_db():
             normalized_name TEXT NOT NULL,
             insert_date TEXT DEFAULT CURRENT_TIMESTAMP,
             matched_product_id INTEGER, -- nullable
+            traduzione_italiano TEXT,  -- Traduzione italiana del nome
+            quantita INTEGER,          -- Quantità acquistata
+            prezzo_unitario REAL,      -- Prezzo per unità
+            prezzo_totale REAL,         -- Prezzo totale
             note TEXT
         )
     """)
     conn.commit()
 
+ 
     conn.close()
 
 import sqlite3
