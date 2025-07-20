@@ -6,7 +6,7 @@ from stockhouse.app_code.models import add_product_dim, add_transaction_fact, de
                        get_number_expiring_products, get_out_of_stock_count, get_critical_stock_count, get_monthly_consumed_count, \
                        get_week_date_range, get_product_by_name_and_dates, get_expiring_products_for_home, get_out_of_stock_products, get_critical_stock, get_monthly_consumed_statistics, \
                        upsert_budget, get_budget, update_inventory_mean_usage_time, get_unconsumed_products_full_list,  \
-                       get_unique_unconsumed_record, clean_old_transactions, update_reorder_frequency,upsert_expense, delete_from_shopping_list
+                       get_unique_unconsumed_record, clean_old_transactions, update_reorder_frequency,upsert_expense, delete_from_shopping_list, upsert_transaction_fact
 from stockhouse.app_code.models import add_shop, update_shop, delete_shop, get_unknown_products, delete_unknown_product_by_name, insert_product_alias_if_not_exists  
 from stockhouse.app_code.models import add_category, get_all_categories, update_category, delete_category, get_all_items, update_item, delete_item
 import sqlite3
@@ -1069,22 +1069,7 @@ def unknown_products():
     })
 
 
-@main.route('/unknown/get_all')
-def get_all_unknown_products():
-    """
-    Restituisce tutti i prodotti non riconosciuti scansionati tramite barcode,
-    presenti nella tabella unknown_products.
-    """
-    conn = sqlite3.connect(Config.DATABASE_PATH)
-    conn.row_factory = sqlite3.Row
-    cursor = conn.cursor()
-    cursor.execute("""
-            SELECT id, raw_name, shop_name, insert_date
-            FROM unknown_products
-            ORDER BY id DESC
-        """)
-    products = cursor.fetchall()
-    return jsonify([dict(row) for row in products])
+
 
 
 #Mainpage - Calcola il numero dei prodotti da riordinare
@@ -1199,43 +1184,37 @@ def api_refresh_shopping_list():
         return jsonify({"status": "no_refresh_needed"})
     
 
+
 @main.route('/api/stockhouse/shopping_receipt', methods=['POST'])
 def shopping_receipt():
-    # ------------------------------------------------------------------------
-    # MATCHING PRODOTTI CON FUZZY LOGIC + SALVATAGGIO DI PRODOTTI NON RICONOSCIUTI
-    # Estende il salvataggio includendo informazioni come quantità e prezzi.
-    # ------------------------------------------------------------------------
-
     try:
         raw_data = request.get_json()
-        print("Headers:", request.headers)
-        print("Raw data:", request.data)
-
-        debug_print("shopping_receipt - Dati grezzi ricevuti:", raw_data)
-
+        # parsing come prima...
         if isinstance(raw_data, dict) and 'text' in raw_data:
             clean_text = re.sub(r"^```json\n?|```$", "", raw_data['text'].strip())
             data = json.loads(clean_text)
         else:
             data = raw_data
 
-        debug_print("shopping_receipt - Dati ricevuti:", data)
-
         prodotti = data.get("prodotti", [])
         shop_name = data.get("negozio", {}).get("nome", "")
+        data_scontrino = data.get("data_scontrino", None)
+
+        # Seleziona la decade corrente
+        decade_number = get_current_decade()
 
         # Carica alias
         aliases = get_aliases_from_db(shop_name) or get_aliases_from_db()
 
         results = []
         for prod in prodotti:
-            nome_grezzo = prod.get("nome", "")
+            # gestione prodotti come prima
+            nome_grezzo = prod.get("nome_prodotto", "")
             traduzione_italiano = prod.get("traduzione_italiano", "")
             quantita = prod.get("quantita", None)
             prezzo_unitario = prod.get("prezzo_unitario", None)
             prezzo_totale = prod.get("prezzo_totale", None)
 
-            # Se quantità è 1 e prezzo_unitario è assente o 0, usa prezzo_totale come prezzo_unitario
             if quantita == 1 and (prezzo_unitario is None or prezzo_unitario == 0):
                 prezzo_unitario = prezzo_totale
 
@@ -1255,12 +1234,43 @@ def shopping_receipt():
                     prezzo_unitario=prezzo_unitario,
                     prezzo_totale=prezzo_totale
                 )
+            else:
+                prodotto_per_nome = lookup_products_by_name(nome_grezzo)
+
+                if prodotto_per_nome["found"]:
+                    product_key = prodotto_per_nome["id"]
+                    barcode = prodotto_per_nome["barcode"]
+
+                    upsert_transaction_fact(
+                        product_key=product_key,
+                        barcode=barcode,
+                        price=prezzo_unitario,
+                        quantity=quantita,
+                        consumed_quantity=0,
+                        ins_date=data_scontrino,
+                        consume_date=None,
+                        expiry_date=None,
+                        status="in stock"
+                    )
+                else:
+                    debug_print(f"Prodotto non trovato in product_dim: {nome_grezzo}")
 
             results.append({
                 "nome": nome_grezzo,
                 "product_id": product_id,
                 "confidence": confidence
             })
+
+        # Alla fine, aggiorna expenses_fact con importo totale e decade_number
+        totale = data.get("totale", None)
+        if totale is not None:
+            conn = sqlite3.connect(Config.DATABASE_PATH)
+            cursor = conn.cursor()
+            # usa la nuova versione di upsert_expense con mode='receipt'
+            debug_print("Receipt- chiama upsert_expense :", data_scontrino, decade_number, shop_name, totale)
+            upsert_expense(cursor, data_scontrino, decade_number, shop_name, totale, mode="receipt")
+            conn.commit()
+            conn.close()
 
         return jsonify({
             "status": "ok",
@@ -1270,7 +1280,23 @@ def shopping_receipt():
 
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 400
-
+    
+@main.route('/unknown/get_all')
+def get_all_unknown_products():
+    """
+    Restituisce tutti i prodotti non riconosciuti scansionati tramite barcode,
+    presenti nella tabella unknown_products.
+    """
+    conn = sqlite3.connect(Config.DATABASE_PATH)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    cursor.execute("""
+            SELECT id, raw_name, shop_name, insert_date, quantita, prezzo_unitario
+            FROM unknown_products
+            ORDER BY id DESC
+        """)
+    products = cursor.fetchall()
+    return jsonify([dict(row) for row in products])
     
 @main.route('/shopping_list/remove_selected', methods=['POST'])
 def remove_selected():
