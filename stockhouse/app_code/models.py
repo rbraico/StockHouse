@@ -287,6 +287,7 @@ def lookup_products_by_name(name):
     cursor.execute("""
         SELECT 
             p.id, 
+            p.barcode,
             p.name, 
             p.brand, 
             p.shop, 
@@ -319,14 +320,15 @@ def lookup_products_by_name(name):
         return {
             "found": True,
             "id": prodotto[0],
-            "name": prodotto[1],
-            "brand": prodotto[2],
-            "shop": prodotto[3],
-            "price": prodotto[4],
-            "quantity": prodotto[5],
-            "category": prodotto[6],
-            "item": prodotto[7],
-            "image": prodotto[8]
+            "barcode": prodotto[1],
+            "name": prodotto[2],
+            "brand": prodotto[3],
+            "shop": prodotto[4],
+            "price": prodotto[5],
+            "quantity": prodotto[6],
+            "category": prodotto[7],
+            "item": prodotto[8],
+            "image": prodotto[9]
         }
     else:
         return {"found": False}
@@ -1309,6 +1311,63 @@ def update_transaction_fact(id, price, quantity, expiry_date, ins_date):
     conn.commit()
     conn.close()
 
+def upsert_transaction_fact(product_key, barcode, price, quantity, consumed_quantity,
+                           ins_date, consume_date, expiry_date, status):
+    """
+    Inserisce una nuova transazione nella tabella transaction_fact oppure aggiorna
+    quella esistente se già presente per lo stesso prodotto e data di inserimento.
+
+    La verifica di esistenza del record si basa su product_key e ins_date, che corrisponde
+    alla data dello scontrino.
+
+    Parametri:
+    - product_key: identificativo univoco del prodotto
+    - barcode: codice a barre del prodotto
+    - price: prezzo unitario del prodotto
+    - quantity: quantità acquistata
+    - consumed_quantity: quantità consumata (inizialmente 0 se nuovo acquisto)
+    - ins_date: data di inserimento (data emissione scontrino)
+    - consume_date: data di consumo (se disponibile)
+    - expiry_date: data di scadenza (se disponibile)
+    - status: stato della transazione (es. 'acquistato')
+
+    Se il record esiste già, aggiorna i campi con i nuovi valori.
+    Altrimenti inserisce un nuovo record.
+    """
+    debug_print("upsert_transaction_fact:", product_key, barcode, price, quantity, consumed_quantity,ins_date, consume_date, expiry_date, status)
+
+    conn = sqlite3.connect(Config.DATABASE_PATH)
+    c = conn.cursor()
+
+    # Controlla se esiste già il record con product_key e ins_date
+    c.execute("""
+        SELECT COUNT(*) FROM transaction_fact
+        WHERE product_key = ? AND ins_date = ?
+    """, (product_key, ins_date))
+    exists = c.fetchone()[0] > 0
+
+    if exists:
+        # Aggiorna il record esistente con i nuovi dati
+        debug_print("upsert_transaction_fact - Record esistente trovato, aggiornamento in corso...")
+        c.execute("""
+            UPDATE transaction_fact
+            SET price = ?, quantity = ? 
+            WHERE product_key = ? AND ins_date = ?
+        """, (price, quantity, product_key, ins_date))
+    else:
+        # Inserisce un nuovo record se non esiste
+        debug_print("upsert_transaction_fact - inserimento :", product_key, barcode, price, quantity, consumed_quantity, ins_date, consume_date, expiry_date, status)
+        c.execute("""
+            INSERT INTO transaction_fact (product_key, barcode, price, quantity, consumed_quantity,
+                                         ins_date, consume_date, expiry_date, status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (product_key, barcode, price, quantity, consumed_quantity,
+              ins_date, consume_date, expiry_date, status))
+
+    conn.commit()
+    conn.close()
+
+
   
 def update_transaction_fact_consumed(id, ins_date, expiry_date):
     debug_print("update_transaction_fact_consumed:", id, ins_date, expiry_date)
@@ -1968,33 +2027,39 @@ def get_priority_level(barcode, necessity_level, product_seasons):
     return 3
 
 # Funzione per inserire o aggiornare un record di spesa
-def upsert_expense(cursor, shopping_date, decade_number, shop, amount):
+def upsert_expense(cursor, shopping_date, decade_number, shop, amount, mode="barcode"):
+    debug_print("upsert_expense:", shopping_date, decade_number, shop, amount, mode)
 
-    debug_print("upsert_expense:", shopping_date, decade_number, shop, amount)
-    
-    # Step 1: cancella record con shopping_date più vecchia di 1 anno
+    # Pulizia record vecchi sempre
     cursor.execute("""
         DELETE FROM expenses_fact
         WHERE shopping_date < date('now', '-1 year')
     """)
 
-    # Step 2: verifica se esiste già un record per quella data, decade e shop
     cursor.execute("""
         SELECT id, amount FROM expenses_fact
         WHERE shopping_date = ? AND decade_number = ? AND shop = ?
     """, (shopping_date, decade_number, shop))
     row = cursor.fetchone()
+
     if row:
-        # Se esiste, aggiorna amount sommando il nuovo valore
-        cursor.execute("""
-            UPDATE expenses_fact
-            SET amount = amount + ?
-            WHERE id = ?
-        """, (amount, row[0]))
+        if mode == "barcode":
+            # Somma amount esistente
+            cursor.execute("""
+                UPDATE expenses_fact
+                SET amount = amount + ?
+                WHERE id = ?
+            """, (amount, row[0]))
+        elif mode == "receipt":
+            # Sovrascrivi amount esistente
+            debug_print("Sovrascrivo amount esistente per receipt")
+            cursor.execute("""
+                UPDATE expenses_fact
+                SET amount = ?
+                WHERE id = ?
+            """, (amount, row[0]))
     else:
-        # Altrimenti inserisci un nuovo record
         cursor.execute("""
             INSERT INTO expenses_fact (shopping_date, decade_number, shop, amount)
             VALUES (?, ?, ?, ?)
         """, (shopping_date, decade_number, shop, amount))
-    

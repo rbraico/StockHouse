@@ -839,89 +839,105 @@ document.addEventListener("DOMContentLoaded", function () {
    * Il pannello contenente la tabella (#unknown-products-panel) sarà
    * mostrato solo se esistono prodotti sconosciuti, altrimenti sarà nascosto.
    */
-async function loadUnknownProducts() {
-  try {
-    const res = await fetch('/unknown/get_all');
-    const data = await res.json();
+  async function loadUnknownProducts() {
+    try {
+      const res = await fetch('/unknown/get_all');
+      const data = await res.json();
 
-    const panel = document.getElementById('unknown-products-panel');
-    const tbody = document.getElementById('unknown-products-body');
+      const panel = document.getElementById('unknown-products-panel');
+      const tbody = document.getElementById('unknown-products-body');
 
-    // Elementi form nome
-    const nameInput = document.getElementById('name');
+      // Elementi form
+      const nameInput = document.getElementById('name');
+      const shopInput = document.getElementById('shop');
+      const priceInput = document.getElementById('price');
+      const quantityInput = document.getElementById('quantity');
 
-    if (data.length === 0) {
-      // Nascondi pannello unknown e mostra solo input testo normale
-      panel.style.display = 'none';
+      if (data.length === 0) {
+        // Nascondi pannello unknown e mostra solo input testo normale
+        panel.style.display = 'none';
 
-      // Se c’è un select al posto dell’input, rimettilo input
-      if (nameInput.tagName !== 'INPUT') {
-        // Ricrea input testo
-        const newInput = document.createElement('input');
-        newInput.type = 'text';
-        newInput.className = 'form-control form-control-sm';
-        newInput.id = 'name';
-        newInput.name = 'name';
-        newInput.required = true;
-        newInput.maxLength = 25;
-        newInput.style.backgroundColor = '#e6f2ff';
+        // Se c’è un select al posto dell’input, rimettilo input
+        if (nameInput.tagName !== 'INPUT') {
+          // Ricrea input testo
+          const newInput = document.createElement('input');
+          newInput.type = 'text';
+          newInput.className = 'form-control form-control-sm';
+          newInput.id = 'name';
+          newInput.name = 'name';
+          newInput.required = true;
+          newInput.maxLength = 25;
+          newInput.style.backgroundColor = '#e6f2ff';
 
-        nameInput.parentNode.replaceChild(newInput, nameInput);
+          nameInput.parentNode.replaceChild(newInput, nameInput);
+        }
+
+        tbody.innerHTML = '';
+        return;
       }
 
+      // Mostra pannello unknown e popola tabella
+      panel.style.display = 'block';
       tbody.innerHTML = '';
-      return;
-    }
-
-    // Mostra pannello unknown e popola tabella
-    panel.style.display = 'block';
-    tbody.innerHTML = '';
-    data.forEach(prod => {
-      const row = document.createElement('tr');
-      row.innerHTML = `
-        <td>${prod.raw_name || ''}</td>
-        <td>${prod.shop_name || ''}</td>
-        <td>${prod.insert_date || ''}</td>
-      `;
-      tbody.appendChild(row);
-    });
-
-    // Se ci sono unknown, sostituisci input nome con select
-    if (nameInput.tagName === 'INPUT') {
-      const select = document.createElement('select');
-      select.className = 'form-select form-select-sm';
-      select.id = 'name';
-      select.name = 'name';
-      select.required = true;
-      select.style.backgroundColor = '#e6f2ff';
-
-      // Opzione vuota di default
-      const emptyOption = document.createElement('option');
-      emptyOption.value = '';
-      emptyOption.textContent = 'Seleziona un nome da prodotti sconosciuti';
-      select.appendChild(emptyOption);
-
       data.forEach(prod => {
-        const option = document.createElement('option');
-        option.value = prod.raw_name;
-        option.textContent = prod.raw_name;
-        select.appendChild(option);
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td>${prod.raw_name || ''}</td>
+          <td>${prod.shop_name || ''}</td>
+          <td>${prod.insert_date || ''}</td>
+        `;
+        tbody.appendChild(row);
       });
 
-      nameInput.parentNode.replaceChild(select, nameInput);
+      // Se ci sono unknown, sostituisci input nome con select
+      if (nameInput.tagName === 'INPUT') {
+        const select = document.createElement('select');
+        select.className = 'form-select form-select-sm';
+        select.id = 'name';
+        select.name = 'name';
+        select.required = true;
+        select.style.backgroundColor = '#e6f2ff';
+
+        // Opzione vuota di default
+        const emptyOption = document.createElement('option');
+        emptyOption.value = '';
+        emptyOption.textContent = 'Seleziona un nome da prodotti sconosciuti';
+        select.appendChild(emptyOption);
+
+        data.forEach(prod => {
+          const option = document.createElement('option');
+          option.value = prod.raw_name;
+          option.textContent = prod.raw_name;
+
+          // Salvo dati extra come attributi custom nell'option
+          option.dataset.shop = prod.shop_name || '';
+          option.dataset.price = prod.prezzo_unitario || '';
+          option.dataset.quantity = prod.quantita || '';
+
+          select.appendChild(option);
+        });
+
+        // Aggiungo evento onchange per aggiornare shop, price, quantity
+        select.addEventListener('change', (event) => {
+          const selectedOption = event.target.selectedOptions[0];
+          shopInput.value = selectedOption.dataset.shop || '';
+          priceInput.value = selectedOption.dataset.price || '';
+          quantityInput.value = selectedOption.dataset.quantity || '';
+        });
+
+        nameInput.parentNode.replaceChild(select, nameInput);
+      }
+
+    } catch (error) {
+      console.error('Errore caricamento prodotti sconosciuti:', error);
     }
-
-  } catch (error) {
-    console.error('Errore caricamento prodotti sconosciuti:', error);
   }
-}
 
-document.addEventListener('DOMContentLoaded', () => {
-  loadUnknownProducts();
-});
-
-
+  document.addEventListener('DOMContentLoaded', () => {
+    loadUnknownProducts();
+  });
 </script>
+
 
 
 

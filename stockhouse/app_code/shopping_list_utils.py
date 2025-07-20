@@ -605,6 +605,8 @@ def normalize_text(text):
 
 
 def get_aliases_from_db(shop=None):
+
+    debug_print(f"Recupero alias prodotti dal database per il negozio: {shop if shop else 'tutti'}")
     conn = sqlite3.connect(Config.DATABASE_PATH)
     cursor = conn.cursor()
     if shop:
