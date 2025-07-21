@@ -1921,42 +1921,40 @@ def get_budget():
 
 
 # Funzione per calcolare il livello di priorità in base alla stagione
-def get_priority_level(barcode, necessity_level, product_seasons):
-    seasons_circle = ['primavera', 'estate', 'autunno', 'inverno']
-    debug_print("get_priority_level - necessity_level: ", necessity_level, "product_seasons: ", product_seasons)
-
+def get_priority_level(barcode, necessity_level, product_seasons, override_data={}):
     product = get_product_inventory_by_barcode(barcode)
-    debug_print("get_priority_level - Product: ", product)
 
-        # Coalesce manuale:
-    if not necessity_level:
-        necessity_level = product.get('necessity_level', None)
-    if not product_seasons:
-        product_seasons = product.get('season', '') 
+    # Coalesce intelligente: preferisce override_data, altrimenti product
+    def get_value(key, fallback=0):
+        if key in override_data and override_data[key] is not None:
+            return int(override_data[key])
+        return int(product.get(key, fallback))
+
+    quantity = get_value("quantity_in_inventory")
+    security_quantity = get_value("security_quantity")
+    reorder_point = get_value("reorder_point")
+
+    debug_print("get_priority_level - necessity_level:", necessity_level)
+    debug_print("get_priority_level - quantity:", quantity, "security_quantity:", security_quantity, "reorder_point:", reorder_point)
 
     if not necessity_level:
         return 3
 
     necessity = necessity_level.lower()
 
-    # 1. Indispensabile → priorità 1 fissa
     if necessity == 'indispensabile':
-     try:
-        quantity = int(product.get("quantity_in_inventory", 0))
-        security_quantity = int(product.get("security_quantity", 0))
-        reorder_point = int(product.get("reorder_point", 0))
-
-        if quantity <= security_quantity:
-            return 1  # Crisi: sotto la soglia minima
-        elif quantity < reorder_point:
-            return 2  # In zona "attenzione"
-        elif quantity == reorder_point:
-            return 3  # Siamo al punto di riordino, ma non è urgente
-        else:
-            return 4  # Abbiamo abbondanza, può aspettare
-     except Exception as e:
-        debug_print("Errore nel calcolo priorità indispensabile:", e)
-        return 1  # In caso di dubbi, trattiamolo come urgente
+        try:
+            if quantity <= security_quantity:
+                return 1  # Crisi
+            elif quantity < reorder_point:
+                return 2  # Attenzione
+            elif quantity == reorder_point:
+                return 3  # Punto di riordino
+            else:
+                return 4  # Abbondanza
+        except Exception as e:
+            debug_print("Errore nel calcolo priorità indispensabile:", e)
+            return 1
     
 
     # 2. Utile → priorità 2 fissa

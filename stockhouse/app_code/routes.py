@@ -370,22 +370,27 @@ def update_products_inline():
         'security_quantity', 'reorder_point', 'mean_usage_time',
         'reorder_frequency', 'user_override'
     ]
-    
+
     updates = []
     values = []
 
-    # Prepara i campi normali
+    # Prepara i campi per l'UPDATE SQL
     for field in allowed_fields:
         if field in data:
             updates.append(f"{field} = ?")
             values.append(data[field])
 
-    # Se abbiamo necessity_level e season, calcoliamo priority
+    # Se abbiamo necessity_level e season, calcoliamo priority usando tutti i dati ricevuti
     necessity_level = data.get('necessity_level')
     product_seasons = data.get('season')
 
     if necessity_level is not None and product_seasons is not None:
-        priority_level = get_priority_level(barcode, necessity_level, product_seasons)
+        priority_level = get_priority_level(
+            barcode,
+            necessity_level,
+            product_seasons,
+            override_data=data  # <-- tutti i valori passati qui
+        )
         updates.append("priority_level = ?")
         values.append(priority_level)
 
@@ -400,7 +405,6 @@ def update_products_inline():
     conn.commit()
     conn.close()
 
-    # Recupera il nuovo livello di priorità
     return jsonify(success=True, priority_level=priority_level if 'priority_level' in locals() else None, barcode=barcode)
 
 # Questa route serve per visualizzare il filtro modale dell'ins_date nella seconda tab dei prodotti
