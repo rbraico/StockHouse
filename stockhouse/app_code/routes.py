@@ -850,6 +850,7 @@ def shopping_list():
     budget = float(budget_record['budget']) 
     spesa_corrente = sum(spesa_decade)
     budget_residuo = round(budget - spesa_corrente, 2)
+    debug_print("shopping_list Budget: ", budget, budget_record)
 
     debug_print("Spesa corrente: ", [dict(item) for item in items])
 
@@ -1193,6 +1194,7 @@ def api_refresh_shopping_list():
 def shopping_receipt():
     try:
         raw_data = request.get_json()
+        debug_print("shopping_receipt - Dati ricevuti:", raw_data)
         # parsing come prima...
         if isinstance(raw_data, dict) and 'text' in raw_data:
             clean_text = re.sub(r"^```json\n?|```$", "", raw_data['text'].strip())
@@ -1200,9 +1202,10 @@ def shopping_receipt():
         else:
             data = raw_data
 
-        prodotti = data.get("prodotti", [])
-        shop_name = data.get("negozio", {}).get("nome", "")
+        prodotti = data.get("lista_prodotti", [])
+        shop_name = data.get("nome_negozio", "")
         data_scontrino = data.get("data_scontrino", None)
+        debug_print("shopping_receipt - Dati ricevuti:", data)
 
         # Seleziona la decade corrente
         decade_number = get_current_decade()

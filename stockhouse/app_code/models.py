@@ -1569,7 +1569,7 @@ def get_number_expiring_products():
     query = """
         SELECT COUNT(*)
         FROM transaction_fact
-        WHERE quantity > 0 AND expiry_date BETWEEN ? AND ?
+        WHERE status = "in stock" AND expiry_date BETWEEN ? AND ?
     """
     cursor.execute(query, (first_day_str, last_day_str))
     count = cursor.fetchone()[0]
@@ -1609,7 +1609,7 @@ def get_expiring_products_for_home():
         FROM transaction_fact trs
         INNER JOIN product_dim dim ON dim.id = trs.product_key
         WHERE trs.expiry_date IS NOT NULL 
-          AND trs.quantity > 0
+          AND trs.status = "in stock"
           AND trs.expiry_date BETWEEN ? AND ?
         ORDER BY trs.expiry_date ASC
     """

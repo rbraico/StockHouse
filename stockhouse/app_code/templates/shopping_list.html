@@ -119,7 +119,7 @@
                     <tr>
                         <th>Decade</th>
                         <th>%</th>
-                        <th>Budget</th>
+                        <th>Budget disponibile</th>
                         <th>Spesi</th>
                         <th>Bilancio</th>
                     </tr>
@@ -129,26 +129,27 @@
                     {% set budget_total = budget_record['budget'] %}
                     {% set bilancio_prec = 0 %}
                     {% set dec_num = current_decade[1]|int %}
+                    {% set bilancio_precedente = [0, 0, 0] %}
                     {% for i in range(3) %}
                         {% set label = 'D' ~ (i+1) %}
                         {% set perc = dec_percent[i] %}
-                        {% set previsto = (budget_total * perc / 100)|round(2) %}
-                        {% set bilancio_attuale = previsto + bilancio_prec %}
-                        {% set spesi = spesa_decade[i]|round(2) %}
-                        {% if dec_num >= i + 1 %}
-                        {% set bilancio = bilancio_attuale - spesi %}
-                        {% set bilancio_prec = bilancio %}
+                        {% set quota = (budget_total * perc / 100)|round(2) %}
+                        {% if i == 0 %}
+                            {% set previsto = quota %}
                         {% else %}
-                        {% set bilancio = previsto %}
+                            {% set previsto = (quota + bilancio_precedente[i-1])|round(2) %}
                         {% endif %}
+                        {% set spesi = spesa_decade[i]|round(2) %}
+                        {% set bilancio = previsto - spesi %}
+                        {% set _ = bilancio_precedente.__setitem__(i, bilancio) %}
                         <tr {% if dec_num == i + 1 %} class="table-primary fw-bold" {% endif %}>
-                        <td>{{ label }}</td>
-                        <td>{{ perc }}%</td>
-                        <td>€ {{ previsto }}</td>
-                        <td>€ {{ spesi }}</td>
-                        <td style="color: {{ 'green' if bilancio >= 0 else 'red' }}">
-                            € {{ bilancio|round(2) }}
-                        </td>
+                            <td>{{ label }}</td>
+                            <td>{{ perc }}%</td>
+                            <td>€ {{ previsto }}</td>
+                            <td>€ {{ spesi }}</td>
+                            <td style="color: {{ 'green' if bilancio >= 0 else 'red' }}">
+                                € {{ bilancio|round(2) }}
+                            </td>
                         </tr>
                     {% endfor %}
                     </tbody>
