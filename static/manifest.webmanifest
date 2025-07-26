@@ -1,0 +1,20 @@
+{
+  "name": "Stock House",
+  "short_name": "StockHouse",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#add8e6",
+  "theme_color": "#add8e6",
+  "icons": [
+    {
+      "src": "/static/icons/StockHouse_icon-192.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "/static/icons/StockHouse_icon-512.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+ ]
+}

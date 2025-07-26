@@ -45,6 +45,28 @@ def get_budget_for_decade(total_budget, decade):
     }
     return round(total_budget * budget_distribution.get(decade, 0), 2)
 
+# Funzione per ottenere l'intervallo di date della decade corrente
+def get_decade_range(current_date=None):
+    if current_date is None:
+        current_date = date.today()
+
+    day = current_date.day
+    year = current_date.year
+    month = current_date.month
+
+    if day <= 10:
+        start_decade_date = date(year, month, 1)
+        end_decade_date = date(year, month, 10)
+    elif day <= 20:
+        start_decade_date = date(year, month, 11)
+        end_decade_date = date(year, month, 20)
+    else:
+        start_decade_date = date(year, month, 21)
+        # Prende ultimo giorno del mese
+        last_day = calendar.monthrange(year, month)[1]
+        end_decade_date = date(year, month, last_day)
+
+    return start_decade_date, end_decade_date
 
 
 # Funzioni per la gestione della lista della spesa
@@ -170,18 +192,20 @@ def get_budget_decade_corrente(decade=None):
     }
 
     # Calcolo del budget corrente con taglio prudenziale del 20%
-    budget_corrente = budget_per_decade[decade] * 0.80
+    budget_corrente = budget_per_decade[decade] #* 0.80
     spesa_corrente = spesa_per_decade[decade]
 
     # Calcolo del bilancio precedente solo per D2 e D3
     bilancio_precedente = 0
     if decade == "D2":
         bilancio_precedente = budget_per_decade["D1"] - spesa_per_decade["D1"]
+        budget_corrente = budget_per_decade[decade] + bilancio_precedente
     elif decade == "D3":
         bilancio_precedente = budget_per_decade["D2"] - spesa_per_decade["D2"]
+        budget_corrente = budget_per_decade[decade] + bilancio_precedente
 
     # Budget disponibile = budget corrente - spesa corrente + eventuale avanzo precedente
-    budget_disponibile = budget_corrente - spesa_corrente + bilancio_precedente
+    budget_disponibile = budget_corrente - spesa_corrente
 
     debug_print(
         f"📆 get_budget_per_decade_corrente: Decade: {decade}, "
@@ -191,7 +215,7 @@ def get_budget_decade_corrente(decade=None):
         f"➡️ Budget disponibile: {budget_disponibile:.2f}"
     )
 
-    return budget_disponibile
+    return budget_corrente, budget_disponibile
 
 
 
@@ -247,16 +271,21 @@ def get_shopping_list_data(save_to_db=False, conn=None, cursor=None, decade=None
         cursor = conn.cursor()
         external_connection = True
 
+    # Calcola l'intervallo di date della decade corrente
+    start_decade, end_decade = get_decade_range()
+
     # Usa decade passata oppure calcola quella corrente
     decade = decade or get_current_decade()
     debug_print(f"📆 Decade corrente/elaborata: {decade}")
 
     # Recupera le info di budget dal DB
-    budget = get_budget_decade_corrente(decade)
- 
-    debug_print(f"💰 Budget disponibile per la {decade}: {budget:.2f}")
+    budget_corrente, budget_disponibile = get_budget_decade_corrente(decade)
 
-    query = """
+    debug_print(f"💰 Budget corrente per la {decade}: {budget_corrente:.2f}")
+
+    debug_print(f"💰 Budget disponibile per la {decade}: {budget_disponibile:.2f}")
+
+    main_query = """
         SELECT 
             i.barcode,
             COALESCE(stock.total_quantity, 0) AS quantity,
@@ -286,9 +315,94 @@ def get_shopping_list_data(save_to_db=False, conn=None, cursor=None, decade=None
         )
         ORDER BY i.priority_level ASC, ins_date ASC, tf.price ASC;
         """
-
-    cursor.execute(query)
+    cursor.execute(main_query)
     rows = cursor.fetchall()
+
+
+    expiring_query = """
+        SELECT dim.barcode,
+            SUM(tf.quantity) AS quantity,
+            inv.reorder_point,
+            inv.min_quantity,
+            inv.max_quantity,
+            inv.security_quantity,
+            dim.name,
+            dim.shop,
+            tf.price,
+            dim.category,
+            inv.necessity_level,
+            1 AS priority_level,
+            MIN(tf.ins_date) as ins_date
+        FROM transaction_fact tf
+        INNER JOIN product_dim dim ON dim.id = tf.product_key
+        JOIN product_settings inv ON tf.barcode = inv.barcode
+        WHERE tf.expiry_date IS NOT NULL 
+        AND tf.status = "in stock"
+        AND tf.expiry_date BETWEEN ? AND ?
+        GROUP BY tf.barcode  
+        ORDER BY tf.expiry_date ASC
+   """
+
+
+    # prodotti con scorte critiche
+    critical_stock_query = """
+        SELECT  
+            dim.barcode,
+            SUM(tf.quantity) AS quantity,
+            inv.reorder_point,
+            inv.min_quantity,
+            inv.max_quantity,
+            inv.security_quantity,
+            dim.name,
+            dim.shop,
+            tf.price,
+            dim.category,
+            inv.necessity_level,
+            1 AS priority_level,
+            MIN(tf.ins_date) as ins_date
+        FROM transaction_fact tf
+        JOIN product_dim dim ON tf.barcode = dim.barcode
+        JOIN product_settings inv ON tf.barcode = inv.barcode
+        GROUP BY tf.barcode
+        HAVING SUM(tf.quantity) < inv.security_quantity;
+    """
+
+    if decade == "D3":
+        # Prima prendi i prodotti speciali D3
+
+        # seleziona i prodotti che stanno scadendo
+        cursor.execute(expiring_query, (start_decade.strftime("%Y-%m-%d"), end_decade.strftime("%Y-%m-%d")))
+        rows = cursor.fetchall()
+        debug_print(f"Prodotti in scadenza trovati: {len(rows)}")
+        
+        # aggiunge i prodotti con scorte critiche
+        cursor.execute(critical_stock_query)
+        rows_critical_stock = cursor.fetchall()
+        rows.extend(rows_critical_stock)
+        debug_print(f"Prodotti con scorte critiche trovati: {len(rows_critical_stock)}")
+
+        # Poi prendi i prodotti standard
+        cursor.execute(main_query)
+        main_rows = cursor.fetchall()
+        rows.extend(main_rows)
+        debug_print(f"Prodotti standard trovati: {len(main_rows)}")
+
+    else:
+        # Solo prodotti standard
+        cursor.execute(main_query)
+        rows = cursor.fetchall()
+
+    # Deduplicazione: tieni la prima occorrenza per barcode
+    unique_rows = {}
+    deduped_rows = []
+    for row in rows:
+        barcode = row["barcode"]
+        if barcode not in unique_rows:
+            unique_rows[barcode] = True
+            deduped_rows.append(row)
+
+    rows = deduped_rows
+
 
     debug_print(f"Query eseguita, trovati {len(rows)} prodotti per la {decade}, save_to_db: {save_to_db}")
 
@@ -301,6 +415,7 @@ def get_shopping_list_data(save_to_db=False, conn=None, cursor=None, decade=None
         product_name = row["name"]
         shop = row["shop"]
         price = row["price"] or 0
+
         category = row["category"]
         quantity = parse_quantity(row["quantity"])
         max_q = parse_quantity(row["max_quantity"])
@@ -332,17 +447,17 @@ def get_shopping_list_data(save_to_db=False, conn=None, cursor=None, decade=None
         product_cost = quantity_to_buy * price
         total_cost += product_cost
 
-        debug_print(f"Hei Budget disponibie: {budget}, Prodotto: {product_name}, Quantità da acquistare: {quantity_to_buy}, Prezzo unitario: {price:.2f}€, Costo totale: {product_cost:.2f}€, Spesa corrente: {total_cost:.2f}€")
+        debug_print(f"Hei Budget disponibie: {budget_disponibile}, Prodotto: {product_name}, Quantità da acquistare: {quantity_to_buy}, Prezzo unitario: {price:.2f}€, Costo totale: {product_cost:.2f}€, Spesa corrente: {total_cost:.2f}€")
 
-        # lascia un 20% di margine sul budget
-        if product_cost <= budget:
+        # Se il prodotto rientra nel budeget, aggiorna il budget
+        if product_cost <= budget_disponibile:
             within_budget = 1
-            budget = budget - product_cost
+            budget_disponibile = budget_disponibile - product_cost
         else:
             within_budget = 0
 
 
-        debug_print(f"Prodotto: {product_name}, within_budget: {within_budget},  Quantità da acquistare: {quantity_to_buy}, Ragione: {reason}, Prezzo unitario: {price:.2f}€, Costo totale: {product_cost:.2f}€, Budget rimanente: {budget - total_cost:.2f}€")
+        debug_print(f"Prodotto: {product_name}, within_budget: {within_budget},  Quantità da acquistare: {quantity_to_buy}, Ragione: {reason}, Prezzo unitario: {price:.2f}€, Costo totale: {product_cost:.2f}€, Budget rimanente: {budget_disponibile - total_cost:.2f}€")
 
         item = {
             "barcode": barcode,
