@@ -201,9 +201,10 @@ def get_budget_decade_corrente(decade=None):
         bilancio_precedente = budget_per_decade["D1"] - spesa_per_decade["D1"]
         budget_corrente = budget_per_decade[decade] + bilancio_precedente
     elif decade == "D3":
-        bilancio_precedente = budget_per_decade["D2"] - spesa_per_decade["D2"]
+        bilancio_precedente = budget_per_decade["D2"] + (budget_per_decade["D1"] - spesa_per_decade["D1"]) - spesa_per_decade["D2"]
         budget_corrente = budget_per_decade[decade] + bilancio_precedente
 
+    debug_print(f"📆 get_budget_per_decade_corrente: Budget corrente per {decade}: {budget_corrente:.2f}€ bilancio precedente: {bilancio_precedente:.2f}€ ")
     # Budget disponibile = budget corrente - spesa corrente + eventuale avanzo precedente
     budget_disponibile = budget_corrente - spesa_corrente
 
@@ -429,7 +430,7 @@ def get_shopping_list_data(save_to_db=False, conn=None, cursor=None, decade=None
         if "Alimenti freschi" in category:
             quantity_to_buy = max(max_q - quantity, 1)
             reason = "Acquisto abituale alimento fresco"
-        elif necessity_level == "Indispensabile" and quantity < sec_q:
+        elif necessity_level == "Indispensabile" and quantity <= sec_q:
             if decade == "D3":
                 quantity_to_buy = max(max_q - quantity, 1)
                 reason = "Reintegro scorte"

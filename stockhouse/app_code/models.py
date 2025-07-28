@@ -1676,7 +1676,7 @@ def get_out_of_stock_products():
             dim.category
         FROM transaction_fact trs
         INNER JOIN product_dim dim ON dim.id = trs.product_key
-        WHERE trs.quantity = 0
+        WHERE trs.quantity - trs.consumed_quantity = 0
           AND trs.consume_date BETWEEN ? AND ?
         ORDER BY dim.name ASC
     """, (first_day, last_day))
@@ -1712,7 +1712,7 @@ def get_out_of_stock_count():
         SELECT COUNT(*)
         FROM transaction_fact trs
         INNER JOIN product_dim dim ON dim.id = trs.product_key
-        WHERE trs.quantity = 0
+        WHERE trs.quantity - trs.consumed_quantity = 0
           AND trs.consume_date BETWEEN ? AND ?
     """
     cursor.execute(query, (first_day, last_day))
