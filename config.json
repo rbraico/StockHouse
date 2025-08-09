@@ -1,6 +1,6 @@
 {
   "name": "StockHouse",
-  "version": "2.2.1",
+  "version": "2.2.2",
   "slug": "stockhouse",
   "description": "Gestione intelligente scorte alimentari",
   "url": "https://github.com/rbraico/StockHouse",
@@ -12,7 +12,6 @@
     "armhf"
   ],
   "homeassistant": "2023.0.0",
-  "image": "ghcr.io/rbraico/stockhouse",
   "panel_icon": "mdi:warehouse",
   "panel_title": "StockHouse",
   "panel_admin": false
