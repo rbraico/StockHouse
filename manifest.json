@@ -1,0 +1,19 @@
+{
+  "name": "StockHouse",
+  "version": "2.2.2",
+  "slug": "stockhouse",
+  "description": "Addon per gestione magazzino e lista della spesa",
+  "startup": "services",
+  "boot": "auto",
+  "arch": [
+    "amd64",
+    "armv7",
+    "armhf",
+    "aarch64"
+  ],
+  "homeassistant": "2023.1.0",
+  "options": {},
+  "schema": {},
+  "map": [],
+  "host_network": false
+}

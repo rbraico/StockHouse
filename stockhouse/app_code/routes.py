@@ -1269,7 +1269,7 @@ def shopping_receipt():
             })
 
         # Alla fine, aggiorna expenses_fact con importo totale e decade_number
-        totale = data.get("totale", None)
+        totale = data.get("spesa_totale", None)
         if totale is not None:
             conn = sqlite3.connect(Config.DATABASE_PATH)
             cursor = conn.cursor()

@@ -134,13 +134,20 @@
                         {% set label = 'D' ~ (i+1) %}
                         {% set perc = dec_percent[i] %}
                         {% set quota = (budget_total * perc / 100)|round(2) %}
+                        {% set spesi = spesa_decade[i]|round(2) %}
                         {% if i == 0 %}
                             {% set previsto = quota %}
+                            {% set bilancio = previsto - spesi %}
                         {% else %}
-                            {% set previsto = (quota + bilancio_precedente[i-1])|round(2) %}
+                            {% if spesi > 0 %}
+                                {% set previsto = (quota + bilancio_precedente[i-1])|round(2) %}
+                                {% set bilancio = previsto - spesi %}
+                            {% else %}
+                                {% set previsto = quota %}
+                                {% set bilancio = 0 %}
+                            {% endif %}
                         {% endif %}
                         {% set spesi = spesa_decade[i]|round(2) %}
-                        {% set bilancio = previsto - spesi %}
                         {% set _ = bilancio_precedente.__setitem__(i, bilancio) %}
                         <tr {% if dec_num == i + 1 %} class="table-primary fw-bold" {% endif %}>
                             <td>{{ label }}</td>
