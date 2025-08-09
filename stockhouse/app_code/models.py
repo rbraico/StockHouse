@@ -1287,6 +1287,10 @@ def add_transaction_fact(product_key, barcode, price, quantity, consumed_quantit
 
     debug_print("add_transaction_fact: ", product_key ,barcode, price, quantity, consumed_quantity, ins_date, consume_date, expiry_date, status)
 
+    # Normalizza expiry_date: se None o stringa vuota, setta a None (che diventa NULL in SQLite)
+    if not expiry_date or str(expiry_date).strip() == '':
+        expiry_date = None
+
     conn = sqlite3.connect(Config.DATABASE_PATH)
     c = conn.cursor()
     c.execute("""
@@ -1388,9 +1392,12 @@ def update_transaction_fact_consumed(id, ins_date, expiry_date):
                 WHEN quantity < COALESCE(consumed_quantity, 0) + 1 THEN NULL
                 ELSE consume_date
             END
-        WHERE id = ? AND ins_date = ? AND expiry_date = ?
-    """, (id, ins_date, expiry_date))
-
+        WHERE id = ? AND ins_date = ? AND
+        (
+        expiry_date = ?
+        OR ( (expiry_date IS NULL OR expiry_date = '') AND (? IS NULL OR ? = '') )
+        )
+    """, (id, ins_date, expiry_date, expiry_date, expiry_date))
     conn.commit()
     conn.close()
 
