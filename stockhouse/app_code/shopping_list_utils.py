@@ -291,9 +291,11 @@ def get_shopping_list_data(save_to_db=False, conn=None, cursor=None, decade=None
             i.barcode,
             COALESCE(stock.total_quantity, 0) AS quantity,
             i.reorder_point, i.min_quantity, i.max_quantity, i.security_quantity,
-            pd.name, pd.shop, tf.price, pd.category,
+            pd.name, pd.shop,
+            MIN(tf.price) AS price,
+            pd.category,
             i.necessity_level, i.priority_level,
-            MIN(tf.ins_date) as ins_date
+            MAX(tf.ins_date) AS ins_date
         FROM product_settings i
         LEFT JOIN (
             SELECT 
@@ -305,16 +307,18 @@ def get_shopping_list_data(save_to_db=False, conn=None, cursor=None, decade=None
         LEFT JOIN transaction_fact tf ON i.barcode = tf.barcode
         LEFT JOIN product_dim pd ON i.barcode = pd.barcode
         WHERE i.max_quantity > 0
-        AND (pd.category LIKE '%Alimenti freschi' OR pd.item LIKE '%Alimenti Congelati')
         GROUP BY i.barcode
         HAVING (
             (i.necessity_level = 'Indispensabile' AND COALESCE(stock.total_quantity, 0) <= i.security_quantity)
             OR
             (pd.category LIKE '%Alimenti freschi' AND COALESCE(stock.total_quantity, 0) < i.min_quantity)
-                OR
+            OR
             (pd.category LIKE '%Alimenti Congelati' AND COALESCE(stock.total_quantity, 0) < i.min_quantity)
         )
-        ORDER BY i.priority_level ASC, ins_date ASC, tf.price ASC;
+        ORDER BY 
+            i.priority_level ASC,
+            ins_date ASC,
+            price ASC;
         """
     cursor.execute(main_query)
     rows = cursor.fetchall()

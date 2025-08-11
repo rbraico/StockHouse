@@ -1392,12 +1392,10 @@ def update_transaction_fact_consumed(id, ins_date, expiry_date):
                 WHEN quantity < COALESCE(consumed_quantity, 0) + 1 THEN NULL
                 ELSE consume_date
             END
-        WHERE id = ? AND ins_date = ? AND
-        (
-        expiry_date = ?
-        OR ( (expiry_date IS NULL OR expiry_date = '') AND (? IS NULL OR ? = '') )
-        )
-    """, (id, ins_date, expiry_date, expiry_date, expiry_date))
+            WHERE id = ?
+            AND ins_date = ?
+            AND (expiry_date = ? OR expiry_date IS NULL OR TRIM(expiry_date) = '')
+    """, (id, ins_date, expiry_date))
     conn.commit()
     conn.close()
 
