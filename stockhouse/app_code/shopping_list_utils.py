@@ -291,11 +291,9 @@ def get_shopping_list_data(save_to_db=False, conn=None, cursor=None, decade=None
             i.barcode,
             COALESCE(stock.total_quantity, 0) AS quantity,
             i.reorder_point, i.min_quantity, i.max_quantity, i.security_quantity,
-            pd.name, pd.shop,
-            MIN(tf.price) AS price,
-            pd.category,
+            pd.name, pd.shop, tf.price, pd.category,
             i.necessity_level, i.priority_level,
-            MAX(tf.ins_date) AS ins_date
+            MAX(tf.ins_date) as ins_date
         FROM product_settings i
         LEFT JOIN (
             SELECT 
@@ -307,18 +305,16 @@ def get_shopping_list_data(save_to_db=False, conn=None, cursor=None, decade=None
         LEFT JOIN transaction_fact tf ON i.barcode = tf.barcode
         LEFT JOIN product_dim pd ON i.barcode = pd.barcode
         WHERE i.max_quantity > 0
+        AND (pd.category LIKE '%Alimenti freschi' OR pd.item LIKE '%Alimenti Congelati')
         GROUP BY i.barcode
         HAVING (
             (i.necessity_level = 'Indispensabile' AND COALESCE(stock.total_quantity, 0) <= i.security_quantity)
             OR
             (pd.category LIKE '%Alimenti freschi' AND COALESCE(stock.total_quantity, 0) < i.min_quantity)
-            OR
+                OR
             (pd.category LIKE '%Alimenti Congelati' AND COALESCE(stock.total_quantity, 0) < i.min_quantity)
         )
-        ORDER BY 
-            i.priority_level ASC,
-            ins_date ASC,
-            price ASC;
+        ORDER BY i.priority_level ASC, ins_date ASC, tf.price ASC;
         """
     cursor.execute(main_query)
     rows = cursor.fetchall()
@@ -482,29 +478,44 @@ def get_shopping_list_data(save_to_db=False, conn=None, cursor=None, decade=None
     debug_print("save_to_db, decade:", decade)
 
     if save_to_db:
+        # 1️⃣ Pulisce solo i record ATTIVI (within_budget=1) di decadi vecchie, escludendo i manuali
         cursor.execute("""
-                        DELETE FROM shopping_list 
-                        WHERE decade_number != ? 
-                        OR reason != 'Aggiunto manualmente'
-                    """, (decade,)
-                    )
+            DELETE FROM shopping_list
+            WHERE decade_number != ?
+            AND reason != 'Aggiunto manualmente'
+            AND within_budget = 1
+        """, (decade,))
 
+        # 2️⃣ Inserisce/aggiorna in un colpo solo
         for item in items:
-            # Salta l'inserimento se non è nel budget
-            if item["within_budget"] == 0:
-               continue
+            # Salta se il calcolo dice che non è nel budget
+            if item.get("within_budget", 0) == 0:
+                continue
 
             cursor.execute("""
-                    INSERT INTO shopping_list (
-                        barcode, product_name, quantity_to_buy,
-                        shop, reason, price, decade_number, insert_date, within_budget
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, DATE('now'), ?)
-                """, (
-                    item["barcode"], item["product_name"], item["quantity_to_buy"],
-                    item["shop"], item["reason"], item["price"], item["decade_number"], item["within_budget"]
-                ))
- 
-            conn.commit()
+                INSERT INTO shopping_list (
+                    barcode, product_name, quantity_to_buy,
+                    shop, reason, price, decade_number, insert_date, within_budget
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, DATE('now'), ?)
+                ON CONFLICT(barcode, decade_number) DO UPDATE SET
+                    product_name = excluded.product_name,
+                    quantity_to_buy = excluded.quantity_to_buy,
+                    shop = excluded.shop,
+                    reason = excluded.reason,
+                    price = excluded.price,
+                    insert_date = DATE('now'),
+                    within_budget = CASE
+                        WHEN shopping_list.within_budget = 0 THEN 0  -- Rispetta la rimozione manuale
+                        ELSE excluded.within_budget
+                    END
+            """, (
+                item["barcode"], item["product_name"], item["quantity_to_buy"],
+                item["shop"], item["reason"], item["price"], decade,
+                item["within_budget"]
+            ))
+
+        conn.commit()
 
     # Recupera tutti gli elementi della lista della spesa
     cursor.execute("SELECT * FROM shopping_list WHERE within_budget = 1")

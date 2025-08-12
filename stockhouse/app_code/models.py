@@ -146,6 +146,14 @@ def init_db():
         )
     """)
 
+    # Crea un indice unico su barcode + decade_number per permettere ON CONFLICT nelle insert/update
+    c.execute("""
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_shopping_list_barcode_decade
+        ON shopping_list (barcode, decade_number)
+    """)
+
+
+
     conn.commit()
 
     # ✅ CREA TABELLA EXPENSES_FACT che contiene la la somma delle spese per giorno e negozio
