@@ -1,6 +1,6 @@
 name: stockhouse
 description: "Gestione dell'inventario con stockhouse per Home Assistant"
-version: "2.2.4"
+version: "2.2.5"
 slug: "stockhouse"
 url: "https://github.com/rbraico/stockhouse"
 init: false

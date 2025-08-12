@@ -912,14 +912,14 @@ def add_selected_products():
                 continue  # se il barcode non esiste in product_dim, salta
 
             # Inserisce nella lista
-            try:
-                current_decade = get_current_decade(datetime.today())
-                within_budget = 1 # E` stato aggiunto manualmente, quindi lo si vuole comprare
-                current_date = datetime.today().date()
-                reason_to_add = "Aggiunto manualmente"
 
-                debug_print("add_selected_products - Inserimento nella lista:", barcode, row["name"], row["shop"], row["price"], current_decade)
-                cursor.execute("""
+            current_decade = get_current_decade(datetime.today())
+            within_budget = 1 # E` stato aggiunto manualmente, quindi lo si vuole comprare
+            current_date = datetime.today().date()
+            reason_to_add = "Aggiunto manualmente"
+            debug_print("add_selected_products - Dati da inserire:", barcode, row["name"], row["shop"], row["price"], current_decade)
+            try:
+               cursor.execute("""
                     INSERT INTO shopping_list (
                         barcode, product_name, quantity_to_buy, shop, reason, price, decade_number, insert_date, within_budget
                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
