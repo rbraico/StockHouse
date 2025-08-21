@@ -4,6 +4,7 @@ from config import Config  # usa il path corretto se è diverso
 from stockhouse.utils import debug_print
 from calendar import monthrange
 
+
 def init_db():
  
     conn = sqlite3.connect(Config.DATABASE_PATH)
@@ -286,6 +287,61 @@ def lookup_products(barcode):
         }
     else:
         return {"found": False}
+    
+# Esegue Lookup in product_dim sulla base del product_id
+def lookup_products_by_id(product_id):
+    conn = sqlite3.connect(Config.DATABASE_PATH)
+    cursor = conn.cursor()
+    
+    cursor.execute("""
+        SELECT 
+            p.id, 
+            p.barcode,
+            p.name, 
+            p.brand, 
+            p.shop, 
+            tf.price, 
+            tf.quantity, 
+            c.name AS category, 
+            p.item, 
+            p.image
+        FROM product_dim p
+        LEFT JOIN item_list i ON p.item = i.name
+        LEFT JOIN category_list c ON i.category_id = c.id
+        LEFT JOIN (
+            SELECT tf1.product_key, tf1.price, tf1.quantity
+            FROM transaction_fact tf1
+            JOIN (
+                SELECT product_key, MAX(ins_date) AS max_date
+                FROM transaction_fact
+                GROUP BY product_key
+            ) tf2 ON tf1.product_key = tf2.product_key AND tf1.ins_date = tf2.max_date
+        ) tf ON p.id = tf.product_key
+        WHERE p.id = ?
+    """, (product_id,))
+
+    prodotto = cursor.fetchone()
+    conn.close()
+  
+    debug_print("lookup_products_by_id: ", prodotto)
+
+    if prodotto:
+        return {
+            "found": True,
+            "id": prodotto[0],
+            "barcode": prodotto[1],
+            "name": prodotto[2],
+            "brand": prodotto[3],
+            "shop": prodotto[4],
+            "price": prodotto[5],
+            "quantity": prodotto[6],
+            "category": prodotto[7],
+            "item": prodotto[8],
+            "image": prodotto[9]
+        }
+    else:
+        return {"found": False}
+
 
 # Esegue Lookup in product_dim per ottenere la chiave. Il barcode puo anche essere null. Name mai
 def lookup_products_by_name(name):
@@ -2056,6 +2112,7 @@ def upsert_expense(cursor, shopping_date, decade_number, shop, amount, mode="bar
     if row:
         if mode == "barcode":
             # Somma amount esistente
+
             cursor.execute("""
                 UPDATE expenses_fact
                 SET amount = amount + ?
@@ -2074,3 +2131,7 @@ def upsert_expense(cursor, shopping_date, decade_number, shop, amount, mode="bar
             INSERT INTO expenses_fact (shopping_date, decade_number, shop, amount)
             VALUES (?, ?, ?, ?)
         """, (shopping_date, decade_number, shop, amount))
+
+
+
+

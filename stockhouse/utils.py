@@ -23,3 +23,4 @@ def get_debug_mode():
 def debug_print(*args):
     if get_debug_mode():
         print(*args)
+

@@ -1,11 +1,15 @@
 from datetime import datetime, timedelta, date
 import sqlite3
-from stockhouse.app_code.models import get_week_date_range, upsert_expense
+from stockhouse.app_code.models import get_week_date_range, upsert_expense, lookup_products_by_name, upsert_transaction_fact
 from config import Config  # usa il path corretto se è diverso
 from stockhouse.utils import debug_print
 import calendar
 from rapidfuzz import process, fuzz
 
+from google import genai
+
+import json
+import re
 
 # Funzione per calcolare il numero della decade corrente
 def get_current_decade(today=None):
@@ -624,6 +628,20 @@ def get_suggested_products():
 
     return suggested
 
+import threading
+# Funzione per testare il thread alla chiusura della pagina shopping list per il riordino dei prodotti secondo lo schema del supermercato
+def trigger_thread_on_exit():
+    """
+    Funzione minimale per testare il thread alla chiusura della pagina.
+    Per ora stampa solo un messaggio.
+    """
+    def task():
+        print("✅ Ok, thread selezionato e in esecuzione")
+    
+    threading.Thread(target=task, daemon=True).start()
+
+
+
 # Funzione per processare la coda della lista della spesa
 def process_shopping_queue():
     debug_print("Processo la coda della lista della spesa...")
@@ -808,3 +826,4 @@ def insert_unknown_product(
     """, (shop_name, raw_name, normalized_name, matched_product_id, traduzione_italiano, quantita, prezzo_unitario, prezzo_totale, note))
     conn.commit()
     conn.close()
+

@@ -1,6 +1,37 @@
 {% extends 'layout.html' %}
 
 {% block content %}
+
+<style>
+    .card-footer {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.75rem 1rem;
+        border-top: 1px solid #dee2e6;
+        background-color: #f8f9fa;
+    }
+
+    #deleteSelectedBtn,
+    #finalizeListBtn {
+        min-width: 160px;
+        font-weight: 500;
+    }
+
+    /* Assicura che la card abbia spazio sufficiente */
+    .card {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+    }
+
+    .card-body {
+        flex-grow: 1;
+        overflow-y: auto;
+    }
+</style>
+
+
 <h2 class="text-center">🍭️ Lista della Spesa</h2>
 <br>
 <!-- Periodo della decade corrente -->
@@ -46,20 +77,26 @@
                 </div>
             </div>
         </div>
+
         <!-- Lista della Spesa -->
         <div class="col-md-6">
             <div class="card border-primary">
                 <div class="card-header bg-primary text-white">
                     🛒 Lista della Spesa
                 </div>
-                <div class="card-body p-0 position-relative">
-                    <div class="table-responsive" id="shoppingListContainer" style="max-height: 250px; overflow-y: auto; padding-bottom: 40px;">
+
+                <!-- Card body con tabella scrollabile -->
+                <div class="card-body p-0">
+                    <div class="table-responsive" id="shoppingListContainer" style="max-height: 250px; overflow-y: auto;">
                         {% include 'shopping_list_table.html' %}
                     </div>
-                    <div class="card-footer text-end">
-                        <button id="deleteSelectedBtn" class="btn btn-danger">🗑️ Rimuovi selezionati</button>
-                    </div>
                 </div>
+
+                <div class="card-footer d-flex justify-content-between">
+                    <button id="deleteSelectedBtn" class="btn btn-danger">🗑️ Rimuovi selezionati</button>
+                    <button id="finalizeListBtn" class="btn btn-primary">✅ Finalizza Lista</button>
+                </div>
+
             </div>
         </div>
     </div>
@@ -236,5 +273,22 @@ document.getElementById('deleteSelectedBtn').addEventListener('click', async fun
 });
 </script>
 
+<script>
+document.getElementById('finalizeListBtn').addEventListener('click', async function () {
+    // Chiamata alla route Flask che lancia il thread in background
+    const response = await fetch('/shopping_list/finalize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+    });
+
+    if (response.ok) {
+        const data = await response.json();
+        console.log(data.message);  // stampiamo "ok thread avviato"
+        alert("Lista finalizzata: l'ordinamento dei reparti verrà calcolato in background.");
+    } else {
+        alert("Errore durante la finalizzazione della lista.");
+    }
+});
+</script>
 
 {% endblock %}

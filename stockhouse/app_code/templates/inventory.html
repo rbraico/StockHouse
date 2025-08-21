@@ -39,21 +39,25 @@
       border: 2px solid #dee2e6;
       display: block;
   }
-  .custom-table thead {
-      position: sticky;
-      top: 0;
-      background-color: #0050b9;
-      z-index: 10;
-  }
   .table-container .row.bg-primary {
       background-color: transparent !important;
   }
   .consume-btn {
-    min-width: 160px; /* Scegli la larghezza che preferisci */
+    min-width: 160px;
+  }
+  #drop-zone {
+    cursor: pointer;
+    transition: background-color 0.2s;
+  }
+  #receipt-preview {
+    max-width: 100%;
+    margin-top: 15px;
+    border: 1px solid #dee2e6;
+    display: none;
   }
 </style>
 
-<!-- Modale per selezionare il lotto da consumare. Prima TAB -->
+<!-- Modale per selezionare il lotto da consumare -->
 <div class="modal fade" id="consumeModal" tabindex="-1" aria-labelledby="consumeModalLabel" aria-hidden="true">
   <div class="modal-dialog">
     <div class="modal-content">
@@ -71,47 +75,51 @@
   </div>
 </div>
 
+<!-- NAV TABS -->
+<ul class="nav nav-tabs" id="inventoryTab" role="tablist">
+  <li class="nav-item" role="presentation">
+    <button class="nav-link active" id="gestione-tab" data-bs-toggle="tab" data-bs-target="#gestione" type="button" role="tab" aria-controls="gestione" aria-selected="true">📦 Gestione Magazzino</button>
+  </li>
+  <li class="nav-item" role="presentation">
+    <button class="nav-link" id="import-tab" data-bs-toggle="tab" data-bs-target="#import" type="button" role="tab" aria-controls="import" aria-selected="false">📄 Importa scontrino</button>
+  </li>
+</ul>
+
 <div class="tab-content mt-3">
 
-  <!-- 📋 Gestione Magazzino-->
+  <!-- 📋 Gestione Magazzino -->
   <div class="tab-pane fade show active" id="gestione" role="tabpanel" aria-labelledby="gestione-tab">
-  <div class="table-container">
-    <table class="table table-bordered custom-table" id="gestione-table">
-      <thead class="table-dark">
-        <tr>
-          <th>Prodotto</th>
-          <th>Barcode</th>
-          <th>Nome</th>
-          <th>Articolo</th>
-          <th>Categoria</th>
-          <th>Prezzo</th>
-          <th>Quantità Attuale</th>
-          <th>Valore Totale</th>
-          <th>Azioni</th>
-        </tr>
-        <tr>
-          <th></th>
-          <th></th>
-          <th>
-            <select id="filterNameGestione" class="form-select form-select-sm">
-              <option value="">Tutti</option>
-            </select>
-          </th>
-          <th>
-            <select id="filterArticleGestione" class="form-select form-select-sm">
-              <option value="">Tutti</option>
-            </select>
-          </th>
-          <th>
-            <select id="filterCategoryGestione" class="form-select form-select-sm">
-              <option value="">Tutte</option>
-            </select>
-          </th>
-          <th colspan="4"></th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for product in products %}
+    <div class="table-container">
+      <table class="table table-bordered custom-table" id="gestione-table">
+        <thead class="table-dark">
+          <tr>
+            <th>Prodotto</th>
+            <th>Barcode</th>
+            <th>Nome</th>
+            <th>Articolo</th>
+            <th>Categoria</th>
+            <th>Prezzo</th>
+            <th>Quantità Attuale</th>
+            <th>Valore Totale</th>
+            <th>Azioni</th>
+          </tr>
+          <tr>
+            <th></th>
+            <th></th>
+            <th>
+              <select id="filterNameGestione" class="form-select form-select-sm"><option value="">Tutti</option></select>
+            </th>
+            <th>
+              <select id="filterArticleGestione" class="form-select form-select-sm"><option value="">Tutti</option></select>
+            </th>
+            <th>
+              <select id="filterCategoryGestione" class="form-select form-select-sm"><option value="">Tutte</option></select>
+            </th>
+            <th colspan="4"></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for product in products %}
           <tr data-barcode="{{ product.barcode }}">
             <td>
               {% if product.image %}
@@ -130,30 +138,42 @@
             <td>
               <button class="btn btn-sm btn-warning consume-btn">🍽️ Consumato</button>
             </td>
-
           </tr>
-        {% endfor %}
+          {% endfor %}
         </tbody>
       </table>
     </div>
   </div>
 
+  <!-- 📄 Importa scontrino -->
+  <div class="tab-pane fade" id="import" role="tabpanel" aria-labelledby="import-tab">
+    <div class="p-3">
+      <h5>Trascina qui il tuo scontrino</h5>
+      <div id="drop-zone" class="border border-primary rounded p-5 text-center" style="background-color: #f8f9fa;">
+        📥 Trascina il file qui oppure clicca per selezionarlo
+      </div>
+      <input type="file" id="file-input" style="display:none;" accept=".jpg,.png,.jpeg,.pdf"/>
+      <div id="upload-status" class="mt-3"></div>
+      <img id="receipt-preview" />
+      <div id="action-buttons" class="mt-3" style="display:none;">
+        <button id="analyze-btn" class="btn btn-primary me-2">Analizza scontrino</button>
+        <button id="delete-btn" class="btn btn-danger">Elimina scontrino</button>
+      </div>
+    </div>
+  </div>
 
+</div>
 
-<!-- --- PRIMA TAB - INVENTORY: Filtri e bottone Consumato avanzato --- -->
+<!-- --- SCRIPT --- -->
 <script>
 document.addEventListener("DOMContentLoaded", function () {
+  // --- FILTRI E CONSUMO ---
   function populateGestioneFilters() {
-    const nameSet = new Set();
-    const articleSet = new Set();
-    const categorySet = new Set();
+    const nameSet = new Set(), articleSet = new Set(), categorySet = new Set();
     document.querySelectorAll('#gestione-table tbody tr').forEach(row => {
-      const name = row.children[2].textContent.trim();
-      const article = row.children[3].textContent.trim();
-      const category = row.children[4].textContent.trim();
-      if (name) nameSet.add(name);
-      if (article) articleSet.add(article);
-      if (category) categorySet.add(category);
+      if(row.children[2].textContent) nameSet.add(row.children[2].textContent.trim());
+      if(row.children[3].textContent) articleSet.add(row.children[3].textContent.trim());
+      if(row.children[4].textContent) categorySet.add(row.children[4].textContent.trim());
     });
     const filterName = document.getElementById('filterNameGestione');
     const filterArticle = document.getElementById('filterArticleGestione');
@@ -161,15 +181,9 @@ document.addEventListener("DOMContentLoaded", function () {
     filterName.innerHTML = '<option value="">Tutti</option>';
     filterArticle.innerHTML = '<option value="">Tutti</option>';
     filterCategory.innerHTML = '<option value="">Tutte</option>';
-    Array.from(nameSet).sort().forEach(name => {
-      filterName.innerHTML += `<option value="${name}">${name}</option>`;
-    });
-    Array.from(articleSet).sort().forEach(article => {
-      filterArticle.innerHTML += `<option value="${article}">${article}</option>`;
-    });
-    Array.from(categorySet).sort().forEach(cat => {
-      filterCategory.innerHTML += `<option value="${cat}">${cat}</option>`;
-    });
+    Array.from(nameSet).sort().forEach(n=>filterName.innerHTML+=`<option value="${n}">${n}</option>`);
+    Array.from(articleSet).sort().forEach(a=>filterArticle.innerHTML+=`<option value="${a}">${a}</option>`);
+    Array.from(categorySet).sort().forEach(c=>filterCategory.innerHTML+=`<option value="${c}">${c}</option>`);
   }
 
   function filterGestioneTable() {
@@ -177,13 +191,9 @@ document.addEventListener("DOMContentLoaded", function () {
     const articleVal = document.getElementById('filterArticleGestione').value;
     const catVal = document.getElementById('filterCategoryGestione').value;
     document.querySelectorAll('#gestione-table tbody tr').forEach(row => {
-      const name = row.children[2].textContent.trim();
-      const article = row.children[3].textContent.trim();
-      const category = row.children[4].textContent.trim();
-      let show = true;
-      if (nameVal && name !== nameVal) show = false;
-      if (articleVal && article !== articleVal) show = false;
-      if (catVal && category !== catVal) show = false;
+      const show = (!nameVal || row.children[2].textContent.trim()===nameVal)
+                && (!articleVal || row.children[3].textContent.trim()===articleVal)
+                && (!catVal || row.children[4].textContent.trim()===catVal);
       row.style.display = show ? '' : 'none';
     });
   }
@@ -193,80 +203,115 @@ document.addEventListener("DOMContentLoaded", function () {
   document.getElementById('filterArticleGestione').addEventListener('change', filterGestioneTable);
   document.getElementById('filterCategoryGestione').addEventListener('change', filterGestioneTable);
 
-  // --- Nuovo comportamento bottone Consumato ---
-  let selectedRow = null;
-  let selectedBarcode = null;
-
-  document.querySelectorAll('#gestione-table .consume-btn').forEach(function(button) {
-    button.addEventListener('click', function() {
-      console.log("Cliccato Consumato!");
-      selectedRow = button.closest('tr');
+  // --- Bottone Consumato ---
+  let selectedRow=null, selectedBarcode=null;
+  document.querySelectorAll('#gestione-table .consume-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      selectedRow = btn.closest('tr');
       selectedBarcode = selectedRow.dataset.barcode;
       const productName = selectedRow.children[2].textContent.trim();
-
-      // Fetch lotti disponibili per questo prodotto
-      fetch("/products/unconsumed_dropdown")
-        .then(res => res.json())
-        .then(products => {
-          // Filtra solo i lotti del prodotto selezionato
-          const filtered = products.filter(p => p.name === productName);
-          const select = document.getElementById('consumeSelect');
-          select.innerHTML = '';
-          if (filtered.length > 0) {
-            filtered.forEach(record => {
-              const label = `Inserito: ${record.ins_date} - Scadenza: ${record.expiry_date || 'N/A'} - Q.tà: ${record.quantity}`;
-              select.innerHTML += `<option value="${record.ins_date}|${record.expiry_date}|${record.id}|${record.barcode}|${record.quantity}">${label}</option>`;
-            });
-            const modal = new bootstrap.Modal(document.getElementById('consumeModal'));
-            modal.show();
-          } else {
-            alert("Nessun lotto disponibile per questo prodotto.");
-          }
-        });
+      fetch("/products/unconsumed_dropdown").then(res=>res.json()).then(products=>{
+        const filtered = products.filter(p=>p.name===productName);
+        const select = document.getElementById('consumeSelect');
+        select.innerHTML='';
+        if(filtered.length>0){
+          filtered.forEach(record=>{
+            select.innerHTML += `<option value="${record.ins_date}|${record.expiry_date}|${record.id}|${record.barcode}|${record.quantity}">Inserito: ${record.ins_date} - Scadenza: ${record.expiry_date||'N/A'} - Q.tà: ${record.quantity}</option>`;
+          });
+          new bootstrap.Modal(document.getElementById('consumeModal')).show();
+        } else alert("Nessun lotto disponibile per questo prodotto.");
+      });
     });
   });
 
-  document.getElementById('confirmConsumeBtn').addEventListener('click', function() {
+  document.getElementById('confirmConsumeBtn').addEventListener('click',()=>{
     const select = document.getElementById('consumeSelect');
-    if (!select.value) return;
+    if(!select.value) return;
     const [ins_date, expiry_date, id, product_key, quantity] = select.value.split('|');
-    // Chiamata alla route per consumare il prodotto
     fetch(`/consumed_product?id=${id}&product_key=${product_key}&barcode=${encodeURIComponent(selectedBarcode)}&ins_date=${ins_date}&expiry_date=${expiry_date}&quantity=${quantity}`)
-      .then(res => res.json())
-      .then(data => {
-        console.log('Risposta da /consumed_product:', data);
-        if (data.success) {
-          // Aggiorna la quantità nella tabella
+      .then(res=>res.json())
+      .then(data=>{
+        if(data.success){
           selectedRow.children[6].textContent = data.quantita;
-
-          // Aggiorna il valore totale (colonna 7, cioè children[7])
-          const prezzo = parseFloat(selectedRow.children[5].textContent.replace('€', '').replace(',', '.'));
-          const nuovaQuantita = parseInt(data.quantita, 10);
-          const nuovoTotale = isNaN(prezzo) || isNaN(nuovaQuantita) ? "0.00" : (prezzo * nuovaQuantita).toFixed(2);
-          selectedRow.children[7].textContent = `€${nuovoTotale}`;
-          
-          // Aggiorna il bottone
+          const prezzo = parseFloat(selectedRow.children[5].textContent.replace('€','').replace(',','.'));
+          selectedRow.children[7].textContent = isNaN(prezzo)||isNaN(data.quantita) ? "0.00" : `€${(prezzo*parseInt(data.quantita,10)).toFixed(2)}`;
           const btn = selectedRow.querySelector('.consume-btn');
-          btn.textContent = "✅ DB Aggiornato";
-          btn.classList.remove('btn-warning');
-          btn.classList.add('btn-success');
-          btn.disabled = true;
-          // Chiudi il modale
+          btn.textContent="✅ DB Aggiornato";
+          btn.classList.replace('btn-warning','btn-success');
+          btn.disabled=true;
           bootstrap.Modal.getInstance(document.getElementById('consumeModal')).hide();
-          // Dopo 2 secondi, ripristina il bottone
-          setTimeout(() => {
-            btn.textContent = "🍽️ Consumato";
-            btn.classList.remove('btn-success');
-            btn.classList.add('btn-warning');
-            btn.disabled = false;
-          }, 2000);
-        } else {
-          alert("Errore durante la registrazione del consumo.");
-        }
+          setTimeout(()=>{btn.textContent="🍽️ Consumato"; btn.classList.replace('btn-success','btn-warning'); btn.disabled=false;},2000);
+        } else alert("Errore durante la registrazione del consumo.");
       });
   });
+
+  // --- DROPZONE SCONTRINO ---
+  const dropZone = document.getElementById('drop-zone');
+  const fileInput = document.getElementById('file-input');
+  const statusDiv = document.getElementById('upload-status');
+  const actionButtons = document.getElementById('action-buttons');
+  const analyzeBtn = document.getElementById('analyze-btn');
+  const deleteBtn = document.getElementById('delete-btn');
+  const receiptPreview = document.getElementById('receipt-preview');
+  let uploadedFilename = null;
+
+  dropZone.addEventListener('click',()=>fileInput.click());
+  dropZone.addEventListener('dragover',e=>{e.preventDefault(); dropZone.style.backgroundColor='#e0f7ff';});
+  dropZone.addEventListener('dragleave',e=>{e.preventDefault(); dropZone.style.backgroundColor='#f8f9fa';});
+  dropZone.addEventListener('drop',e=>{e.preventDefault(); dropZone.style.backgroundColor='#f8f9fa'; handleFileUpload(e.dataTransfer.files[0]);});
+  fileInput.addEventListener('change',e=>handleFileUpload(e.target.files[0]));
+
+  function handleFileUpload(file){
+    if(!file) return;
+    const formData = new FormData();
+    formData.append('file',file);
+    fetch('/import_receipt',{method:'POST', body:formData})
+      .then(res=>res.json())
+      .then(data=>{
+        if(data.success){
+          uploadedFilename=data.filename;
+          statusDiv.textContent=`File caricato: ${uploadedFilename}`;
+          actionButtons.style.display='block';
+          if(file.type.startsWith('image/')){
+            const reader = new FileReader();
+            reader.onload = function(e){ receiptPreview.src = e.target.result; receiptPreview.style.display='block'; };
+            reader.readAsDataURL(file);
+          } else { receiptPreview.style.display='none'; }
+        }
+        else { statusDiv.textContent=`Errore: ${data.msg}`; actionButtons.style.display='none'; receiptPreview.style.display='none'; }
+      })
+      .catch(err=>{statusDiv.textContent=`Errore upload: ${err}`; actionButtons.style.display='none'; receiptPreview.style.display='none';});
+  }
+
+  analyzeBtn.addEventListener('click',()=>{
+    if(!uploadedFilename) return;
+    fetch(`/analyze_receipt?filename=${encodeURIComponent(uploadedFilename)}`)
+      .then(res=>res.json())
+      .then(data=>{
+        if(data.success){
+          alert('Scontrino analizzato (simulazione). Dati ricevuti da Gemini AI!');
+          console.log(data);
+        } else alert('Errore durante l’analisi.');
+      })
+      .catch(err=>alert('Errore chiamata analyze_receipt: '+err));
+  });
+
+  deleteBtn.addEventListener('click',()=>{
+    if(!uploadedFilename) return;
+    fetch(`/delete_receipt?filename=${encodeURIComponent(uploadedFilename)}`,{method:'POST'})
+      .then(res=>res.json())
+      .then(data=>{
+        if(data.success){
+          statusDiv.textContent='';
+          actionButtons.style.display='none';
+          receiptPreview.style.display='none';
+          uploadedFilename=null;
+        } else alert('Errore durante l’eliminazione.');
+      })
+      .catch(err=>alert('Errore chiamata delete_receipt: '+err));
+  });
+
 });
 </script>
-
 
 {% endblock %}

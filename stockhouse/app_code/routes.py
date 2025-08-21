@@ -36,7 +36,11 @@ from stockhouse.app_code.shopping_list_utils import (
     fuzzy_match_product,
     insert_unknown_product,
     normalize_text,
-    remove_from_shopping_lst)
+    remove_from_shopping_lst,
+    trigger_thread_on_exit)
+
+from stockhouse.app_code.ai import manage_shopping_receipt, analyze_receipt_with_gemini, fetch_shopping_list
+
 import calendar
 from calendar import month_name
 import json
@@ -45,6 +49,10 @@ import traceback
 
 main = Blueprint('main', __name__)
 
+
+# Cartella di lavoro per scontrini (development)
+UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), 'uploaded_receipts')
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 @main.route('/')
 def homepage():
@@ -1228,7 +1236,7 @@ def shopping_receipt():
             normalized = normalize_text(nome_grezzo)
             product_id, confidence = fuzzy_match_product(nome_grezzo, aliases)
 
-            if confidence < 0.75:
+            if confidence < 0.95:
                 note = f"Confidenza bassa: {round(confidence * 100)}%"
                 insert_unknown_product(
                     shop_name=shop_name,
@@ -1372,6 +1380,68 @@ def remove_selected():
         print(traceback.format_exc())
         return jsonify({"error": str(e)}), 500
 
+
+@main.route('/import_receipt', methods=['POST'])
+def import_receipt():
+    """
+    Route per ricevere uno scontrino via drag & drop o file input.
+    Salva il file nella cartella di lavoro e stampa un debug in console.
+    """
+    if 'file' not in request.files:
+        return jsonify({'success': False, 'msg': 'Nessun file trovato'})
+
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({'success': False, 'msg': 'File senza nome'})
+
+    # Salva il file con timestamp
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    filename = f"{timestamp}_{file.filename}"
+    filepath = os.path.join(UPLOAD_FOLDER, filename)
+    file.save(filepath)
+
+    print(f"[DEBUG] Route /import_receipt chiamata. File salvato: {filepath}")
+
+    return jsonify({'success': True, 'filename': filename})
     
+# --- Route di analisi scontrino ---
+@main.route('/analyze_receipt', methods=['GET'])
+def main_analyze_receipt():
+    filename = request.args.get('filename')
+    print(f"[DEBUG] Route /analyze_receipt chiamata con file: {filename}")
+
+    if not filename:
+        return jsonify({"success": False, "msg": "Nessun file specificato"})
+
+    # Chiama la funzione di analisi
+    result_json = analyze_receipt_with_gemini(filename, UPLOAD_FOLDER)
+
+    result_manage = manage_shopping_receipt(result_json)
+
+    # Ritorna il JSON così com'è al frontend
+    return jsonify({"success": True, "msg": "Scontrino analizzato", "data": result_manage})
 
 
+# --- Route di debug per cancellare scontrino ---
+@main.route('/delete_receipt', methods=['POST'])
+def main_delete_receipt():
+    filename = request.json.get('filename') if request.is_json else None
+    print(f"[DEBUG] Route /delete_receipt chiamata con file: {filename}")
+    return jsonify({"success": True, "msg": "Simulazione cancellazione scontrino"})
+
+
+# --- Route per finalizzare la lista della spesa ---
+@main.route("/shopping_list/finalize", methods=["POST"])
+def finalize_shopping_list():
+    from threading import Thread
+
+    def background_task():
+        debug_print("Thread avviato: riorganizzo la lista secondo i reparti...")
+        # qui chiami la funzione z.ai o la logica di riordinamento
+        json_data = fetch_shopping_list()
+        debug_print("Lista della spesa recuperata:", json_data)
+        # ad esempio: reorder_shopping_list()
+        debug_print("Thread completato.")
+
+    Thread(target=background_task).start()
+    return jsonify({"message": "ok thread avviato"}), 200
