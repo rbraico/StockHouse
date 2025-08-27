@@ -778,15 +778,16 @@ def fuzzy_match_product(name, aliases):
 
         product_id = aliases[index][1]
         confidence = score / 100.0
-        return product_id, confidence
+        return product_id, confidence, matched_name
     return None, 0.0        
+
 
 
 def insert_unknown_product(
     shop_name,
     raw_name,
-    normalized_name,
     matched_product_id=None,
+    normalized_name="",
     note="",
     traduzione_italiano=None,
     quantita=None,
@@ -821,9 +822,9 @@ def insert_unknown_product(
     cursor = conn.cursor()
     cursor.execute("""
         INSERT INTO unknown_products 
-        (shop_name, raw_name, normalized_name, matched_product_id,  traduzione_italiano, quantita, prezzo_unitario, prezzo_totale, note)
+        (shop_name, raw_name, matched_product_id,  normalized_name,  traduzione_italiano, quantita, prezzo_unitario, prezzo_totale, note)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, (shop_name, raw_name, normalized_name, matched_product_id, traduzione_italiano, quantita, prezzo_unitario, prezzo_totale, note))
+    """, (shop_name, raw_name, matched_product_id, normalized_name, traduzione_italiano, quantita, prezzo_unitario, prezzo_totale, note))
     conn.commit()
     conn.close()
 

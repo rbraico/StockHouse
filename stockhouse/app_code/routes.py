@@ -7,7 +7,7 @@ from stockhouse.app_code.models import add_product_dim, add_transaction_fact, de
                        get_week_date_range, get_product_by_name_and_dates, get_expiring_products_for_home, get_out_of_stock_products, get_critical_stock, get_monthly_consumed_statistics, \
                        upsert_budget, get_budget, update_inventory_mean_usage_time, get_unconsumed_products_full_list,  \
                        get_unique_unconsumed_record, clean_old_transactions, update_reorder_frequency,upsert_expense, delete_from_shopping_list, upsert_transaction_fact
-from stockhouse.app_code.models import add_shop, update_shop, delete_shop, get_unknown_products, delete_unknown_product_by_name, insert_product_alias_if_not_exists  
+from stockhouse.app_code.models import add_shop, update_shop, delete_shop, get_unknown_products, delete_unknown_product_by_name, insert_product_alias_if_not_exists, lookup_products_by_id  
 from stockhouse.app_code.models import add_category, get_all_categories, update_category, delete_category, get_all_items, update_item, delete_item
 import sqlite3
 import hashlib
@@ -1196,105 +1196,6 @@ def api_refresh_shopping_list():
     else:
         return jsonify({"status": "no_refresh_needed"})
     
-
-
-@main.route('/api/stockhouse/shopping_receipt', methods=['POST'])
-def shopping_receipt():
-    try:
-        raw_data = request.get_json()
-        debug_print("shopping_receipt - Dati ricevuti:", raw_data)
-        # parsing come prima...
-        if isinstance(raw_data, dict) and 'text' in raw_data:
-            clean_text = re.sub(r"^```json\n?|```$", "", raw_data['text'].strip())
-            data = json.loads(clean_text)
-        else:
-            data = raw_data
-
-        prodotti = data.get("lista_prodotti", [])
-        shop_name = data.get("nome_negozio", "")
-        data_scontrino = data.get("data_scontrino", None)
-        debug_print("shopping_receipt - Dati ricevuti:", data)
-
-        # Seleziona la decade corrente
-        decade_number = get_current_decade()
-
-        # Carica alias
-        aliases = get_aliases_from_db(shop_name) or get_aliases_from_db()
-
-        results = []
-        for prod in prodotti:
-            # gestione prodotti come prima
-            nome_grezzo = prod.get("nome_prodotto", "")
-            traduzione_italiano = prod.get("traduzione_italiano", "")
-            quantita = prod.get("quantita", None)
-            prezzo_unitario = prod.get("prezzo_unitario", None)
-            prezzo_totale = prod.get("prezzo_totale", None)
-
-            if quantita == 1 and (prezzo_unitario is None or prezzo_unitario == 0):
-                prezzo_unitario = prezzo_totale
-
-            normalized = normalize_text(nome_grezzo)
-            product_id, confidence = fuzzy_match_product(nome_grezzo, aliases)
-
-            if confidence < 0.95:
-                note = f"Confidenza bassa: {round(confidence * 100)}%"
-                insert_unknown_product(
-                    shop_name=shop_name,
-                    raw_name=nome_grezzo,
-                    normalized_name=normalized,
-                    matched_product_id=product_id,
-                    note=note,
-                    traduzione_italiano=traduzione_italiano,
-                    quantita=quantita,
-                    prezzo_unitario=prezzo_unitario,
-                    prezzo_totale=prezzo_totale
-                )
-            else:
-                prodotto_per_nome = lookup_products_by_name(nome_grezzo)
-
-                if prodotto_per_nome["found"]:
-                    product_key = prodotto_per_nome["id"]
-                    barcode = prodotto_per_nome["barcode"]
-
-                    upsert_transaction_fact(
-                        product_key=product_key,
-                        barcode=barcode,
-                        price=prezzo_unitario,
-                        quantity=quantita,
-                        consumed_quantity=0,
-                        ins_date=data_scontrino,
-                        consume_date=None,
-                        expiry_date=None,
-                        status="in stock"
-                    )
-                else:
-                    debug_print(f"Prodotto non trovato in product_dim: {nome_grezzo}")
-
-            results.append({
-                "nome": nome_grezzo,
-                "product_id": product_id,
-                "confidence": confidence
-            })
-
-        # Alla fine, aggiorna expenses_fact con importo totale e decade_number
-        totale = data.get("spesa_totale", None)
-        if totale is not None:
-            conn = sqlite3.connect(Config.DATABASE_PATH)
-            cursor = conn.cursor()
-            # usa la nuova versione di upsert_expense con mode='receipt'
-            debug_print("Receipt- chiama upsert_expense :", data_scontrino, decade_number, shop_name, totale)
-            upsert_expense(cursor, data_scontrino, decade_number, shop_name, totale, mode="receipt")
-            conn.commit()
-            conn.close()
-
-        return jsonify({
-            "status": "ok",
-            "matches": results,
-            "message": f"{len(results)} prodotti elaborati"
-        })
-
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 400
     
 @main.route('/unknown/get_all')
 def get_all_unknown_products():

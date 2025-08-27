@@ -6,6 +6,7 @@
 <br>
 <!-- Stile per righe alternate -->
 <style>
+  /* 🔷 Intestazione tabella */
   .custom-table thead {
       background-color: #0050b9 !important;
       color: white !important;
@@ -13,50 +14,62 @@
       top: 0;
       z-index: 10;
   }
+
+  /* 🔷 Celle tabella compatte */
   .custom-table th, .custom-table td {
       border: 2px solid #dee2e6;
-      padding: 10px;
+      padding: 6px; /* Ridotto da 10px */
       text-align: center;
+      font-size: 13px;
+      white-space: nowrap;
   }
+
   .custom-table {
-    border-collapse: collapse !important;
+      border-collapse: collapse !important;
   }
+
+  /* 🔷 Righe alternate */
   .custom-table tbody tr:nth-child(odd) td {
       background-color: #ffffff !important;
   }
+
   .custom-table tbody tr:nth-child(even) td {
       background-color: #dcf5fe6a !important;
   }
+
   .table-dark {
       background-color: #0050b9 !important;
       color: white !important;
   }
+
+  /* 🔷 Contenitore tabella */
   .table-container {
       max-height: 600px;
       overflow-y: auto;
+      overflow-x: auto;
       border: 2px solid #007BA7;
       display: block;
+      max-width: 100%;
   }
-  .custom-table thead {
-      position: sticky;
-      top: 0;
-      background-color: #0050b9;
-      z-index: 10;
-  }
+
   .table-container .row.bg-primary {
       background-color: transparent !important;
   }
+
+  /* 🔷 Pulsante compatto */
   .consume-btn {
-    min-width: 160px; /* Scegli la larghezza che preferisci */
+      min-width: 120px;
+      padding: 6px 10px;
+      font-size: 13px;
   }
 
-  /* 🔽 Stile per la cornice dell'immagine */
+  /* 🔷 Cornice immagine prodotto */
   .product-image-frame {
       border: 2px solid #ccc;
       border-radius: 12px;
       padding: 10px;
       box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-      background-color:  #e6f2ff;
+      background-color: #e6f2ff;
       max-width: 300px;
       text-align: center;
   }
@@ -66,41 +79,66 @@
       border-radius: 8px;
   }
 
+  /* 🔷 Campo filtro */
   #filterNameList {
-    width: 225px;         /* oppure 220px o anche 240px */
-    min-width: 200px;
-    padding: 6px 10px;
-    font-size: 14px;
-    border-radius: 6px;
-    border: 1px solid #ccc;
-    box-sizing: border-box;
+      width: 225px;
+      min-width: 200px;
+      padding: 6px 10px;
+      font-size: 14px;
+      border-radius: 6px;
+      border: 1px solid #ccc;
+      box-sizing: border-box;
   }
 
-  .table-select-necessity {
-  width: 100%;           /* Occupa tutta la cella */
-  min-width: 125px;      /* Larghezza minima decente */
-  text-align: left;  
-  padding: 8px;
-  font-size: 14px;
-  box-sizing: border-box;
-}
+  /* 🔷 Select compatti */
+  .table-select-necessity,
+  .table-select-season {
+      width: 100%;
+      min-width: 100px;
+      text-align: left;
+      padding: 8px;
+      font-size: 14px;
+      box-sizing: border-box;
+  }
 
-.table-select-season {
-  width: 100%;           /* Occupa tutta la cella */
-  min-width: 100px;      /* Larghezza minima decente */
-  direction: ltr;        /* Assicura che il testo scorra da sinistra */
-  text-align: left;  
-  padding: 8px;
-  font-size: 14px;
-  box-sizing: border-box;
-}
+  .table-select-season {
+      direction: ltr;
+  }
 
-#shop, #item {
-  max-width: 220px; /* o una misura che preferisci */
-  width: 100%; /* per farli occupare tutta la colonna ma entro max-width */
-}
+  /* 🔷 Campi input */
+  #shop, #item {
+      max-width: 220px;
+      width: 100%;
+  }
 
-</style> 
+  /* 🔷 Layout compatto per inserimento prodotto */
+  .form-row {
+      display: grid;
+      grid-template-columns: 100px 1fr;
+      gap: 6px;
+      margin-bottom: 8px;
+      align-items: center;
+  }
+
+  label {
+      width: 100px;
+      font-size: 14px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+  }
+
+  input[type="text"],
+  input[type="number"],
+  select {
+      padding: 6px 8px;
+      font-size: 14px;
+      width: 100%;
+      max-width: 200px;
+      box-sizing: border-box;
+  }
+</style>
+ 
 
 
 
@@ -135,14 +173,26 @@
       <form method="POST" class="text-start" id="product-form">
         <br>
         <!-- Barcode -->
+        <!-- Barcode -->
         <div class="row mb-2 align-items-center">
           <div class="col-4">
             <label for="barcode" class="form-label mb-0" style="color: #00008B">Barcode</label>
           </div>
           <div class="col-8">
-            <input type="text" class="form-control form-control-sm" id="barcode" name="barcode" required maxlength="25" style="background-color:  #e6f2ff;" onchange="autoFillProduct()" onblur="autoFillProduct()">   
+            <input type="text" class="form-control form-control-sm" 
+                  id="barcode" name="barcode" maxlength="25"
+                  style="background-color:  #e6f2ff;"
+                  onchange="autoFillProduct()" onblur="checkBarcodeField()">   
+            
+            <!-- Messaggio nascosto -->
+            <div id="barcodeMessage" style="display:none; color: red; margin-top: 5px; font-size: 0.9em;">
+              Nessun barcode inserito. Vuoi usare il nome del prodotto come barcode?<br>
+              <button type="button" class="btn btn-sm btn-success" onclick="useProductNameAsBarcode()">Sì</button>
+              <button type="button" class="btn btn-sm btn-secondary" onclick="dismissBarcodeMessage()">No</button>
+            </div>
           </div>
         </div>
+
 
         <!-- Nome -->
         <div class="row mb-2 align-items-center">
@@ -938,6 +988,58 @@ document.addEventListener("DOMContentLoaded", function () {
   });
 </script>
 
+<script>
+/* 
+ * Script dedicato alla compilazione del campo BARCODE nella prima tab
+ * ---------------------------------------------------------------
+ * - Se il campo barcode resta vuoto, appare un messaggio con due scelte:
+ *   1) "Sì" → usa il nome del prodotto come barcode.
+ *   2) "No" → chiude il messaggio e lascia il campo vuoto (il form non si invia).
+ * - Tutti gli altri campi con "required" restano gestiti normalmente dal browser.
+ */
+
+function checkBarcodeField() {
+  const barcodeInput = document.getElementById("barcode");
+  const messageDiv = document.getElementById("barcodeMessage");
+
+  // Se il campo barcode è vuoto → mostra il messaggio
+  if (barcodeInput.value.trim() === "") {
+    messageDiv.style.display = "block";
+  } else {
+    messageDiv.style.display = "none";
+  }
+}
+
+function useProductNameAsBarcode() {
+  const productName = document.getElementById("name")?.value || ""; // supponiamo che il campo Nome abbia id="name"
+  const barcodeInput = document.getElementById("barcode");
+  const messageDiv = document.getElementById("barcodeMessage");
+
+  if (productName !== "") {
+    barcodeInput.value = productName;   // assegna il nome prodotto come barcode
+    messageDiv.style.display = "none";  // nasconde il messaggio
+  } else {
+    alert("Devi prima selezionare un nome prodotto!");
+  }
+}
+
+function dismissBarcodeMessage() {
+  const messageDiv = document.getElementById("barcodeMessage");
+  messageDiv.style.display = "none";
+}
+
+// Validazione al submit del form
+document.querySelector("form").addEventListener("submit", function(e) {
+  const barcodeInput = document.getElementById("barcode");
+  const messageDiv = document.getElementById("barcodeMessage");
+
+  // Se barcode è ancora vuoto → blocca l'invio e mostra messaggio
+  if (barcodeInput.value.trim() === "") {
+    e.preventDefault();
+    messageDiv.style.display = "block";
+  }
+});
+</script>
 
 
 

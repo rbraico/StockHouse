@@ -154,7 +154,11 @@
       </div>
       <input type="file" id="file-input" style="display:none;" accept=".jpg,.png,.jpeg,.pdf"/>
       <div id="upload-status" class="mt-3"></div>
-      <img id="receipt-preview" />
+      
+      <img id="image-preview" class="receipt-preview" style="display:none;" />
+      
+      <iframe id="pdf-preview" class="receipt-preview" style="display:none; width:100%; height:500px;" ></iframe>
+      
       <div id="action-buttons" class="mt-3" style="display:none;">
         <button id="analyze-btn" class="btn btn-primary me-2">Analizza scontrino</button>
         <button id="delete-btn" class="btn btn-danger">Elimina scontrino</button>
@@ -261,27 +265,61 @@ document.addEventListener("DOMContentLoaded", function () {
   dropZone.addEventListener('drop',e=>{e.preventDefault(); dropZone.style.backgroundColor='#f8f9fa'; handleFileUpload(e.dataTransfer.files[0]);});
   fileInput.addEventListener('change',e=>handleFileUpload(e.target.files[0]));
 
-  function handleFileUpload(file){
-    if(!file) return;
-    const formData = new FormData();
-    formData.append('file',file);
-    fetch('/import_receipt',{method:'POST', body:formData})
-      .then(res=>res.json())
-      .then(data=>{
-        if(data.success){
-          uploadedFilename=data.filename;
-          statusDiv.textContent=`File caricato: ${uploadedFilename}`;
-          actionButtons.style.display='block';
-          if(file.type.startsWith('image/')){
-            const reader = new FileReader();
-            reader.onload = function(e){ receiptPreview.src = e.target.result; receiptPreview.style.display='block'; };
-            reader.readAsDataURL(file);
-          } else { receiptPreview.style.display='none'; }
-        }
-        else { statusDiv.textContent=`Errore: ${data.msg}`; actionButtons.style.display='none'; receiptPreview.style.display='none'; }
-      })
-      .catch(err=>{statusDiv.textContent=`Errore upload: ${err}`; actionButtons.style.display='none'; receiptPreview.style.display='none';});
+// Aggiungi le nuove variabili per i due elementi di anteprima
+const imagePreview = document.getElementById('image-preview');
+const pdfPreview = document.getElementById('pdf-preview');
+const allPreviews = document.querySelectorAll('.receipt-preview');
+
+function handleFileUpload(file){
+  if(!file) return;
+  const formData = new FormData();
+  formData.append('file', file);
+  
+  // Resetta la visualizzazione di tutte le anteprime
+  allPreviews.forEach(el => el.style.display = 'none');
+  
+  // Aggiungi il controllo preliminare per il tipo di file
+  if (!file.type.startsWith('image/') && file.type !== 'application/pdf') {
+    statusDiv.textContent = `Errore: Formato non supportato. Carica un'immagine (jpg, png) o un PDF.`;
+    actionButtons.style.display = 'none';
+    return;
   }
+  
+  fetch('/import_receipt', { method: 'POST', body: formData })
+    .then(res => res.json())
+    .then(data => {
+      if(data.success) {
+        uploadedFilename = data.filename;
+        statusDiv.textContent = `File caricato: ${uploadedFilename}`;
+        actionButtons.style.display = 'block';
+
+        // Logica per l'anteprima del file
+        if(file.type.startsWith('image/')){
+          // Gestione per le immagini
+          const reader = new FileReader();
+          reader.onload = function(e){ 
+            imagePreview.src = e.target.result; 
+            imagePreview.style.display = 'block'; 
+          };
+          reader.readAsDataURL(file);
+        } else if (file.type === 'application/pdf') {
+          // Nuova gestione per i PDF
+          const fileURL = URL.createObjectURL(file);
+          pdfPreview.src = fileURL;
+          pdfPreview.style.display = 'block';
+        }
+      } else { 
+        statusDiv.textContent = `Errore: ${data.msg}`; 
+        actionButtons.style.display = 'none'; 
+        allPreviews.forEach(el => el.style.display = 'none');
+      }
+    })
+    .catch(err => {
+      statusDiv.textContent = `Errore upload: ${err}`; 
+      actionButtons.style.display = 'none'; 
+      allPreviews.forEach(el => el.style.display = 'none');
+    });
+}
 
   analyzeBtn.addEventListener('click',()=>{
     if(!uploadedFilename) return;
@@ -296,20 +334,39 @@ document.addEventListener("DOMContentLoaded", function () {
       .catch(err=>alert('Errore chiamata analyze_receipt: '+err));
   });
 
-  deleteBtn.addEventListener('click',()=>{
-    if(!uploadedFilename) return;
-    fetch(`/delete_receipt?filename=${encodeURIComponent(uploadedFilename)}`,{method:'POST'})
-      .then(res=>res.json())
-      .then(data=>{
-        if(data.success){
-          statusDiv.textContent='';
-          actionButtons.style.display='none';
-          receiptPreview.style.display='none';
-          uploadedFilename=null;
-        } else alert('Errore durante l’eliminazione.');
-      })
-      .catch(err=>alert('Errore chiamata delete_receipt: '+err));
-  });
+
+// Aggiungi un listener per il pulsante 'delete-btn'
+deleteBtn.addEventListener('click', () => {
+  // Esegui una chiamata API per eliminare il file dal server
+  fetch('/delete_receipt', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ filename: uploadedFilename })
+  })
+    .then(res => res.json())
+    .then(data => {
+      if (data.success) {
+        // Nascondi gli elementi dopo l'eliminazione
+        statusDiv.textContent = 'Scontrino eliminato con successo.';
+        actionButtons.style.display = 'none';
+        
+        // Questo è il punto chiave: devi nascondere tutti gli elementi di anteprima
+        const allPreviews = document.querySelectorAll('.receipt-preview');
+        allPreviews.forEach(el => el.style.display = 'none');
+        
+        uploadedFilename = null; // Resetta il nome del file
+      } else {
+        statusDiv.textContent = `Errore eliminazione: ${data.msg}`;
+      }
+    })
+    .catch(err => {
+      // Questo è l'errore che hai visto
+      statusDiv.textContent = `Errore chiamata delete_receipt: ${err}`;
+      console.error(err);
+      // Il tuo codice originale non gestisce in modo elegante questo errore, quindi lo fa sembrare un errore di stile.
+    });
+});
+
 
 });
 </script>

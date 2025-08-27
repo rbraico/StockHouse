@@ -219,9 +219,9 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             shop_name TEXT NOT NULL,   
             raw_name TEXT NOT NULL,
+            matched_product_id INTEGER,       -- nullable  
             normalized_name TEXT NOT NULL,
             insert_date TEXT DEFAULT CURRENT_TIMESTAMP,
-            matched_product_id INTEGER, -- nullable
             traduzione_italiano TEXT,  -- Traduzione italiana del nome
             quantita INTEGER,          -- Quantità acquistata
             prezzo_unitario REAL,      -- Prezzo per unità
@@ -1991,6 +1991,9 @@ def get_budget():
 
 # Funzione per calcolare il livello di priorità in base alla stagione
 def get_priority_level(barcode, necessity_level, product_seasons, override_data={}):
+
+    seasons_circle = ['primavera', 'estate', 'autunno', 'inverno']
+    
     product = get_product_inventory_by_barcode(barcode)
 
     # Coalesce intelligente: preferisce override_data, altrimenti product
