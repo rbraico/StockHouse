@@ -301,6 +301,9 @@ from bs4 import BeautifulSoup
 import json
 
 def estrai_offerte_lidl():
+
+    debug_print("Estrazione offerte Lidl...")
+    
     url = "https://www.lidl.nl/c/aanbiedingen/a10008785?channel=store&tabCode=Current_Sales_Week"
     headers = {
         "User-Agent": "Mozilla/5.0"
@@ -345,164 +348,7 @@ def estrai_offerte_lidl():
 
 
 
-def offerte_lidle_openai():
-    """
-    Estrae 10 prodotti alimentari in offerta dal sito Reclamefolder.nl
-    per Lidl Heerhugowaard usando GPT-4o full con browsing/web access.
-    Restituisce il risultato in JSON.
-    """
 
-    debug_print("Recupero offerte Lidl con GPT-4o full...")
-
-    prompt = """
-    Da questo sito: Reclamefolder.nl, estrai 10 prodotti alimentari in offerta
-    per Lidl Heerhugowaard. Restituisci SOLO JSON valido, senza testo aggiuntivo,
-    spiegazioni o ragionamenti. Il JSON deve avere per ogni prodotto i campi:
-    nome, prezzo, categoria (se possibile), link (se disponibile).
-
-    Esempio di struttura JSON:
-    [
-      {"nome": "IJsbergsla", "prezzo": "€0,49", "categoria": "Frutta/verdura", "link": "https://..."},
-      {"nome": "...", "prezzo": "...", "categoria": "...", "link": "..."},
-      ...
-    ]
-    """
-
-    try:
-        # Imposta la chiave API
-        openai.api_key = Config.OPENAI_API_KEY
-        print("DEBUG API KEY:", Config.OPENAI_API_KEY[:28], "…")
-
-        client = OpenAI(api_key=Config.OPENAI_API_KEY)
-        response = client.chat.completions.create(
-            model="gpt-4o-full",  # Modello potente con capacità browsing/web
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=2000,
-            temperature=0.1,
-            # tools=["web-browsing"]  # se l'ambiente supporta strumenti, abilita browsing
-        )
-
-        debug_print("OpenAI response:") 
-        print(response)  # stampa tutto l'oggetto
-        print(response.choices[0].message.content)  # stampa il contenuto
-
-        # Estrazione JSON
-        content = response.choices[0].message.content.strip()
-        match = re.search(r"\[.*\]", content, re.DOTALL)
-
-        if match:
-            content = match.group(0)
-        else:
-            raise ValueError(f"Nessun JSON valido nella risposta: {content[:200]}...")
-
-        return json.dumps(json.loads(content), indent=2, ensure_ascii=False)
-
-    except Exception as e:
-        debug_print(f"[ERROR] Errore durante chiamata OpenAI: {e}")
-        return json.dumps([], indent=2, ensure_ascii=False)
-    
-
-
-
-import requests
-from bs4 import BeautifulSoup
-import json
-
-from selenium import webdriver
-from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.common.by import By
-from bs4 import BeautifulSoup
-import json
-import time
-from selenium import webdriver
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-import json
-
-from selenium import webdriver
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-import json
-
-import requests
-import re
-import json
-
-def estrai_offerte_lidl(max_prodotti=10):
-    print("Estrazione offerte Lidl da Reclamefolder.nl...")
-    url = "https://www.reclamefolder.nl/aanbiedingen/?Winkel=Lidl"
-    headers = {
-        "User-Agent": "Mozilla/5.0"
-    }
-
-    try:
-        response = requests.get(url, headers=headers)
-        response.raise_for_status()
-        html = response.text
-
-        # Cerca pattern: prezzo seguito da nome prodotto
-        pattern = r"€\s?\d+,\d{2}\s+([A-Z][^\n\r]+)"
-        matches = re.findall(pattern, html)
-
-        prodotti = []
-        for match in matches:
-            prezzo_match = re.search(rf"(€\s?\d+,\d{{2}})\s+{re.escape(match)}", html)
-            if prezzo_match:
-                prodotti.append({
-                    "nome": match.strip(),
-                    "prezzo": prezzo_match.group(1)
-                })
-            if len(prodotti) >= max_prodotti:
-                break
-
-        print(f"Offerte trovate: {len(prodotti)}")
-        return json.dumps(prodotti, indent=2, ensure_ascii=False)
-
-    except Exception as e:
-        print(f"Errore durante l'estrazione: {e}")
-        return json.dumps([], indent=2, ensure_ascii=False)
-
-
-
-
-def estrai_offerte_with_gemini():
-    # Costruisci il path come Node-RED lo passa
-
-
-    genai.configure(api_key="AIzaSyBfqfUJVEvYZwlrkMXcO6s2H3PmiZhj-nY")
-
-
-
-    model = genai.GenerativeModel('gemini-1.5-flash')
-
-    question = """
-            estrai dal sito https://www.lidl.nl/?utm_source=google&utm_medium=cpc&utm_campaign=&utm_content=145858794437&utm_term=lidl&cid=19643701620&gad_source=1&gad_campaignid=19643701620&gclid=Cj0KCQjwh5vFBhCyARIsAHBx2wwTpQ9s4I_ysTg1v7bcg94ejBKr0A6W9pz_-qnAzz6EZYkiWKRgNbUaAih4EALw_wcB i primi 3 prodotti alimentari in offerta (in olandese: aanbieding) della settimana corrente, con il nome del prodotto il prezzo originale e il prezzo in offerta e url del sito dove hai trovato i dati.
-            Ignora contenuti non testuali o non leggibili. Restituisci solo un oggetto JSON con la seguente struttura:
-
-            [
-            {
-                "nome_prodotto": "nome del prodotto",
-                "prezzo_originale": "prezzo in euro",
-                "prezzo_offerta": "prezzo in euro",
-                "url": url del sito dove hai trovato i dati"
-            },
-            ...
-            ]
-
-            Rispondi esclusivamente con JSON, senza alcuna spiegazione o testo aggiuntivo.
-            """
-   
-    response = model.generate_content([question])
-    description = response.text
-    debug_print("modulo ai - analyze_receipt_with_gemini - Response: OK")
-
-    return description
-
-
-
-    
 def fetch_shopping_list():
     debug_print("Fetching shopping list from database...")
     
@@ -530,7 +376,7 @@ def fetch_shopping_list():
     conn.close()
 
     #prodotti_ordinati = ordina_prodotti_openai(json_output)
-    offerte=estrai_offerte_with_gemini()
+    offerte=estrai_offerte_lidl()
     debug_print("Shopping list fetched and ordered:", offerte)
 
 
