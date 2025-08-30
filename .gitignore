@@ -1,2 +1,4 @@
 stockhouse.db
 deploy.ps1
+__pycache__/
+*.pyc
