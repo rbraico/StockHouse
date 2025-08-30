@@ -486,8 +486,7 @@ def get_shopping_list_data(save_to_db=False, conn=None, cursor=None, decade=None
         cursor.execute("""
             DELETE FROM shopping_list
             WHERE decade_number != ?
-            AND reason != 'Aggiunto manualmente'
-            AND within_budget = 1
+
         """, (decade,))
 
         # 2️⃣ Inserisce/aggiorna in un colpo solo
@@ -828,3 +827,101 @@ def insert_unknown_product(
     conn.commit()
     conn.close()
 
+
+
+
+
+def aggiorna_tabella_shopping_list(lista_ordinata):
+    # Connessione al database
+    conn = sqlite3.connect(Config.DATABASE_PATH)
+    cursor = conn.cursor()
+
+    # Cancella tutti i record esistenti
+    cursor.execute("DELETE FROM shopping_list")
+
+    # Query di inserimento
+    insert_query = """
+        INSERT INTO shopping_list (
+            barcode, product_name, quantity_to_buy, shop,
+            reason, price, decade_number, insert_date, within_budget
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """
+
+    # Inserisci ogni record ordinato
+    for prodotto in lista_ordinata:
+        cursor.execute(insert_query, (
+            prodotto.get("barcode"),
+            prodotto.get("product_name"),
+            prodotto.get("quantity_to_buy"),
+            prodotto.get("shop"),
+            prodotto.get("reason"),
+            prodotto.get("price"),
+            prodotto.get("decade_number"),
+            prodotto.get("insert_date"),
+            prodotto.get("within_budget")
+        ))
+
+    # Salva e chiudi
+    conn.commit()
+    conn.close()
+    print("✅ Tabella shopping_list aggiornata con successo.")
+
+
+
+def ordina_lista_spesa(json_input):
+
+   
+    # Se json_input è una stringa, convertila in oggetto Python
+    if isinstance(json_input, str):
+        lista_spesa = json.loads(json_input)
+    else:
+        lista_spesa = json_input
+
+    # Sequenza desiderata delle categorie
+    ordine_categorie = [
+        "🍝 Pasta", "🍎 Frutta", "🥦 Verdura", "🥐 Prodotti da forno", "🍞Pane",
+        "🥩Carne", "🐟 Pesce", "🫒 Condimenti", "🍕Pizza", "🌾Cereali", "🧀Formaggi",
+        "🍖Salumi", "🥫Conserve in scatola", "🫘Legumi", "🍵Infusi", "🥛Latte",
+        "🍯Dolcificanti", "🌾Farine", "🥜 Frutta secca", "🍺Bevande", "🍰 Dolci",
+        "🍧Gelati", "🪥Dentifricio", "🫧Sapone", "🧹Accessori per la pulizia"
+    ]
+
+    # Mappa di priorità
+    priorita = {categoria: i for i, categoria in enumerate(ordine_categorie)}
+
+    # Ordina la lista
+    lista_ordinata = sorted(lista_spesa, key=lambda x: priorita.get(x.get("item", ""), 999))
+
+    print(json.dumps(lista_ordinata, indent=4, ensure_ascii=False))
+
+    return lista_ordinata
+
+
+def finalizza_shopping_list():
+    debug_print("Finalizza la shopping list ordinandola...")
+    
+    # Connessione al database
+    conn = sqlite3.connect(Config.DATABASE_PATH)
+    cursor = conn.cursor()
+    
+    # Esegui la SELECT completa
+    cursor.execute("select pd.item, sl.* from shopping_list sl join product_dim pd on sl.barcode=pd.barcode")
+    rows = cursor.fetchall()
+
+    # Recupera i nomi delle colonne
+    columns = [description[0] for description in cursor.description]
+
+    # Costruisci la lista di dizionari
+    shopping_data = [dict(zip(columns, row)) for row in rows]
+
+    # Converti in JSON e stampa
+    json_output = json.dumps(shopping_data, indent=2, ensure_ascii=False)
+    #debug_print("Shopping list fetched:", json_output)
+
+
+    # Chiudi la connessione
+    conn.close()
+
+    lista_spesa = ordina_lista_spesa(json_output)
+    aggiorna_tabella_shopping_list(lista_spesa)
+    

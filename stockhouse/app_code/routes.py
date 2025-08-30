@@ -37,6 +37,7 @@ from stockhouse.app_code.shopping_list_utils import (
     insert_unknown_product,
     normalize_text,
     remove_from_shopping_lst,
+    finalizza_shopping_list,
     trigger_thread_on_exit)
 
 from stockhouse.app_code.ai import manage_shopping_receipt, analyze_receipt_with_gemini, fetch_shopping_list
@@ -1334,6 +1335,11 @@ def main_delete_receipt():
 # --- Route per finalizzare la lista della spesa ---
 @main.route("/shopping_list/finalize", methods=["POST"])
 def finalize_shopping_list():
+
+    debug_print("Inizio finalizzazione della lista della spesa...")
+
+    finalizza_shopping_list()
+    """
     from threading import Thread
 
     def background_task():
@@ -1345,4 +1351,5 @@ def finalize_shopping_list():
         debug_print("Thread completato.")
 
     Thread(target=background_task).start()
-    return jsonify({"message": "ok thread avviato"}), 200
+    """
+    return jsonify({"message": "Lista salvata"}), 200
