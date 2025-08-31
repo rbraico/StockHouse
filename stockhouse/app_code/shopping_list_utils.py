@@ -6,8 +6,6 @@ from stockhouse.utils import debug_print
 import calendar
 from rapidfuzz import process, fuzz
 
-from google import genai
-
 import json
 import re
 

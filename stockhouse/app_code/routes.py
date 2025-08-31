@@ -40,7 +40,7 @@ from stockhouse.app_code.shopping_list_utils import (
     finalizza_shopping_list,
     trigger_thread_on_exit)
 
-from stockhouse.app_code.ai import manage_shopping_receipt, analyze_receipt_with_gemini, fetch_shopping_list
+from stockhouse.app_code.ai import manage_shopping_receipt, analyze_receipt_with_gemini
 
 import calendar
 from calendar import month_name
@@ -885,20 +885,39 @@ def add_selected_products():
         data = request.get_json()
         debug_print("🔍 Dati ricevuti:", data)
 
-        barcodes = data.get('barcodes')
-        if not barcodes:
-            return "Nessun barcode ricevuto", 400
+        items = data.get('items')
+        if not items:
+            return "Nessun prodotto ricevuto", 400
 
         conn = sqlite3.connect(Config.DATABASE_PATH)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
 
-        for barcode in barcodes:
-            # Verifica se è già nella lista
-            cursor.execute("SELECT 1 FROM shopping_list WHERE barcode = ?", (barcode,))
-            if cursor.fetchone():
+        current_decade = get_current_decade(datetime.today())
+        current_date = datetime.today().date()
+        reason_to_add = "Aggiunto manualmente"
+        within_budget = 1  # prodotto aggiunto manualmente
+
+        for item in items:
+            barcode = item.get('barcode')
+            quantity = int(item.get('quantity', 1))
+            name = item.get('name')  # opzionale, presente se prodotto manuale
+            shop = item.get('shop', '')
+            price = float(item.get('price', 0))
+
+            # Se barcode è nullo o sconosciuto, inseriamo direttamente
+            if not barcode or barcode in ['None', 'unknown', 'null']:
+                cursor.execute("""
+                    INSERT INTO shopping_list (
+                        barcode, product_name, quantity_to_buy, shop, reason, price, decade_number, insert_date, within_budget
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (None, name, quantity, shop, reason_to_add, price, current_decade, current_date, within_budget))
+                debug_print(f"Inserito prodotto manuale '{name}' con quantità {quantity}")
                 continue
-            debug_print("add_selected_products - barcode: ", barcode)       
+
+            # Recupera eventuale record esistente
+            cursor.execute("SELECT quantity_to_buy, within_budget FROM shopping_list WHERE barcode = ?", (barcode,))
+            existing = cursor.fetchone()
 
             # Recupera i dati per quel barcode
             cursor.execute("""
@@ -915,38 +934,36 @@ def add_selected_products():
                 ) AS tf ON pd.barcode = tf.barcode
                 WHERE pd.barcode = ?
             """, (barcode,))
-
             row = cursor.fetchone()
             if not row:
                 continue  # se il barcode non esiste in product_dim, salta
 
-            # Inserisce nella lista
-
-            current_decade = get_current_decade(datetime.today())
-            within_budget = 1 # E` stato aggiunto manualmente, quindi lo si vuole comprare
-            current_date = datetime.today().date()
-            reason_to_add = "Aggiunto manualmente"
-            debug_print("add_selected_products - Dati da inserire:", barcode, row["name"], row["shop"], row["price"], current_decade)
-            try:
-               cursor.execute("""
+            if existing:
+                # Se il prodotto esiste già, aggiorna quantità e within_budget
+                cursor.execute("""
+                    UPDATE shopping_list
+                    SET quantity_to_buy = ?, within_budget = 1, insert_date = ?
+                    WHERE barcode = ?
+                """, (quantity, current_date, barcode))
+                debug_print(f"Aggiornato prodotto {barcode} con quantità {quantity}")
+            else:
+                # Inserimento nuovo prodotto
+                cursor.execute("""
                     INSERT INTO shopping_list (
                         barcode, product_name, quantity_to_buy, shop, reason, price, decade_number, insert_date, within_budget
                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, (barcode, row["name"], 1, row["shop"], reason_to_add, row["price"], current_decade, current_date, within_budget))
-
-            except Exception as insert_error:
-                debug_print("❌ Errore durante INSERT:", str(insert_error))
+                """, (barcode, row["name"], quantity, row["shop"], reason_to_add, row["price"], current_decade, current_date, within_budget))
+                debug_print(f"Inserito nuovo prodotto {barcode} con quantità {quantity}")
 
         conn.commit()
-          
-        # Ricarica la nuova lista 
+
+        # Ricarica la lista aggiornata
         cursor.execute("""
             SELECT barcode, product_name, quantity_to_buy, shop, reason, price
             FROM shopping_list
-            WHERE within_budget=1 AND decade_number = ?  
+            WHERE within_budget=1 AND decade_number = ?
             ORDER BY shop, product_name
         """, (current_decade,))
-
         updated_items = cursor.fetchall()
         updated_items = [dict(row) for row in updated_items]
 
@@ -964,24 +981,16 @@ def add_selected_products():
 
         debug_print("add_selected_products - Lista aggiornata:", updated_items)
         debug_print("add_selected_products - Totali per negozio:", shop_totals)
-        print(updated_items)
-        print(shop_totals)
 
-        #return render_template('shopping_list_table.html', items=updated_items, shop_totals=shop_totals)
         return jsonify({
             'shopping_list_html': render_template('shopping_list_table.html', items=updated_items),
             'shop_totals_html': render_template('shop_totals.html', shop_totals=shop_totals)
         })
-    
-        
 
     except Exception as e:
         conn.rollback()
         print("❌ Errore nella route add_selected_products:", str(e))
         return "Errore interno", 500
-
-
-
 
 
 
