@@ -1431,6 +1431,10 @@ def upsert_transaction_fact(product_key, barcode, price, quantity, consumed_quan
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (product_key, barcode, price, quantity, consumed_quantity,
               ins_date, consume_date, expiry_date, status))
+        
+    #Rimuove dalla lista della spesa
+    c.execute("DELETE FROM shopping_list WHERE barcode = ?", (barcode,))
+    print(f"[INFO] Prodotto {barcode} rimosso dalla lista della spesa.")    
 
     conn.commit()
     conn.close()

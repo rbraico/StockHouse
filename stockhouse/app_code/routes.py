@@ -309,7 +309,12 @@ def index():
 
         conn = sqlite3.connect(Config.DATABASE_PATH)
         cursor = conn.cursor()
-        upsert_expense(cursor, ins_date, selected_decade, shop, rounded_amount)  
+        # Rimuove dalla lista della spesa
+        cursor.execute("DELETE FROM shopping_list WHERE product_name = ?", (name,))
+        print(f"[INFO] Prodotto {name} rimosso dalla lista della spesa.")
+
+
+        #upsert_expense(cursor, ins_date, selected_decade, shop, rounded_amount)  
         conn.commit()
         conn.close()
          
@@ -837,10 +842,11 @@ def get_decade_period_label(decade_code):
 # Questa route serve per visualizzare la lista della spesa
 @main.route('/shopping_list')
 def shopping_list():
+
     selected_decade = get_current_decade()
     debug_print("Decade selezionata: ", selected_decade)
 
-    refresh_needed = 1  #is_refresh_needed()
+    refresh_needed = is_refresh_needed()
     debug_print("Flag refresh_needed: ", refresh_needed)
 
     if refresh_needed:
@@ -879,13 +885,14 @@ def shopping_list():
     )
 
 
-@main.route('/shopping_list/add_selected', methods=['POST'])
+@main.route('/shopping_list/add_selected', methods=['POST']) 
 def add_selected_products():
     try:
         data = request.get_json()
         debug_print("🔍 Dati ricevuti:", data)
 
         items = data.get('items')
+        debug_print("Prodotti da aggiungere:", items)
         if not items:
             return "Nessun prodotto ricevuto", 400
 
@@ -905,17 +912,38 @@ def add_selected_products():
             shop = item.get('shop', '')
             price = float(item.get('price', 0))
 
-            # Se barcode è nullo o sconosciuto, inseriamo direttamente
-            if not barcode or barcode in ['None', 'unknown', 'null']:
-                cursor.execute("""
-                    INSERT INTO shopping_list (
-                        barcode, product_name, quantity_to_buy, shop, reason, price, decade_number, insert_date, within_budget
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, (None, name, quantity, shop, reason_to_add, price, current_decade, current_date, within_budget))
-                debug_print(f"Inserito prodotto manuale '{name}' con quantità {quantity}")
+            debug_print(f"Elaborazione prodotto: barcode={barcode}, name={name}, quantity={quantity}, shop={shop}, price={price}")  
+
+            # Se barcode è nullo o sconosciuto → usiamo il nome come barcode
+            if name and barcode == name:
+                debug_print(f"Prodotto manuale rilevato con barcode '{barcode}' e nome '{name}'")
+                manual_barcode = name if name else None
+
+                debug_print(f"Usando nome come barcode: '{manual_barcode}'")
+
+                # Controlliamo se esiste già in shopping_list
+                cursor.execute("SELECT quantity_to_buy FROM shopping_list WHERE barcode = ?", (manual_barcode,))
+                existing = cursor.fetchone()
+                
+                debug_print(f"Controllo esistenza prodotto manuale '{name}' con barcode '{manual_barcode}':", existing)
+
+                if existing:
+                    cursor.execute("""
+                        UPDATE shopping_list
+                        SET quantity_to_buy = ?, within_budget = 1, insert_date = ?, shop = ?, price = ?
+                        WHERE barcode = ?
+                    """, (quantity, current_date, shop, price, manual_barcode))
+                    debug_print(f"Aggiornato prodotto manuale '{name}' con barcode '{manual_barcode}' e quantità {quantity}")
+                else:
+                    cursor.execute("""
+                        INSERT INTO shopping_list (
+                            barcode, product_name, quantity_to_buy, shop, reason, price, decade_number, insert_date, within_budget
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (manual_barcode, name, quantity, shop, reason_to_add, price, current_decade, current_date, within_budget))
+                    debug_print(f"Inserito prodotto manuale '{name}' con barcode '{manual_barcode}' e quantità {quantity}")
                 continue
 
-            # Recupera eventuale record esistente
+            # Recupera eventuale record esistente per prodotti con barcode noto
             cursor.execute("SELECT quantity_to_buy, within_budget FROM shopping_list WHERE barcode = ?", (barcode,))
             existing = cursor.fetchone()
 

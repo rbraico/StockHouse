@@ -11,7 +11,7 @@ import openai
 from config import Config
 
 from stockhouse.utils import debug_print
-from stockhouse.app_code.models import lookup_products_by_name, lookup_products_by_id,  upsert_transaction_fact
+from stockhouse.app_code.models import lookup_products_by_name, lookup_products_by_id,  upsert_transaction_fact, upsert_expense
 from stockhouse.app_code.shopping_list_utils import get_current_decade, normalize_text, fuzzy_match_product, lookup_products_by_name, get_aliases_from_db, insert_unknown_product
 
 
@@ -25,13 +25,15 @@ def manage_shopping_receipt(receipt_json):
         prodotti = data.get("lista_prodotti", [])
         shop_name = data.get("nome_negozio", "")
         data_scontrino = data.get("data_scontrino", None)
-        debug_print("modulo ai - shopping_receipt - Dati ricevuti:", shop_name, data_scontrino, prodotti)
+        spesa_totale = data.get("spesa_totale", 0.0)
+        debug_print("modulo ai - shopping_receipt - Dati ricevuti:", shop_name, data_scontrino, prodotti, spesa_totale)
 
         # Seleziona la decade corrente
         decade_number = get_current_decade()
 
         # Carica alias
         aliases = get_aliases_from_db(shop_name) or get_aliases_from_db()
+
 
         results = []
         for prod in prodotti:
@@ -88,6 +90,17 @@ def manage_shopping_receipt(receipt_json):
                     debug_print(f"Prodotto non trovato in product_dim: {nome_grezzo}")
 
 
+        
+
+        # Aggiorna expenses_fact se spesa_totale è presente
+        if spesa_totale is not None and spesa_totale != 0:
+            selected_decade = get_current_decade()
+            conn = sqlite3.connect(Config.DATABASE_PATH)
+            cursor = conn.cursor()
+            upsert_expense(cursor, data_scontrino, selected_decade, shop_name, spesa_totale, mode="receipt")
+            conn.commit()
+            conn.close()
+
         return ("Processed succesfully", 200)
     except Exception as e:
         debug_print("Errore in manage_shopping_receipt:", e)
@@ -139,11 +152,13 @@ def analyze_receipt_with_gemini(filename, upload_folder):
         return None
     
     question = "Analizza lo scontrino e restituisci solo il risultato in JSON senza testo introduttivo o commenti, \
-              con nome_negozio (se il negozio è Lidl, restituisci solo Lidl come nome), indirizzo_negozio, \
-              data_scontrino in formato yyyy-mm-dd (date in input che utilizzano / come separatori, sono da interpretarsi con il formato dd/mm/yyyy), spesa_totale, lista_prodotti con nome_prodotto \
-              (non aggiungere prodotti con prezzi negativi o che iniziano con Statiegeld), \
-              quantita (arrotondata), traduzione_italiano, prezzo_unitario e prezzo_totale.\
-              Se trovi prezzi negativi, sottrai dal prezzo del prodotto precedente; rispondi esclusivamente con JSON."
+                con nome_negozio (se il negozio è Lidl, restituisci solo Lidl come nome), indirizzo_negozio,  \
+                data_scontrino in formato yyyy-mm-dd, spesa_totale, lista_prodotti con nome_prodotto \
+                ( non aggiungere nella lista prodotti le righe con prezzi negativi oppure i prodotti che iniziano con Statiegeld.\
+                il nome_prodotto non deve contenere caratteri come %, ^, !, $ , oppure contengano parole come statiegeld), \
+                quantita (arrotondata al valore intero piu` vicino), traduzione_italiano (traduzione sintetica in italiano), \
+                prezzo_unitario e prezzo_totale (anche se coincidono). Se trovi prezzi negativi, sottrai dal prezzo del prodotto precedente; \
+                rispondi esclusivamente con il JSON."
     
     # Aggiunge la domanda all'inizio della lista di contenuti
     content_list.insert(0, question)
@@ -151,11 +166,66 @@ def analyze_receipt_with_gemini(filename, upload_folder):
     try:
         response = model.generate_content(content_list)
         description = response.text
-        debug_print("modulo ai - analyze_receipt_with_gemini - Response: OK")
+        debug_print("modulo ai - analyze_receipt_with_gemini - Response: OK", description)
         return description
     except Exception as e:
         debug_print(f"Errore durante la chiamata a Gemini: {e}")
         return None
+
+
+def analyze_folder_products_with_gemini(filename, upload_folder):
+    # Costruisci il path
+    file_path = f"{upload_folder}/{filename}"
+    
+    genai.configure(api_key="AIzaSyBfqfUJVEvYZwlrkMXcO6s2H3PmiZhj-nY")
+    
+    model = genai.GenerativeModel('gemini-1.5-flash')
+    
+    content_list = []
+    
+    # Controlla l'estensione del file
+    if filename.lower().endswith('.pdf'):
+        try:
+            doc = fitz.open(file_path)
+            for page in doc:
+                pix = page.get_pixmap()
+                img_data = pix.tobytes("png")
+                img = PIL.Image.open(io.BytesIO(img_data))
+                content_list.append(img)
+            doc.close()
+        except Exception as e:
+            debug_print(f"Errore nella lettura del PDF: {e}")
+            return None
+    else:
+        try:
+            img = PIL.Image.open(file_path)
+            content_list.append(img)
+        except Exception as e:
+            debug_print(f"Errore nella lettura dell'immagine: {e}")
+            return None
+    
+    if not content_list:
+        return None
+    
+    question = "Analizza il volantino incluso e restituisci esclusivamente in formato JSON i primi 10 prodotti alimentari presenti. \
+                Per ciascun prodotto includi: nome_negozio, nome_prodotto, prezzo_originale, \
+                prezzo_scontato, data_inizio_offerta (formato yyyy-mm-dd), data_fine_offerta (formato yyyy-mm-dd). \
+                Se il volantino e` del negozio Lidl, le date di validita della offerta sono indicate nella parte alta della prima pagina. \
+                applica queste date a tutti i prodotti. \
+                Se non trovi queste date, imposta i campi data_inizio_offerta e data_fine_offerta su null. \
+                Non aggiungere alcun commento, introduzione o spiegazione. Rispondi solo con il JSON."
+
+    content_list.insert(0, question)
+    
+    try:
+        response = model.generate_content(content_list)
+        description = response.text
+        debug_print("modulo ai - analyze_folder_products_with_gemini - Response: OK", description)
+        return description
+    except Exception as e:
+        debug_print(f"Errore durante la chiamata a Gemini: {e}")
+        return None
+
 
 
 
@@ -205,39 +275,21 @@ def download_vomar_emails():
     mail.logout()
 
 
-import imaplib
 
-def check_vomar_newsletter():
 
-    IMAP_SERVER = "imap.gmail.com"
-    EMAIL_ACCOUNT = "rbraico.rb@gmail.com"
-    PASSWORD = "nyhj enep wqlt tqgd"
-
-    mail = imaplib.IMAP4_SSL(IMAP_SERVER)
-    mail.login(EMAIL_ACCOUNT, PASSWORD)
-    mail.select("inbox")
-
-    status, data = mail.search(None, 'FROM "roberto.braico@live.com"')
-
-    if status != "OK":
-        debug_print("❌ Errore nella ricerca.")
-    else:
-        mail_ids = data[0].split()
-        if mail_ids:
-            debug_print(f"✅ Trovata {len(mail_ids)} email da Vomar")
-        else:
-            debug_print("📭 Nessuna email trovata da Vomar")
-
-    mail.logout()
 
 """
 def fetch_shopping_list():
-    debug_print("EMAIL..")
-    # Esegui
-    check_vomar_newsletter()
-    download_vomar_emails()
-    debug_print("Fetching shopping list from database...")
+    debug_print("Volantino LidlL..")
+
+    # Esempio di utilizzo
+    url_pdf = "https://object.storage.eu01.onstackit.cloud/leaflets/pdfs/0198e684-473b-72c7-bb4f-8a6f9e15372f/Folder-Week-36-01-09-07-09-06.pdf"
+    nome_file = "volantino_lidl_settimana36.pdf"
+
+    scarica_pdf(url_pdf, nome_file)
+    return nome_file
 """
+
 """
 def fetch_shopping_list():
     debug_print("Fetching shopping list from database...")

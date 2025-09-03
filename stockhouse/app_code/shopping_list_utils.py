@@ -701,7 +701,8 @@ def process_shopping_queue():
         # Aggiorna expenses_fact
         selected_decade = get_current_decade()
         amount = round(float(price) * int(quantity), 2)
-        upsert_expense(cursor, ins_date, selected_decade, shop, amount)
+        
+        #upsert_expense(cursor, ins_date, selected_decade, shop, amount)
 
     # Esegui commit e chiudi connessione **una volta sola**
     conn.commit()
@@ -867,8 +868,6 @@ def aggiorna_tabella_shopping_list(lista_ordinata):
 
 
 def ordina_lista_spesa(json_input):
-
-   
     # Se json_input è una stringa, convertila in oggetto Python
     if isinstance(json_input, str):
         lista_spesa = json.loads(json_input)
@@ -887,9 +886,13 @@ def ordina_lista_spesa(json_input):
     # Mappa di priorità
     priorita = {categoria: i for i, categoria in enumerate(ordine_categorie)}
 
-    # Ordina la lista
-    lista_ordinata = sorted(lista_spesa, key=lambda x: priorita.get(x.get("item", ""), 999))
+    # Ordina la lista: se "item" è None o mancante, assegna priorità alta (999)
+    lista_ordinata = sorted(
+        lista_spesa,
+        key=lambda x: priorita.get(x.get("item") or "", 999)
+    )
 
+    # Stampa per debug
     print(json.dumps(lista_ordinata, indent=4, ensure_ascii=False))
 
     return lista_ordinata
@@ -903,7 +906,7 @@ def finalizza_shopping_list():
     cursor = conn.cursor()
     
     # Esegui la SELECT completa
-    cursor.execute("select pd.item, sl.* from shopping_list sl join product_dim pd on sl.barcode=pd.barcode")
+    cursor.execute("select pd.item, sl.* from shopping_list sl left join product_dim pd on sl.barcode=pd.barcode")
     rows = cursor.fetchall()
 
     # Recupera i nomi delle colonne
@@ -914,7 +917,7 @@ def finalizza_shopping_list():
 
     # Converti in JSON e stampa
     json_output = json.dumps(shopping_data, indent=2, ensure_ascii=False)
-    #debug_print("Shopping list fetched:", json_output)
+    debug_print("Shopping list fetched:", json_output)
 
 
     # Chiudi la connessione
