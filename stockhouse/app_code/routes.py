@@ -305,7 +305,7 @@ def index():
         insert_product_alias_if_not_exists(name, barcode, shop)
 
         # Aggiorna lo stato del refresh che verra eseguito all'apertura della pagina shopping_list che puo avvenire anche da Shoppy
-        set_refresh_needed(True)
+        set_refresh_needed(True, selected_decade)
 
         conn = sqlite3.connect(Config.DATABASE_PATH)
         cursor = conn.cursor()
@@ -852,7 +852,7 @@ def shopping_list():
     if refresh_needed:
         debug_print("⚠️ Rigenerazione necessaria. Ricreo la shopping_list.")
         items, shop_totals = get_shopping_list_data(save_to_db=True, decade=selected_decade)
-        set_refresh_needed(False)
+        set_refresh_needed(False, selected_decade)
     else:
         debug_print("✅ Nessuna rigenerazione. Uso la lista salvata.")
         items, shop_totals = get_shopping_list_data(save_to_db=False, decade=selected_decade)
@@ -1222,7 +1222,9 @@ def trigger_queue_check():
     process_shopping_queue()
     return jsonify({"status": "ok"})
 
+"""
 # Questa route viene chiamata da Shoppy e serve per aggiornare la lista della spesa prima che sShoppy possa visualizzarla
+
 @main.route("/api/shopping_list/refresh", methods=["POST"])
 def api_refresh_shopping_list():
     selected_decade = get_current_decade()
@@ -1233,7 +1235,7 @@ def api_refresh_shopping_list():
         return jsonify({"status": "refreshed", "items_updated": len(items)})
     else:
         return jsonify({"status": "no_refresh_needed"})
-    
+"""    
     
 @main.route('/unknown/get_all')
 def get_all_unknown_products():

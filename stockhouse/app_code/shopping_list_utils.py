@@ -539,7 +539,7 @@ def get_shopping_list_data(save_to_db=False, conn=None, cursor=None, decade=None
         conn.close()
 
     # Se il refresh è stato richiesto, aggiorna lo stato
-    set_refresh_needed(False)
+    set_refresh_needed(False, decade)
 
     debug_print(f"🛒 Lista della spesa per la {decade} generata con {len(items)} prodotti, totale: {total_cost:.2f}€")
     debug_print(f"Totali per negozio: {items}")
@@ -709,7 +709,7 @@ def process_shopping_queue():
     conn.close()
 
 # Nuove funzioni per il refresh della shopping list
-def set_refresh_needed(value=True):
+def set_refresh_needed(value=True, current_decade=None):
     debug_print(f"set_refresh_needed: Imposto refresh_needed a {value}")
     conn = sqlite3.connect(Config.DATABASE_PATH)
     cursor = conn.cursor()
@@ -723,12 +723,59 @@ def set_refresh_needed(value=True):
 
 def is_refresh_needed():
     debug_print("is_refresh_needed: Controllo se il refresh è necessario")
+    
+    current_decade = get_current_decade()
     conn = sqlite3.connect(Config.DATABASE_PATH)
     cursor = conn.cursor()
-    cursor.execute("SELECT value FROM system_state WHERE key = ?", ("shopping_list_refresh_needed",))
+
+    # Legge il valore e la decade salvata
+    cursor.execute("""
+        SELECT value, decade 
+        FROM system_state 
+        WHERE key = ?
+    """, ("shopping_list_refresh_needed",))
     result = cursor.fetchone()
+
+    saved_value = result[0] if result else '0'
+    saved_decade = result[1] if result else None
+
+    debug_print(f"Valore salvato: {saved_value}, Decade salvata: {saved_decade}, Decade corrente: {current_decade}")
+
+    refresh_needed = False
+
+    # Caso 1: flag esplicito
+    if saved_value == '1':
+        debug_print("Refresh necessario: flag value=1")
+        refresh_needed = True
+
+    # Caso 2: cambio decade
+    elif saved_decade != current_decade:
+        debug_print("Refresh necessario: cambio decade")
+        refresh_needed = True
+        # Aggiorna la decade salvata
+        cursor.execute("""
+            INSERT INTO system_state(key, value, decade)
+            VALUES (?, ?, ?)
+            ON CONFLICT(key) DO UPDATE SET decade=excluded.decade
+        """, ("shopping_list_refresh_needed", saved_value, current_decade))
+        conn.commit()
+
+    # Caso 3: shopping_list vuota per la decade corrente
+    else:
+        cursor.execute("""
+            SELECT COUNT(*) 
+            FROM shopping_list 
+            WHERE decade_number = ?
+        """, (current_decade,))
+        count = cursor.fetchone()[0]
+        if count == 0:
+            debug_print("Refresh necessario: shopping_list vuota per la decade corrente")
+            refresh_needed = True
+
     conn.close()
-    return result and result[0] == '1'
+    debug_print(f"Risultato finale is_refresh_needed: {refresh_needed}")
+    return refresh_needed
+
 
 
 # Funzione per rimuovere prodotti dalla lista della spesa - setta within_budget a 0
@@ -906,7 +953,7 @@ def finalizza_shopping_list():
     cursor = conn.cursor()
     
     # Esegui la SELECT completa
-    cursor.execute("select pd.item, sl.* from shopping_list sl left join product_dim pd on sl.barcode=pd.barcode")
+    cursor.execute("select distinct pd.item, sl.* from shopping_list sl left join product_dim pd on sl.barcode=pd.barcode")
     rows = cursor.fetchall()
 
     # Recupera i nomi delle colonne

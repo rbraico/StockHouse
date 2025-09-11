@@ -129,8 +129,7 @@ def init_db():
     conn.commit()
 
 
-
-    # ✅ CREA TABELLA SHOPPING_LIST che contiene la lista della spesa
+    # ✅ CREA TABELLA shopping_list
     c.execute("""
         CREATE TABLE IF NOT EXISTS shopping_list (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -142,19 +141,16 @@ def init_db():
             price REAL,
             decade_number TEXT,
             insert_date DATE,
-            within_budget INTEGER DEFAULT 0,  -- 0=false, 1=true
+            within_budget INTEGER DEFAULT 0,  -- 0 = false, 1 = true
             FOREIGN KEY (barcode) REFERENCES product_dim(barcode)
         )
     """)
 
-    # Crea un indice unico su barcode + decade_number per permettere ON CONFLICT nelle insert/update
+    # ✅ CREA INDICE UNIVOCO su barcode e decade_number
     c.execute("""
         CREATE UNIQUE INDEX IF NOT EXISTS idx_shopping_list_barcode_decade
         ON shopping_list (barcode, decade_number)
     """)
-
-
-
     conn.commit()
 
     # ✅ CREA TABELLA EXPENSES_FACT che contiene la la somma delle spese per giorno e negozio
@@ -185,15 +181,24 @@ def init_db():
 
     conn.commit()
 
-  # ✅ CREA TABELLA shopping_queue usata come coda di comunicazione con shoppy
+    # ✅ CREA TABELLA system_state usata per il refresh della shopping list
     c.execute("""  
         CREATE TABLE IF NOT EXISTS system_state (
             key TEXT PRIMARY KEY,
-            value TEXT DEFAULT "1"
+            value TEXT DEFAULT "1",
+            decade TEXT DEFAULT NULL
         )
-   """)
-
+    """)
     conn.commit()
+
+    # Inserisce il record iniziale se non esiste
+    c.execute("""
+        INSERT INTO system_state (key, value, decade)
+        VALUES ('shopping_list_refresh_needed', '1', NULL)
+        ON CONFLICT(key) DO NOTHING;
+    """)
+    conn.commit()
+
 
   # ✅ CREA TABELLA product_alias usata per la identificazione dei prodotti acquistati dagli scontrini
     c.execute("""  
