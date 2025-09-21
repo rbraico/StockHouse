@@ -260,7 +260,75 @@ def parse_quantity(value):
         return 0
 
 
+# Funzione per calcolare la priorità personalizzata
+def calcola_priority_personalizzata(
+    necessity_level,
+    quantity,
+    reorder_point,
+    min_q,
+    category,
+    offerta,
+    seasonal_priority=None  # solo per prodotti stagionali
+):
+    # Step 1: Categorie prioritarie assolute
+    categorie_prioritarie = ["Primo soccorso", "Igiene personale", "Prodotti per la casa"]
+    if category in categorie_prioritarie:
+        return 1
 
+    # Step 5: Prodotti stagionali
+    if necessity_level == "Stagionale" and seasonal_priority is not None:
+        if seasonal_priority == 1:  # di stagione
+            if offerta == 1:
+                return 1
+            elif quantity <= min_q:
+                return 2
+            elif quantity <= reorder_point:
+                return 3
+        elif seasonal_priority == 2:  # stagione adiacente
+            if offerta == 1:
+                return 4
+            elif quantity <= min_q:
+                return 5
+            elif quantity <= reorder_point:
+                return 6
+        elif seasonal_priority == 3:  # fuori stagione
+            return 10
+
+    # Step 2: Necessità "Indispensabile"
+    if necessity_level == "Indispensabile":
+        if offerta == 1:
+            return 1
+        elif quantity <= min_q:
+            return 2
+        elif quantity <= reorder_point:
+            return 3
+
+    # Step 3: Necessità "Utili"
+    if necessity_level == "Utile":
+        if offerta == 1:
+            return 4
+        elif quantity <= min_q:
+            return 5
+        elif quantity <= reorder_point:
+            return 6
+
+    # Step 4: Necessità "Occasionale"
+    if necessity_level == "Occasionale":
+        if offerta == 1:
+            return 7
+        elif quantity <= min_q:
+            return 8
+        elif quantity <= reorder_point:
+            return 9
+
+    # Fallback finale
+    return 10
+
+
+
+
+
+# Funzione per ottenere i dati della lista della spesa
 # Funzione per ottenere i dati della lista della spesa
 def get_shopping_list_data(save_to_db=False, conn=None, cursor=None, decade=None):
  
@@ -409,6 +477,27 @@ def get_shopping_list_data(save_to_db=False, conn=None, cursor=None, decade=None
 
     debug_print(f"Query eseguita, trovati {len(rows)} prodotti per la {decade}, save_to_db: {save_to_db}")
 
+    # Converti in dict
+    rows = [dict(r) for r in rows]
+
+    # 🔹 Calcola PRIORITÀ personalizzata prima del ciclo
+    for row in rows:
+        quantity = parse_quantity(row["quantity"])
+        min_q = parse_quantity(row["min_quantity"])
+        reorder_point = parse_quantity(row["reorder_point"])
+        necessity_level = row["necessity_level"]
+        category = row["category"]
+        offerta = 0
+        seasonal_priority = row["priority_level"]
+        row['order_by_list'] = calcola_priority_personalizzata(
+            necessity_level, quantity, reorder_point, min_q, category, offerta, seasonal_priority
+        )
+        debug_print(f"Prodotto {row['name']}: order_by_list = {row['order_by_list']}")
+
+    # 🔹 Ordina le righe
+    rows.sort(key=lambda r: r['order_by_list'])
+
+
     items = []
     shop_totals = {}
     total_cost = 0
@@ -428,6 +517,8 @@ def get_shopping_list_data(save_to_db=False, conn=None, cursor=None, decade=None
         necessity_level = row["necessity_level"]
         quantity_to_buy = 1
         reason = ""
+        seasonal_priority = row["priority_level"]
+        offerta=0
 
         if "Alimenti freschi" in category:
             quantity_to_buy = max(max_q - quantity, 1)
@@ -544,7 +635,6 @@ def get_shopping_list_data(save_to_db=False, conn=None, cursor=None, decade=None
     debug_print(f"🛒 Lista della spesa per la {decade} generata con {len(items)} prodotti, totale: {total_cost:.2f}€")
     debug_print(f"Totali per negozio: {items}")
     return items, shop_totals
-
 
 
 

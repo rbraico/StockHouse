@@ -158,7 +158,10 @@ def analyze_receipt_with_gemini(filename, upload_folder):
                 il nome_prodotto non deve contenere caratteri come %, ^, !, $ , oppure contengano parole come statiegeld), \
                 quantita (arrotondata al valore intero piu` vicino), traduzione_italiano (traduzione sintetica in italiano), \
                 prezzo_unitario e prezzo_totale (anche se coincidono). Se trovi prezzi negativi, sottrai dal prezzo del prodotto precedente; \
-                rispondi esclusivamente con il JSON."
+                Negli scontrini di Lidl, 'Volkoren ontbijt' e 'Brinta' sono due prodotti diversi. \
+                Rispondi esclusivamente con il JSON."
+    
+
     
     # Aggiunge la domanda all'inizio della lista di contenuti
     content_list.insert(0, question)
