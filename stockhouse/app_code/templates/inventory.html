@@ -78,11 +78,21 @@
 <!-- NAV TABS -->
 <ul class="nav nav-tabs" id="inventoryTab" role="tablist">
   <li class="nav-item" role="presentation">
-    <button class="nav-link active" id="gestione-tab" data-bs-toggle="tab" data-bs-target="#gestione" type="button" role="tab" aria-controls="gestione" aria-selected="true">📦 Gestione Magazzino</button>
+    <button class="nav-link active" id="gestione-tab" data-bs-toggle="tab" data-bs-target="#gestione" type="button" role="tab" aria-controls="gestione" aria-selected="true">🍽️ Alimentari</button>
   </li>
   <li class="nav-item" role="presentation">
-    <button class="nav-link" id="import-tab" data-bs-toggle="tab" data-bs-target="#import" type="button" role="tab" aria-controls="import" aria-selected="false">📄 Importa scontrino</button>
+    <button class="nav-link" id="import-tab" data-bs-toggle="tab" data-bs-target="#import" type="button" role="tab" aria-controls="import" aria-selected="false">🩹 Primo soccorso</button>
   </li>
+  <li class="nav-item" role="presentation">
+    <button class="nav-link" id="import-tab" data-bs-toggle="tab" data-bs-target="#import" type="button" role="tab" aria-controls="import" aria-selected="false">🧼 Igene personale</button>
+  </li>
+  <li class="nav-item" role="presentation">
+    <button class="nav-link" id="import-tab" data-bs-toggle="tab" data-bs-target="#import" type="button" role="tab" aria-controls="import" aria-selected="false">🏠 Prodotti per la casa</button>
+  </li>
+  <li class="nav-item" role="presentation">
+    <button class="nav-link" id="import-tab" data-bs-toggle="tab" data-bs-target="#import" type="button" role="tab" aria-controls="import" aria-selected="false">🔦 Tools, luce e energia</button>
+  </li>
+  
 </ul>
 
 <div class="tab-content mt-3">
@@ -145,26 +155,37 @@
     </div>
   </div>
 
-  <!-- 📄 Importa scontrino -->
-  <div class="tab-pane fade" id="import" role="tabpanel" aria-labelledby="import-tab">
-    <div class="p-3">
-      <h5>Trascina qui il tuo scontrino</h5>
-      <div id="drop-zone" class="border border-primary rounded p-5 text-center" style="background-color: #f8f9fa;">
-        📥 Trascina il file qui oppure clicca per selezionarlo
-      </div>
-      <input type="file" id="file-input" style="display:none;" accept=".jpg,.png,.jpeg,.pdf"/>
-      <div id="upload-status" class="mt-3"></div>
-      
-      <img id="image-preview" class="receipt-preview" style="display:none;" />
-      
-      <iframe id="pdf-preview" class="receipt-preview" style="display:none; width:100%; height:500px;" ></iframe>
-      
-      <div id="action-buttons" class="mt-3" style="display:none;">
-        <button id="analyze-btn" class="btn btn-primary me-2">Analizza scontrino</button>
-        <button id="delete-btn" class="btn btn-danger">Elimina scontrino</button>
-      </div>
+  <!-- 🩹 Primo soccorso -->
+  <div class="tab-pane fade" id="pharmacy" role="tabpanel" aria-labelledby="pharmacy-tab">
+    <div class="container mt-4">
+      <h5>🩹 Primo soccorso</h5>
+      <p>Questa sezione è dedicata ai prodotti farmaceutici e sarà sviluppata in seguito.</p>
     </div>
   </div>
+
+  <!-- 🧼 Igene personale -->  
+  <div class="tab-pane fade" id="pharmacy" role="tabpanel" aria-labelledby="pharmacy-tab">
+    <div class="container mt-4">
+      <h5>🧼 Igene personale</h5>
+      <p>Questa sezione è dedicata ai prodotti farmaceutici e sarà sviluppata in seguito.</p>
+    </div>
+  </div>  
+
+  <!-- 🏠 Prodotti per la casa -->
+  <div class="tab-pane fade" id="pharmacy" role="tabpanel" aria-labelledby="pharmacy-tab">
+    <div class="container mt-4">
+      <h5>🏠 Prodotti per la casa</h5>
+      <p>Questa sezione è dedicata ai prodotti per la casa e sarà sviluppata in seguito.</p>
+    </div>
+  </div>  
+
+  <!-- 🔦 Tools, luce e energia -->
+  <div class="tab-pane fade" id="pharmacy" role="tabpanel" aria-labelledby="pharmacy-tab">
+    <div class="container mt-4">
+      <h5>🔦 Tools, luce e energia</h5>
+      <p>Questa sezione è dedicata ai prodotti Tool, Luce ed energia e sarà sviluppata in seguito.</p>
+    </div>
+  </div>  
 
 </div>
 
@@ -248,127 +269,8 @@ document.addEventListener("DOMContentLoaded", function () {
         } else alert("Errore durante la registrazione del consumo.");
       });
   });
-
-  // --- DROPZONE SCONTRINO ---
-  const dropZone = document.getElementById('drop-zone');
-  const fileInput = document.getElementById('file-input');
-  const statusDiv = document.getElementById('upload-status');
-  const actionButtons = document.getElementById('action-buttons');
-  const analyzeBtn = document.getElementById('analyze-btn');
-  const deleteBtn = document.getElementById('delete-btn');
-  const receiptPreview = document.getElementById('receipt-preview');
-  let uploadedFilename = null;
-
-  dropZone.addEventListener('click',()=>fileInput.click());
-  dropZone.addEventListener('dragover',e=>{e.preventDefault(); dropZone.style.backgroundColor='#e0f7ff';});
-  dropZone.addEventListener('dragleave',e=>{e.preventDefault(); dropZone.style.backgroundColor='#f8f9fa';});
-  dropZone.addEventListener('drop',e=>{e.preventDefault(); dropZone.style.backgroundColor='#f8f9fa'; handleFileUpload(e.dataTransfer.files[0]);});
-  fileInput.addEventListener('change',e=>handleFileUpload(e.target.files[0]));
-
-// Aggiungi le nuove variabili per i due elementi di anteprima
-const imagePreview = document.getElementById('image-preview');
-const pdfPreview = document.getElementById('pdf-preview');
-const allPreviews = document.querySelectorAll('.receipt-preview');
-
-function handleFileUpload(file){
-  if(!file) return;
-  const formData = new FormData();
-  formData.append('file', file);
-  
-  // Resetta la visualizzazione di tutte le anteprime
-  allPreviews.forEach(el => el.style.display = 'none');
-  
-  // Aggiungi il controllo preliminare per il tipo di file
-  if (!file.type.startsWith('image/') && file.type !== 'application/pdf') {
-    statusDiv.textContent = `Errore: Formato non supportato. Carica un'immagine (jpg, png) o un PDF.`;
-    actionButtons.style.display = 'none';
-    return;
-  }
-  
-  fetch('/import_receipt', { method: 'POST', body: formData })
-    .then(res => res.json())
-    .then(data => {
-      if(data.success) {
-        uploadedFilename = data.filename;
-        statusDiv.textContent = `File caricato: ${uploadedFilename}`;
-        actionButtons.style.display = 'block';
-
-        // Logica per l'anteprima del file
-        if(file.type.startsWith('image/')){
-          // Gestione per le immagini
-          const reader = new FileReader();
-          reader.onload = function(e){ 
-            imagePreview.src = e.target.result; 
-            imagePreview.style.display = 'block'; 
-          };
-          reader.readAsDataURL(file);
-        } else if (file.type === 'application/pdf') {
-          // Nuova gestione per i PDF
-          const fileURL = URL.createObjectURL(file);
-          pdfPreview.src = fileURL;
-          pdfPreview.style.display = 'block';
-        }
-      } else { 
-        statusDiv.textContent = `Errore: ${data.msg}`; 
-        actionButtons.style.display = 'none'; 
-        allPreviews.forEach(el => el.style.display = 'none');
-      }
-    })
-    .catch(err => {
-      statusDiv.textContent = `Errore upload: ${err}`; 
-      actionButtons.style.display = 'none'; 
-      allPreviews.forEach(el => el.style.display = 'none');
-    });
-}
-
-  analyzeBtn.addEventListener('click',()=>{
-    if(!uploadedFilename) return;
-    fetch(`/analyze_receipt?filename=${encodeURIComponent(uploadedFilename)}`)
-      .then(res=>res.json())
-      .then(data=>{
-        if(data.success){
-          alert('Scontrino analizzato (simulazione). Dati ricevuti da Gemini AI!');
-          console.log(data);
-        } else alert('Errore durante l’analisi.');
-      })
-      .catch(err=>alert('Errore chiamata analyze_receipt: '+err));
-  });
-
-
-// Aggiungi un listener per il pulsante 'delete-btn'
-deleteBtn.addEventListener('click', () => {
-  // Esegui una chiamata API per eliminare il file dal server
-  fetch('/delete_receipt', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ filename: uploadedFilename })
-  })
-    .then(res => res.json())
-    .then(data => {
-      if (data.success) {
-        // Nascondi gli elementi dopo l'eliminazione
-        statusDiv.textContent = 'Scontrino eliminato con successo.';
-        actionButtons.style.display = 'none';
-        
-        // Questo è il punto chiave: devi nascondere tutti gli elementi di anteprima
-        const allPreviews = document.querySelectorAll('.receipt-preview');
-        allPreviews.forEach(el => el.style.display = 'none');
-        
-        uploadedFilename = null; // Resetta il nome del file
-      } else {
-        statusDiv.textContent = `Errore eliminazione: ${data.msg}`;
-      }
-    })
-    .catch(err => {
-      // Questo è l'errore che hai visto
-      statusDiv.textContent = `Errore chiamata delete_receipt: ${err}`;
-      console.error(err);
-      // Il tuo codice originale non gestisce in modo elegante questo errore, quindi lo fa sembrare un errore di stile.
-    });
 });
 
-
-});
 </script>
 
 {% endblock %}

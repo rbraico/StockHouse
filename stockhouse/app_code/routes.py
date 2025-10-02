@@ -723,6 +723,9 @@ def items():
 
 @main.route('/edit_item/<int:item_id>', methods=['GET', 'POST'])
 def edit_item(item_id):
+
+    debug_print("edit_item: item_id ", item_id)
+    
     conn = sqlite3.connect(Config.DATABASE_PATH)
     c = conn.cursor()
 

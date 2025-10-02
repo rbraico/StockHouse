@@ -3,17 +3,15 @@
 {% block content %}
 <h2>🗂️ Articoli</h2>
 <br>
-<!-- Stile per righe alternate -->
+
 <style>
     thead th {
         background-color: #0050b9 !important;
         color: white !important;
     }
-
     table.custom-table tbody tr:nth-child(odd) td {
         background-color: #ffffff !important;
     }
-
     table.custom-table tbody tr:nth-child(even) td {
         background-color: #e7f1ff !important;
     }
@@ -41,24 +39,19 @@
                 <input type="text" class="form-control" id="nome" name="nome" required>
             </div>
 
-            <br>
-
-            <!-- Categoria -->
             <div class="row mb-2 align-items-center">
                 <div class="col-2">
-                  <label for="category" class="form-label mb-0" style="color: #00008B" >Categoria</label>
+                    <label for="category" class="form-label mb-0" style="color: #00008B">Categoria</label>
                 </div>
                 <div class="col-5">
-                  <select class="form-select form-select-sm" id="category" name="category" required style="background-color:  #e6f2ff;">
-                    <option value="">Seleziona una categoria</option>
-                    {% for cat in categories %}
-                      <option value="{{ cat[0] }}">{{ cat[1] }}</option>
-                    {% endfor %}
-                  </select>
+                    <select class="form-select form-select-sm" id="category" name="category" required style="background-color: #e6f2ff;">
+                        <option value="">Seleziona una categoria</option>
+                        {% for cat in categories %}
+                            <option value="{{ cat[0] }}">{{ cat[1] }}</option>
+                        {% endfor %}
+                    </select>
                 </div>
             </div>
-
-            <br>
 
             <div class="mb-3">
                 <label for="note" class="form-label">Note (opzionale)</label>
@@ -66,7 +59,6 @@
             </div>
             <button type="submit" class="btn btn-primary">Salva</button>
         </form>
-
 
         {% if last_item %}
             <hr>
@@ -76,7 +68,7 @@
                     <tr>
                         <th>Nome</th>
                         <th>Note</th>
-                        <th>Categoria</th>                     
+                        <th>Categoria</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -88,7 +80,6 @@
                 </tbody>
             </table>
         {% endif %}
-
     </div>
 
     <!-- TAB 2: Gestione -->
@@ -111,10 +102,14 @@
                         <td>{{ sub[2] }}</td>
                         <td>{{ sub[3] }}</td>
                         <td>
-                            <a href="{{ url_for('main.edit_item', item_id=sub[0]) }}" class="btn btn-sm btn-warning">✏️ Modifica</a>
-                            <form method="POST" action="{{ url_for('main.delete_item_route', item_id=sub[0]) }}" style="display:inline;">
-                                <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Sei sicuro?')">❌ Elimina</button>
-                            </form>
+                            {% if sub and sub[0] %}
+                                <a href="{{ url_for('main.edit_item', item_id=sub[0]) }}" class="btn btn-sm btn-warning">✏️ Modifica</a>
+                                <form method="POST" action="{{ url_for('main.delete_item_route', item_id=sub[0]) }}" style="display:inline;">
+                                    <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Sei sicuro?')">❌ Elimina</button>
+                                </form>
+                            {% else %}
+                                <span class="text-muted">ID mancante</span>
+                            {% endif %}
                         </td>
                     </tr>
                 {% endfor %}
@@ -122,5 +117,4 @@
         </table>
     </div>
 </div>
-
 {% endblock %}

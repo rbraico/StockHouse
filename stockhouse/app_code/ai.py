@@ -120,7 +120,7 @@ def analyze_receipt_with_gemini(filename, upload_folder):
     
     genai.configure(api_key="AIzaSyBfqfUJVEvYZwlrkMXcO6s2H3PmiZhj-nY")
     
-    model = genai.GenerativeModel('gemini-1.5-flash')
+    model = genai.GenerativeModel('gemini-2.5-pro')
     
     content_list = []
     
