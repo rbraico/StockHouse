@@ -273,6 +273,18 @@
           </div>
         </div>
 
+        <!-- Note -->
+        <div class="row mb-2 align-items-center">
+          <div class="col-4">
+            <label for="notes" class="form-label mb-0" style="color: #00008B">Note</label>
+          </div>
+          <div class="col-8">
+            <textarea class="form-control form-control-sm" id="notes" name="notes" rows="4" maxlength="500"
+              style="background-color: #e6f2ff; resize: none; width: 100%;"
+              placeholder="se ci sono...">{{ products.notes | default('', true) }}</textarea>
+          </div>
+        </div>
+
         <!-- Submit -->
         <button type="submit" class="btn btn-primary mt-2">Aggiungi Prodotto</button>
       </form>

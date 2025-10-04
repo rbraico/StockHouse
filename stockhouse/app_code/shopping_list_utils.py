@@ -679,6 +679,7 @@ def get_suggested_products():
             SELECT product_name FROM shopping_list
         )
         GROUP BY i.barcode
+        ORDER BY pd.name ASC           
     """)
 
     rows = cursor.fetchall()

@@ -20,6 +20,7 @@ def init_db():
             shop TEXT,
             category TEXT,
             item TEXT,  
+            notes TEXT,
             image TEXT  
         )
     """)
@@ -473,16 +474,16 @@ def lookup_category_by_item(item_name):
     else:
         return {"found": False}
 
-def add_product_dim(barcode, name, brand, shop, category, item, image):
+def add_product_dim(barcode, name, brand, shop, category, item, notes, image):
 
-    debug_print(f"Risultato: Barcode={barcode}, Name={name}, Brand={brand}, Shop={shop}, Category={category}, Item={item}")
+    debug_print(f"Risultato: Barcode={barcode}, Name={name}, Brand={brand}, Shop={shop}, Category={category}, Item={item}, Notes={notes}")
 
     conn = sqlite3.connect(Config.DATABASE_PATH)
     c = conn.cursor()
     c.execute("""
-        INSERT INTO product_dim (barcode, name, brand, shop, category, item, image)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-    """, (barcode, name, brand, shop, category, item, image
+        INSERT INTO product_dim (barcode, name, brand, shop, category, item, notes, image)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    """, (barcode, name, brand, shop, category, item, notes, image
           ))
     conn.commit()
     conn.close()
@@ -2145,5 +2146,53 @@ def upsert_expense(cursor, shopping_date, decade_number, shop, amount, mode="bar
         """, (shopping_date, decade_number, shop, amount))
 
 
+# Seleziona i prodotti da visualizzare nella pagina pharmacy.html
+def get_pharmacy():
+    debug_print("Get_Pharmacy")
+    conn = sqlite3.connect(Config.DATABASE_PATH)
+    c = conn.cursor()
 
+    c.execute("""
+        SELECT 
+            dim.name, 
+            dim.notes,
+            dim.brand, 
+            dim.shop, 
+            trs.price, 
+            trs.quantity,
+            trs.expiry_date, 
+            trs.status,          
+            dim.image
+        FROM transaction_fact trs
+        INNER JOIN product_dim dim ON dim.id = trs.product_key
+        LEFT JOIN item_list itl ON dim.item = itl.name   
+        LEFT JOIN category_list cat ON itl.category_id = cat.id
+        WHERE cat.name = '⚕️ Primo soccorso'
+        ORDER BY trs.expiry_date ASC
+    """)
+
+    rows = c.fetchall()
+    conn.close()
+
+    products = []
+    for row in rows:
+        expiry_raw = row[6]
+        try:
+            expiry_date = datetime.strptime(expiry_raw, "%Y-%m-%d").date() if expiry_raw else None
+        except ValueError:
+            expiry_date = None  # fallback in caso di formato errato
+
+        products.append({
+            "name": row[0],
+            "notes": row[1],
+            "brand": row[2],
+            "shop": row[3],
+            "price": row[4],
+            "quantity": row[5],
+            "expiry_date": expiry_date,
+            "status": row[7],
+            "image": row[8]
+        })
+
+    return products
 

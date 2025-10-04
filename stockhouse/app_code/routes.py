@@ -5,7 +5,7 @@ from stockhouse.app_code.models import add_product_dim, add_transaction_fact, de
                        lookup_category_by_item, update_transaction_fact, update_transaction_fact_consumed, get_products_by_name, get_expiring_products, insert_consumed_fact, \
                        get_number_expiring_products, get_out_of_stock_count, get_critical_stock_count, get_monthly_consumed_count, \
                        get_week_date_range, get_product_by_name_and_dates, get_expiring_products_for_home, get_out_of_stock_products, get_critical_stock, get_monthly_consumed_statistics, \
-                       upsert_budget, get_budget, update_inventory_mean_usage_time, get_unconsumed_products_full_list,  \
+                       upsert_budget, get_budget, update_inventory_mean_usage_time, get_unconsumed_products_full_list, get_pharmacy, \
                        get_unique_unconsumed_record, clean_old_transactions, update_reorder_frequency,upsert_expense, delete_from_shopping_list, upsert_transaction_fact
 from stockhouse.app_code.models import add_shop, update_shop, delete_shop, get_unknown_products, delete_unknown_product_by_name, insert_product_alias_if_not_exists, lookup_products_by_id  
 from stockhouse.app_code.models import add_category, get_all_categories, update_category, delete_category, get_all_items, update_item, delete_item
@@ -195,9 +195,10 @@ def index():
         category = request.form.get("category")
         item = request.form.get("item")
         expiry_date = request.form.get("expiry_date")
+        notes = request.form.get("notes") or None
         image = request.form.get("image") or None
 
-        debug_print("index -> POST", barcode,name,brand,shop,price,quantity,category,item,expiry_date )
+        debug_print("index -> POST", barcode,name,brand,shop,price,quantity,category,item,expiry_date, notes )
 
         # Ottieni la data odierna e formatta come yyyy-mm-dd
         ins_date     = datetime.now().strftime('%Y-%m-%d')
@@ -217,12 +218,13 @@ def index():
             shop        = prodotto_esistente["shop"]
             category    = prodotto_esistente["category"]
             item        = prodotto_esistente["item"]
+            notes       = prodotto_esistente["notes"]
             image       = prodotto_esistente["image"]
-            debug_print("index -> POST 2", barcode,name,brand,shop,price,quantity,category,item )
+            debug_print("index -> POST 2", barcode,name,brand,shop,price,quantity,category,item,notes )
         else:
             # Il prodotto non e` presente in product_dim, cerca online con il barcode
             data = lookup_barcode(barcode)
-            debug_print("index -> POST 3", barcode,name,brand,shop,price,quantity,category,item )
+            debug_print("index -> POST 3", barcode,name,brand,shop,price,quantity,category,item,notes )
             if "error" not in data:
                 name = data["name"]
                 brand = data["brand"]
@@ -232,7 +234,7 @@ def index():
                 debug_print("index -> POST 4", barcode,name,brand,shop,price,quantity,category,item )
 
             # INSERT in product_dim anche se il barcode e` null oppure non e`stato trovato online
-            debug_print ("index -> add_product_dim: ", barcode, name, brand, shop, category, item, image)      
+            debug_print ("index -> add_product_dim: ", barcode, name, brand, shop, category, item, notes, image)      
             result = lookup_category_by_item(item)
 
             # Associare il risultato alla variabile 'category' se trovato
@@ -243,7 +245,7 @@ def index():
                 debug_print(f"Item '{item}' non trovato.")
 
             # INSERT in product_dim anche se il barcode e` null oppure non e`stato trovato online
-            debug_print ("index -> add_product_dim: ", barcode, name, brand, shop, category, item, image)      
+            debug_print ("index -> add_product_dim: ", barcode, name, brand, shop, category, item, notes, image)      
         
             # Prepara l'immagine per il DB         
             if barcode:
@@ -276,7 +278,7 @@ def index():
             # Il nome e`comunque quello impostato nel form! 
             name = request.form["name"]
             debug_print("index -> add_product_dim: ", barcode, name, brand, shop, category, item, image_browser_path)
-            add_product_dim(barcode, name, brand, shop, category, item, image_browser_path)
+            add_product_dim(barcode, name, brand, shop, category, item, notes, image_browser_path)
 
         # Ottiene ID del prodotto
         if product_key is None:
@@ -1395,3 +1397,14 @@ def finalize_shopping_list():
     Thread(target=background_task).start()
     """
     return jsonify({"message": "Lista salvata"}), 200
+
+
+
+#questa route serve per visualizzare i prodotti in via di scadenza 
+@main.route('/pharmacy')
+def pharmacy():
+    products = get_pharmacy()
+    message = None
+    if not products:
+        message = "Nessun prodotto trovato in Primo Soccorso."
+    return render_template('pharmacy.html', products=products, message=message, current_date=date.today())
