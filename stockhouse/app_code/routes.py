@@ -337,7 +337,7 @@ def index():
 
     # 💡 Se la richiesta è GET, semplicemente carichiamo la pagina
     products      = get_all_products()
-    debug_print("ALL PRODUCTS: ", products)
+    #debug_print("ALL PRODUCTS: ", products)
     shops         = get_all_shops()
     #debug_print("ALL SHOPS: ", shops)
     categories    = get_all_categories()
@@ -1227,7 +1227,7 @@ def trigger_queue_check():
     process_shopping_queue()
     return jsonify({"status": "ok"})
 
-"""
+
 # Questa route viene chiamata da Shoppy e serve per aggiornare la lista della spesa prima che sShoppy possa visualizzarla
 
 @main.route("/api/shopping_list/refresh", methods=["POST"])
@@ -1240,7 +1240,7 @@ def api_refresh_shopping_list():
         return jsonify({"status": "refreshed", "items_updated": len(items)})
     else:
         return jsonify({"status": "no_refresh_needed"})
-"""    
+    
     
 @main.route('/unknown/get_all')
 def get_all_unknown_products():

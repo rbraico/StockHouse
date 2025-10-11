@@ -1,5 +1,6 @@
 import os
 import yaml
+from datetime import datetime
 
 def get_debug_mode():
     try:
@@ -22,5 +23,5 @@ def get_debug_mode():
     
 def debug_print(*args):
     if get_debug_mode():
-        print(*args)
-
+        timestamp = datetime.now().strftime("[%Y-%m-%d %H:%M:%S]")
+        print(timestamp, *args)

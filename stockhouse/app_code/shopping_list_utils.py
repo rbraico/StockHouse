@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta, date
 import sqlite3
-from stockhouse.app_code.models import get_week_date_range, upsert_expense, lookup_products_by_name, upsert_transaction_fact
+from stockhouse.app_code.models import get_week_date_range, recalculate_seasonal_priorities, upsert_expense, lookup_products_by_name, upsert_transaction_fact
 from config import Config  # usa il path corretto se è diverso
 from stockhouse.utils import debug_print
 import calendar
@@ -615,7 +615,7 @@ def get_shopping_list_data(save_to_db=False, conn=None, cursor=None, decade=None
 
     shop_totals = {}
     for item in items:
-        debug_print(f"Elaboro prodotto: {item['product_name']}, Ragione: {item['reason']}, Quantità da acquistare: {item['quantity_to_buy']}, Prezzo unitario: {item['price']:.2f}€")
+        #debug_print(f"Elaboro prodotto: {item['product_name']}, Ragione: {item['reason']}, Quantità da acquistare: {item['quantity_to_buy']}, Prezzo unitario: {item['price']:.2f}€")
 
         shop = item["shop"]  # oppure item['shop'] se items è una lista di dict
         product_cost = item["price"] * item["quantity_to_buy"]
@@ -633,7 +633,7 @@ def get_shopping_list_data(save_to_db=False, conn=None, cursor=None, decade=None
     set_refresh_needed(False, decade)
 
     debug_print(f"🛒 Lista della spesa per la {decade} generata con {len(items)} prodotti, totale: {total_cost:.2f}€")
-    debug_print(f"Totali per negozio: {items}")
+    #debug_print(f"Totali per negozio: {items}")
     return items, shop_totals
 
 
@@ -842,6 +842,10 @@ def is_refresh_needed():
     # Caso 2: cambio decade
     elif saved_decade != current_decade:
         debug_print("Refresh necessario: cambio decade")
+
+        # Se è cambiata la decade, forza il refresh e ricalcola le priorità stagionali
+        recalculate_seasonal_priorities ()
+
         refresh_needed = True
         # Aggiorna la decade salvata
         cursor.execute("""

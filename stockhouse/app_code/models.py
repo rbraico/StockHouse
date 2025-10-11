@@ -1996,6 +1996,39 @@ def get_budget():
     debug_print("get_budget - Budget: ", budget)
     return budget
 
+# Ricalcola le priorità per tutti i prodotti stagionali. E` un refresche eseguito ad ogni cambio decade.`
+def recalculate_seasonal_priorities():
+    debug_print("Ricalcolo priorità per tutti i prodotti stagionali (tabella product_settings)...")
+
+    conn = sqlite3.connect(Config.DATABASE_PATH)
+    cursor = conn.cursor()
+
+    # Seleziona tutti i prodotti stagionali
+    cursor.execute("""
+        SELECT barcode, necessity_level, season
+        FROM product_settings
+        WHERE LOWER(necessity_level) = 'stagionale'
+    """)
+    products = cursor.fetchall()
+
+    count = 0
+    for barcode, necessity_level, season in products:
+        try:
+            # Calcola la priorità per ciascun prodotto
+            priority = get_priority_level(barcode, necessity_level, season)
+            cursor.execute("""
+                UPDATE product_settings
+                SET priority_level = ?
+                WHERE barcode = ?
+            """, (priority, barcode))
+            count += 1
+        except Exception as e:
+            debug_print(f"Errore nel ricalcolo priorità per barcode {barcode}: {e}")
+
+    conn.commit()
+    conn.close()
+
+    debug_print(f"Ricalcolo priorità stagionali completato. Prodotti aggiornati: {count}")
 
 
 
@@ -2167,7 +2200,7 @@ def get_pharmacy():
         INNER JOIN product_dim dim ON dim.id = trs.product_key
         LEFT JOIN item_list itl ON dim.item = itl.name   
         LEFT JOIN category_list cat ON itl.category_id = cat.id
-        WHERE cat.name = '⚕️ Primo soccorso'
+        WHERE cat.name = '⚕️ Primo soccorso' AND trs.status = "in stock" AND trs.quantity > 0
         ORDER BY trs.expiry_date ASC
     """)
 
