@@ -1,0 +1,26 @@
+<table class="table table-hover table-bordered mb-0">
+    <thead class="table-primary" style="position: sticky; top: 0; z-index: 1;">
+        <tr>
+            <th style="width: 50px;">✔</th>
+            <th style="width: 25%;">Prodotto</th>
+            <th style="width: 10%;">Quantità</th>
+            <th style="width: 15%;">Negozio</th>
+            <th style="width: 50%;">Costo</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for item in items %}
+        <tr>
+            <td><input type="checkbox" class="shopping-checkbox" value="{{ item.barcode }}"></td>
+            <td>{{ item.product_name }}</td>
+            <td>{{ item.quantity_to_buy }}</td>
+            <td>{{ item.shop }}</td>
+            <td>€ {{ "%.2f"|format(item.price * item.quantity_to_buy) }}</td>
+        </tr>
+        {% else %}
+        <tr>
+            <td colspan="5" class="text-center text-muted">Nessun prodotto da acquistare per questa settimana.</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>

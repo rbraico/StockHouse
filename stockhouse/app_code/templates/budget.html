@@ -1,0 +1,97 @@
+{% extends 'layout.html' %}
+
+{% block content %}
+<h2>€ Budget</h2>
+<br><br>
+
+<style>
+  thead th {
+    background-color: #0050b9 !important;
+    color: white !important;
+  }
+
+  table.custom-table tbody tr:nth-child(odd) td {
+    background-color: #ffffff !important;
+  }
+
+  table.custom-table tbody tr:nth-child(even) td {
+    background-color: #e7f1ff !important;
+  }
+
+  td.budget-id {
+    color: transparent;
+    transition: color 0.3s;
+  }
+
+  table.custom-table tr:hover td.budget-id {
+    color: #555;
+  }
+
+  .form-row {
+    display: flex;
+    align-items: center;
+    margin-bottom: 1rem;
+  }
+
+  .form-row label {
+    width: 150px;
+    margin-bottom: 0;
+    white-space: nowrap;
+  }
+
+  .form-row input {
+    background-color: #e6f2ff !important;
+    width: 100px;
+  }
+
+  #note {
+    width: 300px;
+  }
+
+  input.form-control {
+  background-color: #a2c8f1 !important; /* Celeste chiaro */
+  }
+</style>
+
+<div class="tab-content mt-3">
+  <div class="tab-pane fade show active" id="add" role="tabpanel">
+    <form method="POST" action="{{ url_for('main.budget') }}">
+
+      <!-- Budget mensile -->
+      <div class="form-row">
+        <label for="budget" class="form-label">Budget mensile</label>
+        <input type="number" class="form-control" id="budget" name="budget" required
+               maxlength="4" min="0" max="9999"
+               value="{{ budget_record['budget'] if budget_record else '' }}">
+      </div>
+
+      <!-- Percentuali decadi -->
+      <div class="form-row">
+        <label for="decade1" class="form-label">1ª Decade %</label>
+        <input type="number" class="form-control" id="decade1" name="decade1"
+               value="{{ budget_record['perc_decade_1'] if budget_record else '' }}" min="0" max="100">
+      </div>
+      <div class="form-row">
+        <label for="decade2" class="form-label">2ª Decade %</label>
+        <input type="number" class="form-control" id="decade2" name="decade2"
+               value="{{ budget_record['perc_decade_2'] if budget_record else '' }}" min="0" max="100">
+      </div>
+      <div class="form-row">
+        <label for="decade3" class="form-label">3ª Decade %</label>
+        <input type="number" class="form-control" id="decade3" name="decade3"
+               value="{{ budget_record['perc_decade_3'] if budget_record else '' }}" min="0" max="100">
+      </div>
+
+      <!-- Note -->
+      <div class="form-row">
+        <label for="note" class="form-label">Note</label>
+        <input type="text" class="form-control" id="note" name="note"
+               maxlength="50"
+               value="{{ budget_record['note'] if budget_record else '' }}">
+      </div>
+
+      <button type="submit" class="btn btn-primary">Salva</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,257 @@
+{% extends 'layout.html' %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h2 class="mb-0">📦 Magazzino</h2>
+  <div id="advanced-settings-messages" class="ms-3" style="min-width: 300px; display: inline-block;"></div>
+</div>
+
+<br>
+<style>
+  .custom-table thead {
+      background-color: #0050b9 !important;
+      color: white !important;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+  }
+  .custom-table th, .custom-table td {
+      border: 2px solid #dee2e6;
+      padding: 10px;
+      text-align: center;
+  }
+  .custom-table {
+    border-collapse: collapse !important;
+  }
+  .custom-table tbody tr:nth-child(odd) td {
+      background-color: #ffffff !important;
+  }
+  .custom-table tbody tr:nth-child(even) td {
+      background-color: #e7f1ff !important;
+  }
+  .table-dark {
+      background-color: #0050b9 !important;
+      color: white !important;
+  }
+  .table-container {
+      max-height: 600px;
+      overflow-y: auto;
+      border: 2px solid #dee2e6;
+      display: block;
+  }
+  .table-container .row.bg-primary {
+      background-color: transparent !important;
+  }
+  .consume-btn {
+    min-width: 160px;
+  }
+  #drop-zone {
+    cursor: pointer;
+    transition: background-color 0.2s;
+  }
+  #receipt-preview {
+    max-width: 100%;
+    margin-top: 15px;
+    border: 1px solid #dee2e6;
+    display: none;
+  }
+</style>
+
+<!-- Modale per selezionare il lotto da consumare -->
+<div class="modal fade" id="consumeModal" tabindex="-1" aria-labelledby="consumeModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="consumeModalLabel">Seleziona lotto da consumare</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Chiudi"></button>
+      </div>
+      <div class="modal-body">
+        <select id="consumeSelect" class="form-select"></select>
+      </div>
+      <div class="modal-footer">
+        <button type="button" id="confirmConsumeBtn" class="btn btn-primary">Conferma</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<div class="tab-content mt-3">
+
+  <!-- 📋 Gestione Magazzino -->
+  <div class="tab-pane fade show active" id="gestione" role="tabpanel" aria-labelledby="gestione-tab">
+    <div class="table-container">
+      <table class="table table-bordered custom-table" id="gestione-table">
+        <thead class="table-dark">
+          <tr>
+            <th>Prodotto</th>
+            <th>Barcode</th>
+            <th>Nome</th>
+            <th>Articolo</th>
+            <th>Categoria</th>
+            <th>Prezzo</th>
+            <th>Quantità Attuale</th>
+            <th>Valore Totale</th>
+            <th>Azioni</th>
+          </tr>
+          <tr>
+            <th></th>
+            <th></th>
+            <th>
+              <select id="filterNameGestione" class="form-select form-select-sm"><option value="">Tutti</option></select>
+            </th>
+            <th>
+              <select id="filterArticleGestione" class="form-select form-select-sm"><option value="">Tutti</option></select>
+            </th>
+            <th>
+              <select id="filterCategoryGestione" class="form-select form-select-sm"><option value="">Tutte</option></select>
+            </th>
+            <th colspan="4"></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for product in products %}
+          <tr data-barcode="{{ product.barcode }}">
+            <td>
+              {% if product.image %}
+                <img src="{{ product.image }}" alt="Immagine prodotto" style="max-width: 80px; height: auto;">
+              {% else %}
+                <span class="text-muted">Nessuna immagine</span>
+              {% endif %}
+            </td>
+            <td>{{ product.barcode or "-" }}</td>
+            <td>{{ product.name or "-" }}</td>
+            <td>{{ product.item or "-" }}</td>
+            <td>{{ product.category or "-" }}</td>
+            <td>€{{ product.price or "0.00" }}</td>  
+            <td>{{ product.quantity_in_inventory or "-" }}</td>
+            <td>€{{ product.total_value or "0.00" }}</td>
+            <td>
+              <button class="btn btn-sm btn-warning consume-btn">🍽️ Consumato</button>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- 🩹 Primo soccorso -->
+  <div class="tab-pane fade" id="pharmacy" role="tabpanel" aria-labelledby="pharmacy-tab">
+    <div class="container mt-4">
+      <h5>🩹 Primo soccorso</h5>
+      <p>Questa sezione è dedicata ai prodotti farmaceutici e sarà sviluppata in seguito.</p>
+    </div>
+  </div>
+
+  <!-- 🧼 Igene personale -->  
+  <div class="tab-pane fade" id="pharmacy" role="tabpanel" aria-labelledby="pharmacy-tab">
+    <div class="container mt-4">
+      <h5>🧼 Igene personale</h5>
+      <p>Questa sezione è dedicata ai prodotti farmaceutici e sarà sviluppata in seguito.</p>
+    </div>
+  </div>  
+
+  <!-- 🏠 Prodotti per la casa -->
+  <div class="tab-pane fade" id="pharmacy" role="tabpanel" aria-labelledby="pharmacy-tab">
+    <div class="container mt-4">
+      <h5>🏠 Prodotti per la casa</h5>
+      <p>Questa sezione è dedicata ai prodotti per la casa e sarà sviluppata in seguito.</p>
+    </div>
+  </div>  
+
+  <!-- 🔦 Tools, luce e energia -->
+  <div class="tab-pane fade" id="pharmacy" role="tabpanel" aria-labelledby="pharmacy-tab">
+    <div class="container mt-4">
+      <h5>🔦 Tools, luce e energia</h5>
+      <p>Questa sezione è dedicata ai prodotti Tool, Luce ed energia e sarà sviluppata in seguito.</p>
+    </div>
+  </div>  
+
+</div>
+
+<!-- --- SCRIPT --- -->
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  // --- FILTRI E CONSUMO ---
+  function populateGestioneFilters() {
+    const nameSet = new Set(), articleSet = new Set(), categorySet = new Set();
+    document.querySelectorAll('#gestione-table tbody tr').forEach(row => {
+      if(row.children[2].textContent) nameSet.add(row.children[2].textContent.trim());
+      if(row.children[3].textContent) articleSet.add(row.children[3].textContent.trim());
+      if(row.children[4].textContent) categorySet.add(row.children[4].textContent.trim());
+    });
+    const filterName = document.getElementById('filterNameGestione');
+    const filterArticle = document.getElementById('filterArticleGestione');
+    const filterCategory = document.getElementById('filterCategoryGestione');
+    filterName.innerHTML = '<option value="">Tutti</option>';
+    filterArticle.innerHTML = '<option value="">Tutti</option>';
+    filterCategory.innerHTML = '<option value="">Tutte</option>';
+    Array.from(nameSet).sort().forEach(n=>filterName.innerHTML+=`<option value="${n}">${n}</option>`);
+    Array.from(articleSet).sort().forEach(a=>filterArticle.innerHTML+=`<option value="${a}">${a}</option>`);
+    Array.from(categorySet).sort().forEach(c=>filterCategory.innerHTML+=`<option value="${c}">${c}</option>`);
+  }
+
+  function filterGestioneTable() {
+    const nameVal = document.getElementById('filterNameGestione').value;
+    const articleVal = document.getElementById('filterArticleGestione').value;
+    const catVal = document.getElementById('filterCategoryGestione').value;
+    document.querySelectorAll('#gestione-table tbody tr').forEach(row => {
+      const show = (!nameVal || row.children[2].textContent.trim()===nameVal)
+                && (!articleVal || row.children[3].textContent.trim()===articleVal)
+                && (!catVal || row.children[4].textContent.trim()===catVal);
+      row.style.display = show ? '' : 'none';
+    });
+  }
+
+  populateGestioneFilters();
+  document.getElementById('filterNameGestione').addEventListener('change', filterGestioneTable);
+  document.getElementById('filterArticleGestione').addEventListener('change', filterGestioneTable);
+  document.getElementById('filterCategoryGestione').addEventListener('change', filterGestioneTable);
+
+  // --- Bottone Consumato ---
+  let selectedRow=null, selectedBarcode=null;
+  document.querySelectorAll('#gestione-table .consume-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      selectedRow = btn.closest('tr');
+      selectedBarcode = selectedRow.dataset.barcode;
+      const productName = selectedRow.children[2].textContent.trim();
+      fetch("/products/unconsumed_dropdown").then(res=>res.json()).then(products=>{
+        const filtered = products.filter(p=>p.name===productName);
+        const select = document.getElementById('consumeSelect');
+        select.innerHTML='';
+        if(filtered.length>0){
+          filtered.forEach(record=>{
+            select.innerHTML += `<option value="${record.ins_date}|${record.expiry_date}|${record.id}|${record.barcode}|${record.quantity}">Inserito: ${record.ins_date} - Scadenza: ${record.expiry_date||'N/A'} - Q.tà: ${record.quantity}</option>`;
+          });
+          new bootstrap.Modal(document.getElementById('consumeModal')).show();
+        } else alert("Nessun lotto disponibile per questo prodotto.");
+      });
+    });
+  });
+
+  document.getElementById('confirmConsumeBtn').addEventListener('click',()=>{
+    const select = document.getElementById('consumeSelect');
+    if(!select.value) return;
+    const [ins_date, expiry_date, id, product_key, quantity] = select.value.split('|');
+    fetch(`/consumed_product?id=${id}&product_key=${product_key}&barcode=${encodeURIComponent(selectedBarcode)}&ins_date=${ins_date}&expiry_date=${expiry_date}&quantity=${quantity}`)
+      .then(res=>res.json())
+      .then(data=>{
+        if(data.success){
+          selectedRow.children[6].textContent = data.quantita;
+          const prezzo = parseFloat(selectedRow.children[5].textContent.replace('€','').replace(',','.'));
+          selectedRow.children[7].textContent = isNaN(prezzo)||isNaN(data.quantita) ? "0.00" : `€${(prezzo*parseInt(data.quantita,10)).toFixed(2)}`;
+          const btn = selectedRow.querySelector('.consume-btn');
+          btn.textContent="✅ DB Aggiornato";
+          btn.classList.replace('btn-warning','btn-success');
+          btn.disabled=true;
+          bootstrap.Modal.getInstance(document.getElementById('consumeModal')).hide();
+          setTimeout(()=>{btn.textContent="🍽️ Consumato"; btn.classList.replace('btn-success','btn-warning'); btn.disabled=false;},2000);
+        } else alert("Errore durante la registrazione del consumo.");
+      });
+  });
+});
+
+</script>
+
+{% endblock %}

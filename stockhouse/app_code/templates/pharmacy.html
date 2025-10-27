@@ -1,0 +1,58 @@
+{% extends 'layout.html' %}
+{% block title %}⚕️ Primo Soccorso{% endblock %}
+
+{% block content %}
+<h2>⚕️ Prodotti - Primo Soccorso</h2>
+<br>
+
+<!-- Mostra il messaggio se esiste -->
+{% if message %}
+<div class="alert alert-info" role="alert">
+  <i class="bi bi-info-circle"></i> {{ message }}
+</div>
+{% endif %}
+
+<!-- Tabella per visualizzare i prodotti -->
+{% if products %}
+<div class="table-container" style="max-height: 600px; overflow-y: auto; border: 1px solid #dee2e6;">
+  <table class="table table-striped custom-table">
+    <thead style="position: sticky; top: 0; background-color: #f8f9fa; z-index: 1;">
+      <tr>
+        <th>Image</th>
+        <th>Name</th>
+        <th>Notes</th>
+        <th>Brand</th>
+        <th>Shop</th>
+        <th>Price</th>
+        <th>Quantity</th>
+        <th>Expiry Date</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for product in products %}
+      <tr {% if product.expiry_date and product.expiry_date < current_date %} style="background-color:#ffe6e6;" {% endif %}>
+        <td>
+          {% if product.image %}
+            <img src="{{ product.image }}" alt="Product Image" width="50">
+          {% else %}
+            N/A
+          {% endif %}
+        </td>
+        <td>{{ product.name }}</td>
+        <td>{{ product.notes or '—' }}</td>
+        <td>{{ product.brand }}</td>
+        <td>{{ product.shop }}</td>
+        <td>{{ product.price }} €</td>
+        <td>{{ product.quantity }}</td>
+        <td>{{ product.expiry_date or '—' }}</td>
+        <td>{{ product.status }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<p>Nessun prodotto trovato nella categoria Primo Soccorso.</p>
+{% endif %}
+{% endblock %}

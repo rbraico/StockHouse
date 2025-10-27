@@ -1,0 +1,22 @@
+/* === Tabella personalizzata === */
+thead th {
+    background-color: #007bff !important;  /* Azzurro */
+    color: white !important;
+}
+
+tbody tr:nth-child(odd) {
+    background-color: #ffffff !important;  /* Bianco */
+}
+
+tbody tr:nth-child(even) {
+    background-color: #e6f2ff !important;  /* Celeste */
+}
+
+tbody tr:hover {
+    background-color: #d0e7ff !important;
+}
+
+table td, table th {
+    text-align: center;
+    vertical-align: middle;
+}

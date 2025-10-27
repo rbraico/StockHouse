@@ -1,0 +1,37 @@
+{% extends "layout.html" %}
+
+{% block content %}
+    <h2>✏️ Modifica Articolo</h2>
+
+    <form method="POST">
+        <br>
+        <div class="mb-3">
+            <label for="name" class="form-label">Articolo</label>
+            <input type="text" class="form-control" id="name" name="name" value="{{ item[1] }}" required>
+        </div>
+        <br>
+        <!-- Categoria -->
+        <div class="row mb-2 align-items-center">
+            <div class="col-2">
+                <label for="category" class="form-label mb-0" style="color: #00008B" >Categoria</label>
+            </div>
+            <div class="col-5">
+                <select class="form-select form-select-sm" id="category" name="category" required style="background-color:  #e6f2ff;">
+                <option value="">Seleziona una categoria</option>
+                {% for cat in categories %}
+                   <option value="{{ cat[0] }}" {% if cat[0] == item[2] %}selected{% endif %}>{{ cat[1] }}</option>
+                {% endfor %}
+                </select>
+            </div>
+        </div>
+        <br>
+        <div class="mb-3">
+            <label for="note" class="form-label">Note</label>
+            <input type="text" class="form-control" id="note" name="note" value="{{ item[3] }}">
+        </div>
+        <br>
+
+        <button type="submit" class="btn btn-primary">Salva modifiche</button>
+        <a href="{{ url_for('main.items') }}" class="btn btn-secondary">Annulla</a>
+    </form>
+{% endblock %}

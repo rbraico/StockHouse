@@ -1,0 +1,297 @@
+{% extends 'layout.html' %}
+{% block title %}Home{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+  <!-- Intestazione -->
+  <div class="text-center mb-4">
+    <h1>Benvenuto in StockHouse</h1>
+    <p class="lead">Decade corrente: {{ current_decade }}</p>
+  </div>
+
+  <!-- Prima riga di informazioni -->
+  <div class="row text-center mb-4">
+    <div class="col-md-4">
+      <div class="info-box" onclick="showRecords('/home_expiring_products')">
+        <h5>Prodotti in Scadenza mese corrente</h5>
+        <p class="text-muted">
+          <strong id="expiring-count" class="highlighted-number">0</strong>
+        </p>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="info-box" onclick="showRecords('/home_out_of_stock_products')">
+        <h5>Prodotti Esauriti</h5>
+        <p class="text-muted">
+           <strong id="out-of-stock-count" class="highlighted-number">0</strong>
+        </p>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="info-box" onclick="showRecords('/home_critical_stock')">
+        <h5>Prodotti con Scorte Critiche</h5>
+        <p class="text-muted">
+           <strong id="critical-stock-count" class="highlighted-number">0</strong>
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Seconda riga di informazioni -->
+  <div class="row text-center">
+    <div class="col-md-4">
+      <div class="info-box" onclick="showRecords('/unknown_products')">
+        <h5>Prodotti da confermare</h5>
+        <p class="text-muted">
+          <strong id="unknown-products-count" class="highlighted-number">0</strong>
+        </p>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="info-box" onclick="showRecords('/home_reorder_products')">
+        <h5>Prodotti da Riordinare</h5>
+        <p class="text-muted">
+         <strong id="reorder-count" class="highlighted-number">0</strong>
+         </p>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="info-box">
+        <h5>Spesa Prevista</h5>
+        <p class="text-muted">
+          Totale spesa: 
+          <strong id="reorder-total-cost" class="highlighted-number">0.00 €</strong>
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Tabella nascosta per mostrare i dati -->
+<div id="records-table-container" style="display: none; margin-top: 20px;">
+  <h3 id="table-title"></h3>
+  <div style="overflow-y: auto; max-height: 400px;">
+    <table class="table table-striped">
+      <thead>
+        <tr id="table-headers">
+          <!-- Intestazioni della tabella -->
+        </tr>
+      </thead>
+      <tbody id="table-body">
+        <!-- Dati della tabella -->
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<style>
+  /* Sfondo celeste molto tenue */
+  body {
+    background-color: #e6f7ff; /* Celeste molto tenue */
+  }
+
+  /* Stile per le aree quadrate */
+  .info-box {
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    padding: 20px;
+    background-color: #f8f9fa;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    height: 150px; /* Altezza uniforme per tutte le aree */
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer; /* Aggiunto per indicare che è cliccabile */
+  }
+
+  .info-box:hover {
+    background-color: #e2e6ea; /* Cambia colore al passaggio del mouse */
+  }
+
+  .info-box h5 {
+    margin-top: 10px;
+    font-weight: bold;
+    color: #0056b3;
+  }
+
+  .info-box p {
+    font-size: 0.9rem;
+    color: #6c757d;
+  }
+
+  /* Stile per il numero evidenziato */
+  .highlighted-number {
+    font-size: 2rem; /* Dimensione del testo più grande */
+    color: #0056b3; /* Colore blu */
+  }
+
+</style>
+
+<style>
+  /* Contenitore della tabella */
+  #records-table-container {
+    margin: 20px auto; /* Centra la tabella */
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid #ddd;
+    background-color: #f9f9f9;
+    max-width: 1000px; /* Limita la larghezza massima */
+  }
+
+  /* Tabella */
+  #records-table-container .table {
+    width: 100%;
+    table-layout: fixed; /* Colonne a larghezza fissa */
+    border-collapse: collapse;
+    background-color: #fff;
+  }
+
+  /* Intestazioni della tabella */
+  #records-table-container .table thead {
+    display: table;
+    width: 100%;
+    table-layout: fixed;
+  }
+
+  #records-table-container .table thead th {
+    background-color: #f1f1f1;
+    border: 1px solid #ddd;
+    padding: 10px;
+    text-align: left;
+    font-weight: bold;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* Corpo della tabella */
+  #records-table-container .table tbody {
+    display: block;
+    max-height: 200px;
+    overflow-y: auto;
+    width: 100%;
+  }
+
+  #records-table-container .table tbody tr {
+    display: table;
+    table-layout: fixed;
+    width: 100%;
+  }
+
+  #records-table-container .table tbody td {
+    border: 1px solid #ddd;
+    padding: 8px;
+    text-align: left;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* Riga alternata */
+  #records-table-container .table tbody tr:nth-child(even) {
+    background-color: #f9f9f9;
+  }
+
+  /* Hover */
+  #records-table-container .table tbody tr:hover {
+    background-color: #e6f7ff;
+  }
+</style>
+
+
+<script>
+    fetch('/expiring_products_count')
+      .then(response => response.json())
+      .then(data => {
+        document.getElementById('expiring-count').textContent = data.expiring_products_count;
+      })
+      .catch(error => console.error('Errore nel recupero dei dati:', error));
+</script>
+
+<script>
+  fetch('/out_of_stock_count')
+    .then(response => response.json())
+    .then(data => {
+      document.getElementById('out-of-stock-count').textContent = data.out_of_stock_count;
+    })
+    .catch(error => console.error('Errore nel recupero dei dati:', error));
+</script>
+
+<script>
+  fetch('/critical_stock_count')
+    .then(response => response.json())
+    .then(data => {
+      document.getElementById('critical-stock-count').textContent = data.critical_stock_count;
+    })
+    .catch(error => console.error('Errore nel recupero dei dati:', error));
+</script>
+
+<script>
+  fetch('/unknown_products_count')
+    .then(response => response.json())
+    .then(data => {
+      document.getElementById('unknown-products-count').textContent = data.unknown_products_count;
+    })
+    .catch(error => console.error('Errore nel recupero dei dati:', error));
+</script>
+
+<script>
+  fetch('/reorder_count')
+    .then(response => response.json())
+    .then(data => {
+      document.getElementById('reorder-count').textContent = data.reorder_count;
+    })
+    .catch(error => console.error('Errore nel recupero dei dati:', error));
+</script>
+
+<script>
+  fetch('/reorder_total_cost')
+    .then(response => response.json())
+    .then(data => {
+      document.getElementById('reorder-total-cost').textContent = `${data.reorder_total_cost} €`;
+    })
+    .catch(error => console.error('Errore nel recupero dei dati:', error));
+</script>
+
+<script>
+function showRecords(endpoint, title) {
+  fetch(endpoint)
+    .then(response => response.json())
+    .then(data => {
+      // Mostra la tabella e popola i dati
+      const tableContainer = document.getElementById('records-table-container');
+      tableContainer.style.display = 'block';
+
+      const tableTitle = document.getElementById('table-title');
+      tableTitle.textContent = title;
+
+      const tableHeaders = document.getElementById('table-headers');
+      tableHeaders.innerHTML = '';
+      if (data.headers) {
+        data.headers.forEach(header => {
+          const th = document.createElement('th');
+          th.textContent = header;
+          tableHeaders.appendChild(th);
+        });
+      }
+
+      const tableBody = document.getElementById('table-body');
+      tableBody.innerHTML = '';
+      if (data.records) {
+        data.records.forEach(record => {
+          const tr = document.createElement('tr');
+          record.forEach(cell => {
+            const td = document.createElement('td');
+            td.textContent = cell;
+            tr.appendChild(td);
+          });
+          tableBody.appendChild(tr);
+        });
+      }
+    })
+    .catch(error => console.error('Errore nel recupero dei dati:', error));
+}
+</script>
+
+{% endblock %}

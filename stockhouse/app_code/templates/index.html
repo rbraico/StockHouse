@@ -1,0 +1,1057 @@
+{% extends 'layout.html' %}
+{% block title %}Inserisci Prodotto{% endblock %}
+
+{% block content %}
+<h2>🛒 Gestione prodotti</h2>
+<br>
+<!-- Stile per righe alternate -->
+<style>
+  /* 🔷 Intestazione tabella */
+  .custom-table thead {
+      background-color: #0050b9 !important;
+      color: white !important;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+  }
+
+  /* 🔷 Celle tabella compatte */
+  .custom-table th, .custom-table td {
+      border: 2px solid #dee2e6;
+      padding: 6px; /* Ridotto da 10px */
+      text-align: center;
+      font-size: 13px;
+      white-space: nowrap;
+  }
+
+  .custom-table {
+      border-collapse: collapse !important;
+  }
+
+  /* 🔷 Righe alternate */
+  .custom-table tbody tr:nth-child(odd) td {
+      background-color: #ffffff !important;
+  }
+
+  .custom-table tbody tr:nth-child(even) td {
+      background-color: #dcf5fe6a !important;
+  }
+
+  .table-dark {
+      background-color: #0050b9 !important;
+      color: white !important;
+  }
+
+  /* 🔷 Contenitore tabella */
+  .table-container {
+      max-height: 600px;
+      overflow-y: auto;
+      overflow-x: auto;
+      border: 2px solid #007BA7;
+      display: block;
+      max-width: 100%;
+  }
+
+  .table-container .row.bg-primary {
+      background-color: transparent !important;
+  }
+
+  /* 🔷 Pulsante compatto */
+  .consume-btn {
+      min-width: 120px;
+      padding: 6px 10px;
+      font-size: 13px;
+  }
+
+  /* 🔷 Cornice immagine prodotto */
+  .product-image-frame {
+      border: 2px solid #ccc;
+      border-radius: 12px;
+      padding: 10px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+      background-color: #e6f2ff;
+      max-width: 300px;
+      text-align: center;
+  }
+
+  .product-image-frame img {
+      max-width: 100%;
+      border-radius: 8px;
+  }
+
+  /* 🔷 Campo filtro */
+  #filterNameList {
+      width: 225px;
+      min-width: 200px;
+      padding: 6px 10px;
+      font-size: 14px;
+      border-radius: 6px;
+      border: 1px solid #ccc;
+      box-sizing: border-box;
+  }
+
+  /* 🔷 Select compatti */
+  .table-select-necessity,
+  .table-select-season {
+      width: 100%;
+      min-width: 100px;
+      text-align: left;
+      padding: 8px;
+      font-size: 14px;
+      box-sizing: border-box;
+  }
+
+  .table-select-season {
+      direction: ltr;
+  }
+
+  /* 🔷 Campi input */
+  #shop, #item {
+      max-width: 220px;
+      width: 100%;
+  }
+
+  /* 🔷 Layout compatto per inserimento prodotto */
+  .form-row {
+      display: grid;
+      grid-template-columns: 100px 1fr;
+      gap: 6px;
+      margin-bottom: 8px;
+      align-items: center;
+  }
+
+  label {
+      width: 100px;
+      font-size: 14px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+  }
+
+  input[type="text"],
+  input[type="number"],
+  select {
+      padding: 6px 8px;
+      font-size: 14px;
+      width: 100%;
+      max-width: 200px;
+      box-sizing: border-box;
+  }
+</style>
+ 
+
+
+
+<!-- Crea le 3 tab -->
+<ul class="nav nav-tabs" id="categoryTabs" role="tablist">
+  <li class="nav-item" role="presentation">
+      <button class="nav-link active" id="add-tab" data-bs-toggle="tab" data-bs-target="#add" type="button" role="tab">
+          ➕ Aggiungi Prodotto
+      </button>
+  </li>
+  <li class="nav-item" role="presentation">
+    <button class="nav-link" id="manage-tab" data-bs-toggle="tab" data-bs-target="#manage" type="button" role="tab">
+        🛠️ Modifica/Rimuovi Prodotto
+    </button>
+  </li>  
+  <li class="nav-item" role="presentation">
+    <button class="nav-link" id="list-tab" data-bs-toggle="tab" data-bs-target="#list" type="button" role="tab" aria-controls="list" aria-selected="false">
+       ⚙️ Impostazioni di prodotto
+    </button>
+  </li>
+</ul>
+
+<!-- Contenuto delle tab -->
+<div class="tab-content mt-3">
+  
+  
+<!-- Prima tab: Aggiungi Prodotto -->
+<div class="tab-pane fade show active" id="add" role="tabpanel">
+  <div class="row">
+    <!-- Form a sinistra -->
+    <div class="col-md-5">
+      <form method="POST" class="text-start" id="product-form">
+        <br>
+        <!-- Barcode -->
+        <div class="row mb-2 align-items-center">
+          <div class="col-4">
+            <label for="barcode" class="form-label mb-0" style="color: #00008B">Barcode</label>
+          </div>
+          <div class="col-8">
+            <input type="text" class="form-control form-control-sm" 
+                  id="barcode" name="barcode" maxlength="25"
+                  style="background-color:  #e6f2ff;"
+                  onchange="autoFillProduct()" onblur="checkBarcodeField()">   
+            
+            <!-- Messaggio nascosto -->
+            <div id="barcodeMessage" style="display:none; color: red; margin-top: 5px; font-size: 0.9em;">
+              Nessun barcode inserito. Vuoi usare il nome del prodotto come barcode?<br>
+              <button type="button" class="btn btn-sm btn-success" onclick="useProductNameAsBarcode()">Sì</button>
+              <button type="button" class="btn btn-sm btn-secondary" onclick="dismissBarcodeMessage()">No</button>
+            </div>
+          </div>
+        </div>
+
+
+        <!-- Nome -->
+        <div class="row mb-2 align-items-center">
+          <div class="col-4">
+            <label for="name" class="form-label mb-0" style="color: #00008B">Nome</label>
+          </div>
+          <div class="col-8">
+            <input type="text" class="form-control form-control-sm" id="name" name="name" required maxlength="25" style="background-color:  #e6f2ff;">
+          </div>
+        </div>
+
+        <!-- Marca -->
+        <div class="row mb-2 align-items-center">
+          <div class="col-4">
+            <label for="brand" class="form-label mb-0" style="color: #00008B">Marca</label>
+          </div>
+          <div class="col-8">
+            <input type="text" class="form-control form-control-sm" id="brand" name="brand" required maxlength="25" style="background-color:  #e6f2ff;">
+          </div>
+        </div>
+
+        <!-- Negozio -->
+        <div class="row mb-2 align-items-center">
+          <div class="col-4">
+            <label for="shop" class="form-label mb-0" style="color: #00008B">Negozio</label>
+          </div>
+          <div class="col-8">
+            <select class="form-select form-select-sm" id="shop" name="shop" required style="background-color:  #e6f2ff;">
+              <option value="">Seleziona un negozio</option>
+              {% for shop in shops %}
+                <option value="{{ shop[1] }}">{{ shop[1] }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+
+        <!-- Prezzo -->
+        <div class="row mb-2 align-items-center">
+          <div class="col-4">
+            <label for="price" class="form-label mb-0" style="color: #00008B">Prezzo</label>
+          </div>
+          <div class="col-8">
+            <input type="number" step="0.01" class="form-control form-control-sm" id="price" name="price" required style="background-color:  #e6f2ff;">
+          </div>
+        </div>
+
+        <!-- Quantità -->
+        <div class="row mb-2 align-items-center">
+          <div class="col-4">
+            <label for="quantity" class="form-label mb-0" style="color: #00008B">Quantità</label>
+          </div>
+          <div class="col-8">
+            <input type="number" min="1" class="form-control form-control-sm" id="quantity" name="quantity" required style="background-color:  #e6f2ff;">
+          </div>
+        </div>
+
+        <!-- Articolo -->
+        <div class="row mb-2 align-items-center">
+          <div class="col-4">
+            <label for="item" class="form-label mb-0" style="color: #00008B">Articolo</label>
+          </div>
+          <div class="col-8">
+            <select class="form-select form-select-sm" id="item" name="item" required style="background-color:  #e6f2ff;">
+              <option value="">Seleziona un tipo di articolo</option>
+              {% for cat in items %}
+                <option value="{{ cat[1] }}">{{ cat[1] }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+
+        <!-- Scadenza -->
+        <div class="row mb-2 align-items-center">
+          <div class="col-4">
+            <label for="expiry_date" class="form-label mb-0" style="color: #00008B">Scadenza</label>
+          </div>
+          <div class="col-8">
+            <input type="date" class="form-control form-control-sm" id="expiry_date" name="expiry_date" style="background-color:  #e6f2ff;">
+          </div>
+        </div>
+
+        <!-- Note -->
+        <div class="row mb-2 align-items-center">
+          <div class="col-4">
+            <label for="notes" class="form-label mb-0" style="color: #00008B">Note</label>
+          </div>
+          <div class="col-8">
+            <textarea class="form-control form-control-sm" id="notes" name="notes" rows="4" maxlength="500"
+              style="background-color: #e6f2ff; resize: none; width: 100%;"
+              placeholder="se ci sono...">{{ products.notes | default('', true) }}</textarea>
+          </div>
+        </div>
+
+        <!-- Submit -->
+        <button type="submit" class="btn btn-primary mt-2">Aggiungi Prodotto</button>
+      </form>
+    </div>
+
+    <!-- Immagine al centro -->
+    <div class="col-md-3 d-flex align-items-start justify-content-center">
+      <div class="product-image-frame" style="max-width: 100%;">
+        <img id="productImage" src="" alt="Immagine prodotto" style="display: none; max-width: 100%;">
+        <p id="image-placeholder" class="text-muted">🔍 Inserisci un barcode per vedere l'immagine.</p>
+      </div>
+    </div>
+
+    <!-- Tabella prodotti sconosciuti -->
+    <div class="col-md-4" id="unknown-products-panel" style="display: none;">
+      <h6 class="text-center" style="color: #00008B;">Prodotti Sconosciuti</h6>
+      <div style="overflow-y: auto; max-height: 300px; border: 1px solid #dee2e6; border-radius: 5px;">
+        <table class="table table-sm table-bordered mb-0">
+          <thead style="position: sticky; top: 0; background-color: #f1f1f1;">
+            <tr>
+              <th>Prodotto</th>
+              <th>Negozio</th>
+              <th>Data</th>
+            </tr>
+          </thead>
+          <tbody id="unknown-products-body">
+            <!-- Popolamento dinamico -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <hr class="my-4">
+
+  {% if new_product %}
+  <h3>Prodotto appena inserito</h3>
+  <table class="table table-bordered mt-3 text-center">
+    <thead>
+      <tr>
+        <th>Nome</th><th>Marca</th><th>Negozio</th><th>Prezzo</th>
+        <th>Quantità</th><th>Categoria</th><th>Item</th><th>Data Scadenza</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>{{ new_product.name }}</td>
+        <td>{{ new_product.brand }}</td>
+        <td>{{ new_product.shop }}</td>
+        <td>{{ new_product.price }}</td>
+        <td>{{ new_product.quantity }}</td>
+        <td>{{ new_product.category }}</td>
+        <td>{{ new_product.item }}</td>
+        <td>{{ new_product.expiry_date }}</td>
+      </tr>
+    </tbody>
+  </table>
+  {% endif %}
+</div>
+
+
+  <!-- Seconda tab: Modifica/Rimuovi Prodotto -->
+<div class="tab-pane fade" id="manage" role="tabpanel">
+  <div class="table-container" style="max-height: 600px; overflow-y: auto; border: 1px solid #dee2e6;">
+    <table class="table table-striped custom-table">
+      <thead style="position: sticky; top: 0; background-color: #f8f9fa; z-index: 1;">
+        <tr>
+          <th>Immagine</th>
+          <th>
+            Nome
+            <select id="filter-name" onchange="filterTable()">
+              <option value="">Tutti</option>
+              {% set names = products | map(attribute='name') | unique | sort %}
+              {% for name in names %}
+                <option value="{{ name }}">{{ name }}</option>
+              {% endfor %}
+            </select>
+          </th>
+
+          <th>
+            Categoria
+            <select id="filter-category" onchange="filterTable()">
+              <option value="">Tutti</option>
+              {% set categories = products | map(attribute='category') | unique | sort %}
+              {% for category in categories %}
+                <option value="{{ category }}">{{ category }}</option>
+              {% endfor %}
+            </select>
+          </th>
+          <th>
+            Articolo
+            <select id="filter-item" onchange="filterTable()">
+              <option value="">Tutti</option>
+              {% set items = products | map(attribute='item') | unique | sort %}
+              {% for item in items %}
+                <option value="{{ item }}">{{ item }}</option>
+              {% endfor %}
+            </select>
+          </th>
+          <th>Azioni</th>
+        </tr>
+      </thead>
+      <tbody id="product-table-body">
+        {% for product in products %}
+        <tr>
+          <td>
+            {% if product.image %}
+              <img src="{{ product.image }}" alt="Immagine prodotto" width="50">
+            {% else %}
+              N/A
+            {% endif %}
+          </td>
+          <td>{{ product.name }}</td>
+          <td>{{ product.category }}</td>
+          <td>{{ product.item }}</td>
+          <td>
+            <a href="#" class="btn btn-sm btn-warning edit-row-btn" data-barcode="{{ product.barcode }}" data-name="{{ product.name }}">✏️ Modifica</a>
+            <a href="#" class="btn btn-sm btn-danger delete-row-btn" data-barcode="{{ product.barcode }}" data-name="{{ product.name }}">❌ Elimina</a>
+         </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Modale per selezionare la data di inserimento -->
+  <div class="modal fade" id="editInsDateModal" tabindex="-1" aria-labelledby="editInsDateModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="editInsDateModalLabel">Seleziona data di inserimento</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Chiudi"></button>
+        </div>
+        <div class="modal-body">
+          <select id="editInsDateSelect" class="form-select"></select>
+        </div>
+        <div class="modal-footer">
+          <button type="button" id="confirmEditInsDateBtn" class="btn btn-primary">Conferma</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- questo script Riempie il filtro modale per inserire ins_date nella seconda tab -->
+<script>
+document.querySelectorAll('.edit-row-btn').forEach(function(button) {
+  button.addEventListener('click', function(e) {
+    e.preventDefault();
+    const barcode = button.dataset.barcode;
+    const name = button.dataset.name;
+    fetch(`/products/ins_dates?barcode=${encodeURIComponent(barcode)}`)
+      .then(res => res.json())
+      .then(dates => {
+        const select = document.getElementById('editInsDateSelect');
+        select.innerHTML = '';
+        dates.forEach(date => {
+          select.innerHTML += `<option value="${date}">${date}</option>`;
+        });
+        select.dataset.barcode = barcode;
+        select.dataset.name = name;
+        const modal = new bootstrap.Modal(document.getElementById('editInsDateModal'));
+        modal.show();
+      });
+  });
+});
+
+document.getElementById('confirmEditInsDateBtn').addEventListener('click', function() {
+  const select = document.getElementById('editInsDateSelect');
+  const barcode = select.dataset.barcode;
+  const name = select.dataset.name;
+  const ins_date = select.value;
+  const action = select.dataset.action || 'edit';
+
+  if (action === 'delete') {
+    // Vai alla route di eliminazione con i parametri scelti
+    window.location.href = `/delete_product/${encodeURIComponent(barcode)}/${encodeURIComponent(ins_date)}`;
+  } else {
+    // Vai alla pagina di modifica con i parametri scelti
+    window.location.href = `/edit/${encodeURIComponent(barcode)}/${encodeURIComponent(ins_date)}`;
+  }
+});
+</script>
+
+<!-- Questo script serve per applicare il filtro su ins_date per il tasto Elimina --->
+<script>
+document.querySelectorAll('.delete-row-btn').forEach(function(button) {
+  button.addEventListener('click', function(e) {
+    e.preventDefault();
+    const barcode = button.dataset.barcode;
+    const name = button.dataset.name;
+    fetch(`/products/ins_dates?barcode=${encodeURIComponent(barcode)}`)
+      .then(res => res.json())
+      .then(dates => {
+        const select = document.getElementById('editInsDateSelect');
+        select.innerHTML = '';
+        dates.forEach(date => {
+          select.innerHTML += `<option value="${date}">${date}</option>`;
+        });
+        select.dataset.barcode = barcode;
+        select.dataset.name = name;
+        select.dataset.action = 'delete'; // <--- aggiungi questa riga
+        const modal = new bootstrap.Modal(document.getElementById('editInsDateModal'));
+        modal.show();
+      });
+  });
+});
+</script>
+
+<script>
+  function filterTable() {
+    const nameFilter = document.getElementById("filter-name").value.toLowerCase();
+    const categoryFilter = document.getElementById("filter-category").value.toLowerCase();
+    const itemFilter = document.getElementById("filter-item").value.toLowerCase();
+
+    const rows = document.querySelectorAll("#product-table-body tr");
+
+    rows.forEach(row => {
+      const name = row.cells[1].textContent.toLowerCase();
+      const category = row.cells[2].textContent.toLowerCase();
+      const item = row.cells[3].textContent.toLowerCase();
+
+      if ((nameFilter === "" || name.includes(nameFilter)) &&
+          (categoryFilter === "" || category.includes(categoryFilter)) &&
+          (itemFilter === "" || item.includes(itemFilter))) {
+        row.style.display = "";
+      } else {
+        row.style.display = "none";
+      }
+    });
+  }
+</script>
+
+<!-- ... il resto della tua pagina ... -->
+
+<script>
+  // Al caricamento della pagina controlla se ?tab=manage è nella URL e attiva la tab
+  document.addEventListener('DOMContentLoaded', function () {
+    const urlParams = new URLSearchParams(window.location.search);
+    const tabParam = urlParams.get('tab');
+    if (tabParam === 'manage') {
+      const triggerEl = document.querySelector('#manage-tab');
+      if (triggerEl) {
+        const tab = new bootstrap.Tab(triggerEl);
+        tab.show();
+      }
+    }
+  });
+
+
+</script>
+
+
+
+ <!-- terza tab - ⚙️ Impostazioni di prodotto -->
+  <div class="tab-pane fade" id="list" role="tabpanel" aria-labelledby="list-tab">
+    <div class="table-container">
+      <table class="table table-bordered custom-table" id="list-table">
+        <thead class="table-dark">
+          <tr>
+            <th>Prodotto</th>
+            <th>Nome</th>
+            <th>Necessita`</th>
+            <th>Stagione</th>
+            <th>Priorita`</th>
+            <th>Scorta Min</th>
+            <th>Scorta Max</th>
+            <th>Scorta Sicurezza</th>
+            <th>Punto Ordine</th>
+            <th>Media Durata</th>
+            <th>Media Ordine</th>
+            <th>Auto Sync</th>
+            <th>Azioni</th>
+          </tr>
+          <tr>
+            <th></th>
+            <th>
+              <select id="filterNameList" class="form-select form-select-sm">
+                <option value="">Tutti</option>
+              </select>
+            </th>
+
+            </th>
+            <th colspan="11"></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for product in products %}
+          <tr data-barcode="{{ product.barcode }}">
+            <td>
+              {% if product.image %}
+                <img src="{{ product.image }}" alt="Immagine prodotto" style="max-width: 80px; height: auto;">
+              {% else %}
+                <span class="text-muted">Nessuna immagine</span>
+              {% endif %}
+            </td>
+            <td>{{ product.name }}</td>
+            <!-- Necessità (dropdown) -->
+            <td>
+              <select class="table-select-necessity select-editable" name="Necessita`" data-field="necessity_level">
+                <option value="Indispensabile" {% if product.necessity_level == 'Indispensabile' %}selected{% endif %}>Indispensabile</option>
+                <option value="Utile" {% if product.necessity_level == 'Utile' %}selected{% endif %}>Utile</option>
+                <option value="Occasionale" {% if product.necessity_level == 'Occasionale' %}selected{% endif %}>Occasionale</option>
+                <option value="Stagionale" {% if product.necessity_level == 'Stagionale' %}selected{% endif %}>Stagionale</option>
+              </select>
+            </td>
+
+            <!-- Stagione (dropdown) -->
+            <td>
+              <select class="table-select-season select-editable" name="Stagione`" data-field="season">
+                <option value="Primavera" {% if product.season == 'Primavera' %}selected{% endif %}>Primavera</option>
+                <option value="Estate" {% if product.season == 'Estate' %}selected{% endif %}>Estate</option>
+                <option value="Autunno" {% if product.season == 'Autunno' %}selected{% endif %}>Autunno</option>
+                <option value="Inverno" {% if product.season == 'Inverno' %}selected{% endif %}>Inverno</option>
+              </select>
+            </td>
+            
+            <td class="priority-cell">{{ product.priority_level or "-" }}</td>
+            <td>
+              <input type="number"  min="0" class="form-control form-control-sm inline-edit" data-field="min_quantity"
+                 value="{{ product.min_quantity if product.min_quantity is not none else '' }}">
+            </td>
+            <td>
+              <input type="number"  min="0" class="form-control form-control-sm inline-edit" data-field="max_quantity"
+                value="{{ product.max_quantity if product.max_quantity is not none else '' }}">
+            </td>
+            <td>
+              <input type="number"  min="0" class="form-control form-control-sm inline-edit" data-field="security_quantity"
+                value="{{ product.security_quantity if product.security_quantity is not none else '' }}">
+            </td>
+            <td>
+              <input type="number"  min="0" class="form-control form-control-sm inline-edit" data-field="reorder_point"
+                value="{{ product.reorder_point if product.reorder_point is not none else '' }}">
+            </td>
+            <td>
+              <input type="number"  min="0" class="form-control form-control-sm inline-edit mean-usage" data-field="mean_usage_time"
+                value="{{ product.mean_usage_time or '' }}">
+            </td>
+            <td>
+              <input type="number"  min="0" class="form-control form-control-sm inline-edit reorder-freq" data-field="reorder_frequency"
+                value="{{ product.reorder_frequency or '' }}">
+            </td>
+            <td>
+              <input type="checkbox" class="form-check-input auto-update-checkbox"
+                data-field="user_override"
+                {% if product.user_override == 1 %}checked{% endif %}>
+            </td>
+            <td>
+              <button class="btn btn-sm btn-success save-row-btn" style="display:none;">💾 Salva</button>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+
+
+<!-- questo script Riempie la prima TAB -->
+<script>
+  function autoFillProduct() {
+    const barcode = document.getElementById("barcode").value.trim();
+    const name = document.getElementById("name").value.trim();
+
+    let lookupURL = "";
+
+    if (barcode) {
+      lookupURL = `/lookup?barcode=${encodeURIComponent(barcode)}`;
+    } else if (name) {
+      lookupURL = `/lookup?name=${encodeURIComponent(name)}`;
+    } else {
+      console.log("Nessun dato per la lookup.");
+      return;
+    }
+
+    fetch(lookupURL)
+      .then(response => response.json())
+      .then(data => {
+        console.log("Risultato lookup DB:", data);
+
+        if (data.found) {
+          document.getElementById("name").value = data.name || '';
+          document.getElementById("brand").value = data.brand || '';
+          document.getElementById("shop").value = data.shop || '';
+          document.getElementById("price").value = data.price || '';
+          document.getElementById("quantity").value = data.quantity || 1;
+          document.getElementById("item").value = data.item || '';
+
+          if (data.image) {
+            console.log("Immagine trovata:", data.image);
+            document.getElementById("productImage").src = data.image;
+            document.getElementById("productImage").style.display = "block";
+            document.getElementById("image-placeholder").style.display = "none";
+          } else {
+            console.log("Nessuna immagine trovata nel DB.");
+            document.getElementById("productImage").style.display = "none";
+            document.getElementById("image-placeholder").style.display = "block";
+          }
+
+        } else {
+          if (barcode) {
+            console.log("Prodotto non trovato nel DB. Provo lookup online...");
+            fetch(`/lookup_online/${barcode}`)
+              .then(response => response.json())
+              .then(onlineData => {
+                console.log("Risultato lookup online:", onlineData);
+                if (onlineData.found) {
+                  document.getElementById("name").value = onlineData.name || '';
+                  document.getElementById("brand").value = onlineData.brand || '';
+                  document.getElementById("quantity").value = onlineData.quantity || 1;
+
+                  if (onlineData.image) {
+                    document.getElementById("productImage").src = onlineData.image;
+                    document.getElementById("productImage").style.display = "block";
+                    document.getElementById("image-placeholder").style.display = "none";
+                  } else {
+                    document.getElementById("productImage").style.display = "none";
+                    document.getElementById("image-placeholder").style.display = "block";
+                  }
+                }
+              })
+              .catch(error => console.error("Errore lookup online:", error));
+          } else {
+            console.log("Nessun barcode disponibile per il lookup online.");
+          }
+        }
+      })
+      .catch(error => console.error("Errore lookup DB:", error));
+  }
+</script>
+
+
+
+<!-- --- Terza TAB - LIST: Filtri e inline edit --- -->
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  // Gestione readonly dei campi consumo medio e frequenza riordino
+  document.querySelectorAll('.auto-update-checkbox').forEach(function (checkbox) {
+    const row = checkbox.closest('tr');
+    const meanUsage = row.querySelector('.mean-usage');
+    const reorderFreq = row.querySelector('.reorder-freq');
+    function toggleReadonly() {
+      const checked = checkbox.checked;
+      meanUsage.readOnly = checked;
+      reorderFreq.readOnly = checked;
+    }
+    checkbox.addEventListener('change', function () {
+      toggleReadonly();
+      showSave(row);
+    });
+    toggleReadonly();
+
+  // Gestione abilitazione/disabilitazione filtro stagione in base a necessity
+    document.querySelectorAll('select.table-select-necessity').forEach(selectNecessity => {
+      function toggleSeason() {
+        const row = selectNecessity.closest('tr');
+        const seasonSelect = row.querySelector('select.table-select-season');
+        if (selectNecessity.value === 'Stagionale') {
+          seasonSelect.disabled = false;
+        } else {
+          seasonSelect.disabled = true;
+          seasonSelect.value = '';
+        }
+      }
+      // inizializza al caricamento
+      toggleSeason();
+
+      // aggiorna al cambio di necessity
+      selectNecessity.addEventListener('change', () => {
+        toggleSeason();
+        const row = selectNecessity.closest('tr');
+        showSave(row);
+      });
+    });
+ });
+
+  // Mostra il tasto Salva quando una cella viene modificata
+  document.querySelectorAll('.inline-edit, .select-editable, .auto-update-checkbox').forEach(function (input) {
+    input.addEventListener('input', function () {
+      const row = input.closest('tr');
+      showSave(row);
+    });
+  });
+
+  // Gestione click sul tasto Salva
+  document.querySelectorAll('.save-row-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      const row = btn.closest('tr');
+      const barcode = row.dataset.barcode;
+      // Raccogli tutti i valori dei campi modificabili
+      const data = {
+        barcode: barcode,
+        necessity_level: row.querySelector('select.table-select-necessity').value,
+        season: row.querySelector('select.table-select-season').value,
+        min_quantity: row.querySelector('input[data-field="min_quantity"]').value,
+        max_quantity: row.querySelector('input[data-field="max_quantity"]').value,
+        security_quantity: row.querySelector('input[data-field="security_quantity"]').value,
+        reorder_point: row.querySelector('input[data-field="reorder_point"]').value,
+        mean_usage_time: row.querySelector('input[data-field="mean_usage_time"]').value,
+        reorder_frequency: row.querySelector('input[data-field="reorder_frequency"]').value,
+        user_override: row.querySelector('.auto-update-checkbox').checked ? 1 : 0
+      };
+
+      // Soft check logico
+      let warning = "";
+      if (Number(data.min_quantity) > Number(data.max_quantity)) {
+        warning += "La scorta minima è maggiore della scorta massima.\n";
+      }
+      if (Number(data.security_quantity) >= Number(data.max_quantity)) {
+        warning += "La scorta di sicurezza è maggiore o uguale alla scorta massima.\n";
+      }
+      if (Number(data.reorder_point) >= Number(data.max_quantity)) {
+        warning += "Il punto di riordino è maggiore o uguale alla scorta massima.\n";
+      }
+      if (warning) {
+        alert("Attenzione:\n" + warning + "Il salvataggio verrà comunque effettuato.");
+      }
+
+      fetch('/products/update_inline', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      })
+      .then(res => {
+        console.log("Risposta fetch (grezza):", res);
+        return res.json(); // importante!
+      })
+      .then(data => {
+        console.log("Dati ricevuti:", data);
+        btn.style.display = 'none';
+        let icon = document.createElement('span');
+        icon.style.fontSize = '1.5em';
+        icon.style.marginLeft = '5px';
+        if (data.success) {
+          icon.textContent = '😊';
+          icon.style.color = 'green';
+          // Aggiorna la cella 'priority' se presente nella risposta
+          if (data.priority_level !== null && data.priority_level !== undefined) {
+            const row = btn.closest('tr'); // prendi la riga in cui si trova il bottone premuto
+            const priorityCell = row.querySelector('.priority-cell');
+            if (priorityCell) {
+              priorityCell.textContent = data.priority_level;
+            }
+          }
+        } else {
+          icon.textContent = '😞';
+          icon.style.color = 'red';
+        }
+        btn.parentNode.appendChild(icon);
+        setTimeout(() => {
+          icon.remove();
+        }, 2000);
+      });
+    });
+  });
+
+  // Funzione per mostrare il tasto Salva
+  function showSave(row) {
+    const btn = row.querySelector('.save-row-btn');
+    if (btn) btn.style.display = '';
+  }
+});
+</script>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  // --- FILTRO DINAMICO SOLO SUL NOME ---
+  function populateNameFilter() {
+    const nameSet = new Set();
+
+    // Assicurati che la tabella abbia id="list-table"
+    document.querySelectorAll('#list-table tbody tr').forEach(row => {
+      const name = row.children[1].textContent.trim();  // Colonna Nome
+      if (name) nameSet.add(name);
+    });
+
+    const filterName = document.getElementById('filterNameList');
+    filterName.innerHTML = '<option value="">Tutti</option>';
+    Array.from(nameSet).sort().forEach(name => {
+      filterName.innerHTML += `<option value="${name}">${name}</option>`;
+    });
+  }
+
+  // --- FILTRAGGIO TABELLA ---
+  function filterTable() {
+    const nameVal = document.getElementById('filterNameList').value;
+
+    document.querySelectorAll('#list-table tbody tr').forEach(row => {
+      const name = row.children[1].textContent.trim(); // Colonna Nome
+      let show = true;
+      if (nameVal && name !== nameVal) show = false;
+      row.style.display = show ? '' : 'none';
+    });
+  }
+
+  // Popola solo il filtro Nome (necessity è fisso in HTML)
+  populateNameFilter();
+
+  // Event listeners
+  document.getElementById('filterNameList').addEventListener('change', filterTable);
+
+});
+</script>
+
+<script>
+  /**
+   * Funzione per caricare i prodotti sconosciuti dalla route Flask
+   * e popolare dinamicamente la tabella HTML presente nella prima tab
+   * della pagina gestione prodotti.
+   * 
+   * Il pannello contenente la tabella (#unknown-products-panel) sarà
+   * mostrato solo se esistono prodotti sconosciuti, altrimenti sarà nascosto.
+   */
+  async function loadUnknownProducts() {
+    try {
+      const res = await fetch('/unknown/get_all');
+      const data = await res.json();
+
+      const panel = document.getElementById('unknown-products-panel');
+      const tbody = document.getElementById('unknown-products-body');
+
+      // Elementi form
+      const nameInput = document.getElementById('name');
+      const shopInput = document.getElementById('shop');
+      const priceInput = document.getElementById('price');
+      const quantityInput = document.getElementById('quantity');
+
+      if (data.length === 0) {
+        // Nascondi pannello unknown e mostra solo input testo normale
+        panel.style.display = 'none';
+
+        // Se c’è un select al posto dell’input, rimettilo input
+        if (nameInput.tagName !== 'INPUT') {
+          // Ricrea input testo
+          const newInput = document.createElement('input');
+          newInput.type = 'text';
+          newInput.className = 'form-control form-control-sm';
+          newInput.id = 'name';
+          newInput.name = 'name';
+          newInput.required = true;
+          newInput.maxLength = 25;
+          newInput.style.backgroundColor = '#e6f2ff';
+
+          nameInput.parentNode.replaceChild(newInput, nameInput);
+        }
+
+        tbody.innerHTML = '';
+        return;
+      }
+
+      // Mostra pannello unknown e popola tabella
+      panel.style.display = 'block';
+      tbody.innerHTML = '';
+      data.forEach(prod => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td>${prod.raw_name || ''}</td>
+          <td>${prod.shop_name || ''}</td>
+          <td>${prod.insert_date || ''}</td>
+        `;
+        tbody.appendChild(row);
+      });
+
+      // Se ci sono unknown, sostituisci input nome con select
+      if (nameInput.tagName === 'INPUT') {
+        const select = document.createElement('select');
+        select.className = 'form-select form-select-sm';
+        select.id = 'name';
+        select.name = 'name';
+        select.required = true;
+        select.style.backgroundColor = '#e6f2ff';
+
+        // Opzione vuota di default
+        const emptyOption = document.createElement('option');
+        emptyOption.value = '';
+        emptyOption.textContent = 'Seleziona un nome da prodotti sconosciuti';
+        select.appendChild(emptyOption);
+
+        data.forEach(prod => {
+          const option = document.createElement('option');
+          option.value = prod.raw_name;
+          option.textContent = prod.raw_name;
+
+          // Salvo dati extra come attributi custom nell'option
+          option.dataset.shop = prod.shop_name || '';
+          option.dataset.price = prod.prezzo_unitario || '';
+          option.dataset.quantity = prod.quantita || '';
+
+          select.appendChild(option);
+        });
+
+        // Aggiungo evento onchange per aggiornare shop, price, quantity
+        select.addEventListener('change', (event) => {
+          const selectedOption = event.target.selectedOptions[0];
+          shopInput.value = selectedOption.dataset.shop || '';
+          priceInput.value = selectedOption.dataset.price || '';
+          quantityInput.value = selectedOption.dataset.quantity || '';
+        });
+
+        nameInput.parentNode.replaceChild(select, nameInput);
+      }
+
+    } catch (error) {
+      console.error('Errore caricamento prodotti sconosciuti:', error);
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    loadUnknownProducts();
+  });
+</script>
+
+<script>
+/* 
+ * Script dedicato alla compilazione del campo BARCODE nella prima tab
+ * ---------------------------------------------------------------
+ * - Se il campo barcode resta vuoto, appare un messaggio con due scelte:
+ *   1) "Sì" → usa il nome del prodotto come barcode.
+ *   2) "No" → chiude il messaggio e lascia il campo vuoto (il form non si invia).
+ * - Tutti gli altri campi con "required" restano gestiti normalmente dal browser.
+ */
+
+function checkBarcodeField() {
+  const barcodeInput = document.getElementById("barcode");
+  const messageDiv = document.getElementById("barcodeMessage");
+
+  // Se il campo barcode è vuoto → mostra il messaggio
+  if (barcodeInput.value.trim() === "") {
+    messageDiv.style.display = "block";
+  } else {
+    messageDiv.style.display = "none";
+  }
+}
+
+function useProductNameAsBarcode() {
+  const productName = document.getElementById("name")?.value || ""; // supponiamo che il campo Nome abbia id="name"
+  const barcodeInput = document.getElementById("barcode");
+  const messageDiv = document.getElementById("barcodeMessage");
+
+  if (productName !== "") {
+    barcodeInput.value = productName;   // assegna il nome prodotto come barcode
+    messageDiv.style.display = "none";  // nasconde il messaggio
+  } else {
+    alert("Devi prima selezionare un nome prodotto!");
+  }
+}
+
+function dismissBarcodeMessage() {
+  const messageDiv = document.getElementById("barcodeMessage");
+  messageDiv.style.display = "none";
+}
+
+// Validazione al submit del form
+document.querySelector("form").addEventListener("submit", function(e) {
+  const barcodeInput = document.getElementById("barcode");
+  const messageDiv = document.getElementById("barcodeMessage");
+
+  // Se barcode è ancora vuoto → blocca l'invio e mostra messaggio
+  if (barcodeInput.value.trim() === "") {
+    e.preventDefault();
+    messageDiv.style.display = "block";
+  }
+});
+</script>
+
+
+
+{% endblock %}

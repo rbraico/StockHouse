@@ -1,0 +1,17 @@
+{% extends "layout.html" %}
+
+{% block content %}
+    <h2>✏️ Modifica Negozio</h2>
+    <form method="POST">
+        <div class="mb-3">
+            <label for="name" class="form-label">Nome del negozio</label>
+            <input type="text" class="form-control" id="name" name="name" value="{{ shop[1] }}" required>
+        </div>
+        <div class="mb-3">
+            <label for="notes" class="form-label">Note</label>
+            <input type="text" class="form-control" id="notes" name="notes" value="{{ shop[2] }}">
+        </div>
+        <button type="submit" class="btn btn-primary">Salva modifiche</button>
+        <a href="{{ url_for('main.shops') }}" class="btn btn-secondary">Annulla</a>
+    </form>
+{% endblock %}
