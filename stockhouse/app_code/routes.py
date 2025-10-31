@@ -187,6 +187,7 @@ def index():
         # Ottiene i valori dei campi salvati nel form di inserimento
         barcode = request.form["barcode"]
         name = request.form["name"]
+        old_name = request.form.get("old_name") or None
         brand = request.form["brand"]
         shop = request.form.get("shop")
         price = request.form.get("price")
@@ -198,7 +199,7 @@ def index():
         notes = request.form.get("notes") or None
         image = request.form.get("image") or None
 
-        debug_print("index -> POST", barcode,name,brand,shop,price,quantity,category,item,expiry_date, notes )
+        debug_print("index -> POST", barcode,name,old_name,brand,shop,price,quantity,category,item,expiry_date, notes )
 
         # Ottieni la data odierna e formatta come yyyy-mm-dd
         ins_date     = datetime.now().strftime('%Y-%m-%d')
@@ -220,11 +221,11 @@ def index():
             item        = prodotto_esistente["item"]
            # notes       = prodotto_esistente["notes"]
             image       = prodotto_esistente["image"]
-            debug_print("index -> POST 2", barcode,name,brand,shop,price,quantity,category,item,notes )
+            debug_print("index -> POST 2", barcode,name,old_name,brand,shop,price,quantity,category,item,notes )
         else:
             # Il prodotto non e` presente in product_dim, cerca online con il barcode
             data = lookup_barcode(barcode)
-            debug_print("index -> POST 3", barcode,name,brand,shop,price,quantity,category,item,notes )
+            debug_print("index -> POST 3", barcode,name,old_name,brand,shop,price,quantity,category,item,notes )
             if "error" not in data:
                 name = data["name"]
                 brand = data["brand"]
@@ -301,7 +302,7 @@ def index():
         delete_from_shopping_list(barcode)
 
         # cancella il prodotto da unknown_products, se presente
-        delete_unknown_product_by_name(name)
+        delete_unknown_product_by_name(old_name)
 
         # crea un nuovo alias per il prodotto, se non esiste già
         insert_product_alias_if_not_exists(name, barcode, shop)

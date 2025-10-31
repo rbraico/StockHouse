@@ -549,6 +549,7 @@ def truncate_after_total(text):
 
 
 
+
 def analyze_receipt_with_gemini(filename, upload_folder):
     import os, io, re, json, fitz
     from PIL import Image
@@ -602,7 +603,7 @@ def analyze_receipt_with_gemini(filename, upload_folder):
     ocr_text = truncate_after_total(ocr_text)
 
     debug_print("\n" + "="*40)
-    debug_print("📄 Testo OCR sanitizzato da inviare a Gemini:")
+    debug_print("     Testo OCR sanitizzato da inviare a Gemini:")
     debug_print(ocr_text)
     debug_print("="*40 + "\n")
 

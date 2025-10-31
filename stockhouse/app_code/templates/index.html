@@ -200,6 +200,7 @@
           </div>
           <div class="col-8">
             <input type="text" class="form-control form-control-sm" id="name" name="name" required maxlength="25" style="background-color:  #e6f2ff;">
+            <input type="hidden" id="old_name" name="old_name" value="">
           </div>
         </div>
 
@@ -649,26 +650,24 @@ document.querySelectorAll('.delete-row-btn').forEach(function(button) {
 <script>
   function autoFillProduct() {
     const barcode = document.getElementById("barcode").value.trim();
-    const name = document.getElementById("name").value.trim();
+    const nameInput = document.getElementById("name");
 
-    let lookupURL = "";
-
-    if (barcode) {
-      lookupURL = `/lookup?barcode=${encodeURIComponent(barcode)}`;
-    } else if (name) {
-      lookupURL = `/lookup?name=${encodeURIComponent(name)}`;
-    } else {
-      console.log("Nessun dato per la lookup.");
+    if (!barcode) {
+      console.log("Nessun barcode per la lookup.");
       return;
     }
 
-    fetch(lookupURL)
+    fetch(`/lookup?barcode=${encodeURIComponent(barcode)}`)
       .then(response => response.json())
       .then(data => {
         console.log("Risultato lookup DB:", data);
 
         if (data.found) {
-          document.getElementById("name").value = data.name || '';
+          // Riempie i campi, ma lascia SEMPRE modificabile il campo nome
+          nameInput.value = data.name || '';
+          nameInput.readOnly = false;
+          nameInput.disabled = false;
+
           document.getElementById("brand").value = data.brand || '';
           document.getElementById("shop").value = data.shop || '';
           document.getElementById("price").value = data.price || '';
@@ -676,47 +675,48 @@ document.querySelectorAll('.delete-row-btn').forEach(function(button) {
           document.getElementById("item").value = data.item || '';
 
           if (data.image) {
-            console.log("Immagine trovata:", data.image);
             document.getElementById("productImage").src = data.image;
             document.getElementById("productImage").style.display = "block";
             document.getElementById("image-placeholder").style.display = "none";
           } else {
-            console.log("Nessuna immagine trovata nel DB.");
             document.getElementById("productImage").style.display = "none";
             document.getElementById("image-placeholder").style.display = "block";
           }
 
         } else {
-          if (barcode) {
-            console.log("Prodotto non trovato nel DB. Provo lookup online...");
-            fetch(`/lookup_online/${barcode}`)
-              .then(response => response.json())
-              .then(onlineData => {
-                console.log("Risultato lookup online:", onlineData);
-                if (onlineData.found) {
-                  document.getElementById("name").value = onlineData.name || '';
-                  document.getElementById("brand").value = onlineData.brand || '';
-                  document.getElementById("quantity").value = onlineData.quantity || 1;
+          console.log("Prodotto non trovato nel DB. Provo lookup online...");
+          fetch(`/lookup_online/${barcode}`)
+            .then(response => response.json())
+            .then(onlineData => {
+              console.log("Risultato lookup online:", onlineData);
+              if (onlineData.found) {
+                // Anche qui: campo nome compilato ma modificabile
+                nameInput.value = onlineData.name || '';
+                nameInput.readOnly = false;
+                nameInput.disabled = false;
 
-                  if (onlineData.image) {
-                    document.getElementById("productImage").src = onlineData.image;
-                    document.getElementById("productImage").style.display = "block";
-                    document.getElementById("image-placeholder").style.display = "none";
-                  } else {
-                    document.getElementById("productImage").style.display = "none";
-                    document.getElementById("image-placeholder").style.display = "block";
-                  }
+                document.getElementById("brand").value = onlineData.brand || '';
+                document.getElementById("quantity").value = onlineData.quantity || 1;
+
+                if (onlineData.image) {
+                  document.getElementById("productImage").src = onlineData.image;
+                  document.getElementById("productImage").style.display = "block";
+                  document.getElementById("image-placeholder").style.display = "none";
+                } else {
+                  document.getElementById("productImage").style.display = "none";
+                  document.getElementById("image-placeholder").style.display = "block";
                 }
-              })
-              .catch(error => console.error("Errore lookup online:", error));
-          } else {
-            console.log("Nessun barcode disponibile per il lookup online.");
-          }
+              }
+            })
+            .catch(error => console.error("Errore lookup online:", error));
         }
       })
       .catch(error => console.error("Errore lookup DB:", error));
   }
 </script>
+
+
+
 
 
 
@@ -892,14 +892,6 @@ document.addEventListener("DOMContentLoaded", function () {
 </script>
 
 <script>
-  /**
-   * Funzione per caricare i prodotti sconosciuti dalla route Flask
-   * e popolare dinamicamente la tabella HTML presente nella prima tab
-   * della pagina gestione prodotti.
-   * 
-   * Il pannello contenente la tabella (#unknown-products-panel) sarà
-   * mostrato solo se esistono prodotti sconosciuti, altrimenti sarà nascosto.
-   */
   async function loadUnknownProducts() {
     try {
       const res = await fetch('/unknown/get_all');
@@ -909,85 +901,79 @@ document.addEventListener("DOMContentLoaded", function () {
       const tbody = document.getElementById('unknown-products-body');
 
       // Elementi form
-      const nameInput = document.getElementById('name');
+      const nameInputContainer = document.getElementById('name').parentNode;
+      let nameInput = document.getElementById('name');
+      const oldNameInput = document.getElementById('old_name');
       const shopInput = document.getElementById('shop');
       const priceInput = document.getElementById('price');
       const quantityInput = document.getElementById('quantity');
 
+      // Rimuovo datalist precedente se esiste
+      const oldDatalist = document.getElementById('unknown-products-datalist');
+      if (oldDatalist) oldDatalist.remove();
+
+      // Crea datalist
+      const datalist = document.createElement('datalist');
+      datalist.id = 'unknown-products-datalist';
+
       if (data.length === 0) {
-        // Nascondi pannello unknown e mostra solo input testo normale
         panel.style.display = 'none';
-
-        // Se c’è un select al posto dell’input, rimettilo input
-        if (nameInput.tagName !== 'INPUT') {
-          // Ricrea input testo
-          const newInput = document.createElement('input');
-          newInput.type = 'text';
-          newInput.className = 'form-control form-control-sm';
-          newInput.id = 'name';
-          newInput.name = 'name';
-          newInput.required = true;
-          newInput.maxLength = 25;
-          newInput.style.backgroundColor = '#e6f2ff';
-
-          nameInput.parentNode.replaceChild(newInput, nameInput);
-        }
-
         tbody.innerHTML = '';
-        return;
-      }
-
-      // Mostra pannello unknown e popola tabella
-      panel.style.display = 'block';
-      tbody.innerHTML = '';
-      data.forEach(prod => {
-        const row = document.createElement('tr');
-        row.innerHTML = `
-          <td>${prod.raw_name || ''}</td>
-          <td>${prod.shop_name || ''}</td>
-          <td>${prod.insert_date || ''}</td>
-        `;
-        tbody.appendChild(row);
-      });
-
-      // Se ci sono unknown, sostituisci input nome con select
-      if (nameInput.tagName === 'INPUT') {
-        const select = document.createElement('select');
-        select.className = 'form-select form-select-sm';
-        select.id = 'name';
-        select.name = 'name';
-        select.required = true;
-        select.style.backgroundColor = '#e6f2ff';
-
-        // Opzione vuota di default
-        const emptyOption = document.createElement('option');
-        emptyOption.value = '';
-        emptyOption.textContent = 'Seleziona un nome da prodotti sconosciuti';
-        select.appendChild(emptyOption);
-
+      } else {
+        panel.style.display = 'block';
+        tbody.innerHTML = '';
         data.forEach(prod => {
+          const row = document.createElement('tr');
+          row.innerHTML = `
+            <td>${prod.raw_name || ''}</td>
+            <td>${prod.shop_name || ''}</td>
+            <td>${prod.insert_date || ''}</td>
+          `;
+          tbody.appendChild(row);
+
           const option = document.createElement('option');
           option.value = prod.raw_name;
-          option.textContent = prod.raw_name;
-
-          // Salvo dati extra come attributi custom nell'option
           option.dataset.shop = prod.shop_name || '';
           option.dataset.price = prod.prezzo_unitario || '';
           option.dataset.quantity = prod.quantita || '';
-
-          select.appendChild(option);
+          datalist.appendChild(option);
         });
-
-        // Aggiungo evento onchange per aggiornare shop, price, quantity
-        select.addEventListener('change', (event) => {
-          const selectedOption = event.target.selectedOptions[0];
-          shopInput.value = selectedOption.dataset.shop || '';
-          priceInput.value = selectedOption.dataset.price || '';
-          quantityInput.value = selectedOption.dataset.quantity || '';
-        });
-
-        nameInput.parentNode.replaceChild(select, nameInput);
       }
+
+      nameInputContainer.appendChild(datalist);
+
+      if (nameInput.tagName !== 'INPUT') {
+        const newInput = document.createElement('input');
+        newInput.type = 'text';
+        newInput.className = 'form-control form-control-sm';
+        newInput.id = 'name';
+        newInput.name = 'name';
+        newInput.required = true;
+        newInput.maxLength = 25;
+        newInput.style.backgroundColor = '#e6f2ff';
+        newInput.setAttribute('list', 'unknown-products-datalist');
+        nameInputContainer.replaceChild(newInput, nameInput);
+        nameInput = newInput;
+      } else {
+        nameInput.setAttribute('list', 'unknown-products-datalist');
+      }
+
+      // Quando si seleziona un nome dal filtro, popola i campi e salva old_name
+      nameInput.addEventListener('input', (event) => {
+        const value = event.target.value;
+        const match = Array.from(datalist.options).find(opt => opt.value === value);
+        if (match) {
+          // Salva il nome originale selezionato dal filtro
+          if (oldNameInput && !oldNameInput.value) {
+            oldNameInput.value = value;
+          }
+
+          // Popola altri campi solo se non già valorizzati
+          shopInput.value = match.dataset.shop || shopInput.value;
+          priceInput.value = match.dataset.price || priceInput.value;
+          quantityInput.value = match.dataset.quantity || quantityInput.value;
+        }
+      });
 
     } catch (error) {
       console.error('Errore caricamento prodotti sconosciuti:', error);
@@ -998,6 +984,8 @@ document.addEventListener("DOMContentLoaded", function () {
     loadUnknownProducts();
   });
 </script>
+
+
 
 <script>
 /* 
