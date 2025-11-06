@@ -1,6 +1,6 @@
 {
   "name": "StockHouse",
-  "version": "2.3.4",
+  "version": "2.3.5",
   "slug": "stockhouse",
   "description": "Addon per gestione magazzino e lista della spesa",
   "arch": ["amd64", "armv7", "armhf"],
