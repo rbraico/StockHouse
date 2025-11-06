@@ -10,6 +10,7 @@ import sqlite3
 from config import Config
 
 import openai
+from openai import OpenAI
 import fitz  # PyMuPDF
 from PIL import Image
 import io
@@ -19,10 +20,27 @@ import base64
 
 
 # Percorso completo dell'eseguibile tesseract
-pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+#pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 # Imposta la variabile TESSDATA_PREFIX alla cartella tessdata
-os.environ["TESSDATA_PREFIX"] = r"C:\Program Files\Tesseract-OCR\tessdata"
+#os.environ["TESSDATA_PREFIX"] = r"C:\Program Files\Tesseract-OCR\tessdata"
 #print(pytesseract.get_tesseract_version())
+
+if os.name == "nt":  # Windows
+    # Percorsi per installazione locale
+    pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+    os.environ["TESSDATA_PREFIX"] = r"C:\Program Files\Tesseract-OCR\tessdata"
+else:
+    # Percorsi per Home Assistant / Linux
+    pytesseract.pytesseract.tesseract_cmd = "/usr/bin/tesseract"
+    os.environ["TESSDATA_PREFIX"] = "/usr/share/tesseract-ocr/5/tessdata/"
+
+# (Facoltativo: stampa diagnostica)
+# from stockhouse.utils import debug_print
+debug_print(f"[AI] Tesseract path: {pytesseract.pytesseract.tesseract_cmd}")
+debug_print(f"[AI] Tessdata prefix: {os.environ.get('TESSDATA_PREFIX')}")
+
+
+
 
 from stockhouse.utils import debug_print
 from stockhouse.app_code.models import lookup_products_by_name, lookup_products_by_id,  upsert_transaction_fact, upsert_expense
@@ -135,12 +153,12 @@ import fitz  # PyMuPDF
 import PIL.Image
 import io
 
-'''
+
 def analyze_receipt_with_gemini(filename, upload_folder):
     # Costruisci il path
     file_path = f"{upload_folder}/{filename}"
     
-    #openai.api_key = os.getenv("open_ai_key")  # o inserisci la tua chiave qui direttamente
+    openai.api_key = os.getenv("gemini_api_key")  # o inserisci la tua chiave qui direttamente
     
     model = genai.GenerativeModel('gemini-2.5-pro')
     
@@ -202,7 +220,7 @@ def analyze_folder_products_with_gemini(filename, upload_folder):
     # Costruisci il path
     file_path = f"{upload_folder}/{filename}"
     
-    #openai.api_key = os.getenv("open_ai_key")  # o inserisci la tua chiave qui direttamente
+    openai.api_key = os.getenv("gemini_api_key")  # o inserisci la tua chiave qui direttamente
     
     model = genai.GenerativeModel('gemini-1.5-flash')
     
@@ -250,6 +268,163 @@ def analyze_folder_products_with_gemini(filename, upload_folder):
     except Exception as e:
         debug_print(f"Errore durante la chiamata a Gemini: {e}")
         return None
+
+#---------CHAT_GPT---------
+def analyze_receipt_with_chatgpt(filename, upload_folder):
+    # Costruisci il path completo
+    file_path = f"{upload_folder}/{filename}"
+
+    client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+    content_list = []
+
+    # Controlla l'estensione del file (PDF o immagine)
+    if filename.lower().endswith('.pdf'):
+        try:
+            doc = fitz.open(file_path)
+            for page in doc:
+                pix = page.get_pixmap()
+                img_data = pix.tobytes("png")
+                img = PIL.Image.open(io.BytesIO(img_data))
+                content_list.append(img)
+            doc.close()
+        except Exception as e:
+            debug_print(f"Errore nella lettura del PDF: {e}")
+            return None
+    else:
+        try:
+            img = PIL.Image.open(file_path)
+            content_list.append(img)
+        except Exception as e:
+            debug_print(f"Errore nella lettura dell'immagine: {e}")
+            return None
+
+    if not content_list:
+        return None
+
+    # Prompt per ChatGPT
+    question = (
+        "Analizza lo scontrino e restituisci solo il risultato in formato JSON, senza testo introduttivo o commenti. "
+        "Includi i seguenti campi: nome_negozio (se il negozio è Lidl, restituisci solo 'Lidl' come nome), "
+        "indirizzo_negozio, data_scontrino (formato yyyy-mm-dd), spesa_totale, "
+        "lista_prodotti con: nome_prodotto (escludi righe con prezzi negativi o nomi che iniziano con 'Statiegeld' "
+        "o che contengono caratteri come %, ^, !, $, o la parola 'statiegeld'), "
+        "quantita (arrotondata al valore intero più vicino), traduzione_italiano (sintetica), "
+        "prezzo_unitario e prezzo_totale (anche se coincidono). "
+        "Se trovi prezzi negativi, sottrai il valore dal prezzo del prodotto precedente. "
+        "Negli scontrini di Lidl, 'Volkoren ontbijt' e 'Brinta' sono prodotti diversi. "
+        "Rispondi esclusivamente con il JSON."
+    )
+
+    # Prepara i contenuti per il messaggio da mandare a GPT-4o
+    message_content = [{"type": "text", "text": question}]
+    for img in content_list:
+        buffer = io.BytesIO()
+        img.save(buffer, format="PNG")
+        buffer.seek(0)
+        image_b64 = base64.b64encode(buffer.read()).decode()
+        message_content.append({
+            "type": "image_url",
+            "image_url": {"url": f"data:image/png;base64,{image_b64}"}
+        })
+
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",  # oppure "gpt-4o" per più precisione
+            messages=[
+                {"role": "system", "content": "Sei un assistente esperto di analisi di scontrini e OCR."},
+                {"role": "user", "content": message_content},
+            ],
+            temperature=0.2,
+        )
+
+        description = response.choices[0].message.content.strip()
+        debug_print("modulo ai - analyze_receipt_with_chatgpt - Response: OK", description)
+        return description
+
+    except Exception as e:
+        debug_print(f"Errore durante la chiamata a ChatGPT: {e}")
+        return None
+
+def analyze_folder_products_with_chatgpt(filename, upload_folder):
+    # Costruisci il path completo del file
+    file_path = f"{upload_folder}/{filename}"
+
+    client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+    content_list = []
+
+    # Legge PDF o immagine
+    if filename.lower().endswith('.pdf'):
+        try:
+            doc = fitz.open(file_path)
+            for page in doc:
+                pix = page.get_pixmap()
+                img_data = pix.tobytes("png")
+                img = PIL.Image.open(io.BytesIO(img_data))
+                content_list.append(img)
+            doc.close()
+        except Exception as e:
+            debug_print(f"Errore nella lettura del PDF: {e}")
+            return None
+    else:
+        try:
+            img = PIL.Image.open(file_path)
+            content_list.append(img)
+        except Exception as e:
+            debug_print(f"Errore nella lettura dell'immagine: {e}")
+            return None
+
+    if not content_list:
+        return None
+
+    # Prompt per ChatGPT
+    question = (
+        "Analizza il volantino incluso e restituisci esclusivamente in formato JSON "
+        "i primi 10 prodotti alimentari presenti. Per ciascun prodotto includi: "
+        "nome_negozio, nome_prodotto, prezzo_originale, prezzo_scontato, "
+        "data_inizio_offerta (formato yyyy-mm-dd), data_fine_offerta (formato yyyy-mm-dd). "
+        "Se il volantino è del negozio Lidl, le date di validità dell'offerta sono indicate "
+        "nella parte alta della prima pagina: applica queste date a tutti i prodotti. "
+        "Se non trovi queste date, imposta i campi data_inizio_offerta e data_fine_offerta su null. "
+        "Non aggiungere alcun commento, introduzione o spiegazione. Rispondi solo con il JSON."
+    )
+
+    # Prepara i contenuti per ChatGPT-4o
+    message_content = [{"type": "text", "text": question}]
+    for img in content_list:
+        buffer = io.BytesIO()
+        img.save(buffer, format="PNG")
+        buffer.seek(0)
+        image_b64 = f"data:image/png;base64,{base64.b64encode(buffer.read()).decode()}"
+        message_content.append({"type": "image_url", "image_url": {"url": image_b64}})
+
+    try:
+        response = client.chat.completions.create(
+            model="gpt-3.5-turbo",  # oppure "gpt-4o" se vuoi la versione più potente
+            messages=[
+                {"role": "system", "content": "Sei un assistente esperto di analisi di volantini e OCR."},
+                {"role": "user", "content": message_content}
+            ],
+            temperature=0.2,
+        )
+
+        description = response.choices[0].message.content.strip()
+        debug_print("modulo ai - analyze_folder_products_with_chatgpt - Response: OK", description)
+        return description
+
+    except Exception as e:
+        debug_print(f"Errore durante la chiamata a ChatGPT: {e}")
+        return None
+
+
+
+
+
+
+
+
+
 
 '''
 
@@ -353,7 +528,7 @@ def fetch_shopping_list():
         json.dump(offerte, f, indent=2, ensure_ascii=False)
 """
 
-'''
+"""
 def analyze_receipt_with_chatgpt(filename, upload_folder):
     # Costruisci il path
     file_path = f"{upload_folder}/{filename}"
@@ -445,6 +620,7 @@ if __name__ == "__main__":
 #openai.api_key = os.getenv("open_ai_key")  # o inserisci la tua chiave qui direttamente
 
 
+
 def analyze_receipt_with_chatgpt_3_5(filename, upload_folder):
 
     file_path = os.path.join(upload_folder, filename)
@@ -483,6 +659,7 @@ Testo OCR:
         return None
 
 '''
+
 #--------------------------------------------------
 
 def validate_receipt_json(json_text):
@@ -549,14 +726,23 @@ def truncate_after_total(text):
 
 
 
-
+#--- Funzione di analisi scontrino tramite Gemini AI ---
+'''
 def analyze_receipt_with_gemini(filename, upload_folder):
     import os, io, re, json, fitz
     from PIL import Image
     import pytesseract
     import google.generativeai as genai
+    from datetime import datetime
 
     file_path = os.path.join(upload_folder, filename)
+    trace_path = os.path.join(upload_folder, "process.log")
+
+    def writelog(message):
+        """Scrive un messaggio nel log con timestamp"""
+        with open(trace_path, "a") as log:
+            log.write(f"[{datetime.now().isoformat()}] {message}\n")
+            log.flush()
 
     def extract_text_from_pdf(path):
         try:
@@ -566,20 +752,24 @@ def analyze_receipt_with_gemini(filename, upload_folder):
                 pix = page.get_pixmap(dpi=300)
                 img_data = pix.tobytes("png")
                 img = Image.open(io.BytesIO(img_data))
-                text = pytesseract.image_to_string(img, lang="ita")
+                text = pytesseract.image_to_string(img, lang="ita+eng+nld")
                 full_text += f"\n--- Pagina {page_num + 1} ---\n{text}"
             doc.close()
+            writelog("Step: OCR PDF completato")
             return full_text.strip()
         except Exception as e:
+            writelog(f"Step: Errore OCR PDF - {e}")
             debug_print(f"❌ Errore OCR PDF: {e}")
             return None
 
     def extract_text_from_image(path):
         try:
             img = Image.open(path)
-            text = pytesseract.image_to_string(img, lang="ita")
+            text = pytesseract.image_to_string(img, lang="ita+eng+nld")
+            writelog("Step: OCR immagine completato")
             return text.strip()
         except Exception as e:
+            writelog(f"Step: Errore OCR immagine - {e}")
             debug_print(f"❌ Errore OCR immagine: {e}")
             return None
 
@@ -589,25 +779,40 @@ def analyze_receipt_with_gemini(filename, upload_folder):
             return match.group(1)
         return text.strip()
 
+    # --- Inizio procedura ---
+    writelog("\n--- New analyze_receipt run ---")
+    writelog(f"File path: {file_path}")
+
+    debug_print(f"Analisi scontrino con Gemini: {file_path}")
+
     # OCR
+    writelog("Step: OCR started")
     if filename.lower().endswith(".pdf"):
         ocr_text = extract_text_from_pdf(file_path)
     else:
         ocr_text = extract_text_from_image(file_path)
+    writelog("Step: OCR finished")
 
     if not ocr_text:
+        writelog("Step: OCR non ha trovato testo")
         debug_print("❌ OCR non ha trovato testo")
         return None
 
-    ocr_text = sanitize_ocr_text(ocr_text)
-    ocr_text = truncate_after_total(ocr_text)
+    # Sanitize OCR
+    try:
+        ocr_text = sanitize_ocr_text(ocr_text)
+        ocr_text = truncate_after_total(ocr_text)
+    except Exception as e:
+        writelog(f"Step: Errore durante sanitizzazione OCR - {e}")
+        debug_print(f"❌ Errore sanitizzazione OCR: {e}")
+        return None
 
     debug_print("\n" + "="*40)
     debug_print("     Testo OCR sanitizzato da inviare a Gemini:")
     debug_print(ocr_text)
     debug_print("="*40 + "\n")
 
-    # Gemini
+    # --- Chiamata Gemini ---
     gemini_api_key = os.getenv("gemini_api_key")
     genai.configure(api_key=gemini_api_key)
     model = genai.GenerativeModel('gemini-2.5-pro')
@@ -620,45 +825,46 @@ Testo OCR:
 {ocr_text}
 """
 
- 
     try:
-        debug_print(f"Chiama Gemini per analisi scontrino.")
+        writelog("Step: Gemini request started")
+        debug_print("Chiama Gemini per analisi scontrino...")
+
         response = model.generate_content([prompt])
 
-        debug_print(f"Chiamata Gemini completata.")
-        debug_print(f"Tipo risposta: {type(response)}")
-        debug_print(f"Contenuto (troncato): {str(response)[:300]}")
-
-        def extract_json_from_markdown(text):
-            import re
-            match = re.search(r"```json\s*(\{.*?\})\s*```", text, re.DOTALL)
-            if match:
-                return match.group(1)
-            return text.strip()
+        writelog("Step: Gemini response received")
+        debug_print(f"Chiamata Gemini completata. Tipo risposta: {type(response)}")
 
         raw_text = response.text
         if not raw_text or not isinstance(raw_text, str):
+            writelog("Step: Nessuna risposta testuale da Gemini")
             debug_print("❌ Nessuna risposta testuale da Gemini")
             return None
 
         cleaned = extract_json_from_markdown(raw_text)
-
-        import json
         try:
             parsed = json.loads(cleaned)
+            writelog("Step: JSON parsing completato")
         except Exception as e:
-            debug_print("❌ Errore di parsing JSON:", e)
+            writelog(f"Step: Errore parsing JSON - {e}")
+            debug_print(f"❌ Errore parsing JSON: {e}")
             return None
-
-        debug_print("✅ JSON restituito da Gemini:")
-        debug_print(json.dumps(parsed, indent=2))
 
         if not validate_receipt_json(cleaned):
+            writelog("Step: JSON non valido")
             debug_print("❌ JSON non valido")
             return None
+
+        writelog("Step: Analisi completata con successo ✅")
+        debug_print("✅ JSON restituito da Gemini:")
+        debug_print(json.dumps(parsed, indent=2))
 
         return parsed
 
     except Exception as e:
+        writelog(f"Step: Errore durante la chiamata a Gemini - {e}")
         debug_print(f"❌ Errore durante la chiamata a Gemini: {e}")
         return None
+
+    finally:
+        writelog("Step: Fine analisi\n")
+'''

@@ -40,7 +40,7 @@ from stockhouse.app_code.shopping_list_utils import (
     finalizza_shopping_list,
     trigger_thread_on_exit)
 
-from stockhouse.app_code.ai import manage_shopping_receipt, analyze_receipt_with_gemini
+from stockhouse.app_code.ai import manage_shopping_receipt, analyze_receipt_with_gemini, analyze_receipt_with_chatgpt
 
 import calendar
 from calendar import month_name
@@ -51,9 +51,11 @@ import traceback
 main = Blueprint('main', __name__)
 
 
-# Cartella di lavoro per scontrini (development)
-UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), 'uploaded_receipts')
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+# Cartella di lavoro per scontrini (centralizzata in Config)
+UPLOAD_FOLDER = Config.get_receipt_folder()
+debug_print(f"Cartella di lavoro per scontrini: {UPLOAD_FOLDER}")
+
+
 
 @main.route('/')
 def homepage():

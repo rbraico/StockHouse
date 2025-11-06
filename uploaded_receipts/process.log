@@ -1,0 +1,12 @@
+[2025-11-06T12:45:59.415481] 
+--- New analyze_receipt run ---
+[2025-11-06T12:45:59.451330] File path: \\192.168.1.31\Progetti\StockHouse\uploaded_receipts\20251106_124555_20251101_152720.jpg
+[2025-11-06T12:45:59.462054] Step: OCR started
+[2025-11-06T12:46:04.492307] Step: OCR immagine completato
+[2025-11-06T12:46:04.513295] Step: OCR finished
+[2025-11-06T12:46:04.540312] Step: Gemini request started
+[2025-11-06T12:47:11.003913] Step: Gemini response received
+[2025-11-06T12:47:11.030481] Step: JSON parsing completato
+[2025-11-06T12:47:11.043252] Step: Errore durante la chiamata a Gemini - 'charmap' codec can't encode character '\u2705' in position 67: character maps to <undefined>
+[2025-11-06T12:47:11.055690] Step: Fine analisi
+

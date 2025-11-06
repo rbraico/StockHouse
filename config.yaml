@@ -23,3 +23,5 @@ options:
 schema:
   base_url: str
   debug_mode: bool  # Aggiungi la definizione del tipo di dato
+build:
+  dockerfile: Dockerfile

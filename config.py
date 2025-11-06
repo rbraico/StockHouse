@@ -59,6 +59,24 @@ class Config:
             return "http://localhost:5000/images"
 
         return "http://localhost:8123/local/stockhouse_images"
+    
+
+       # 🧾 Nuova funzione per gli scontrini
+    @staticmethod
+    def get_receipt_folder():
+        """
+        Ritorna il percorso dove salvare gli scontrini.
+        In Home Assistant: /config/www/uploaded_receipts
+        In Windows: ./uploaded_receipts
+        """
+        if platform.system() == "Windows":
+            path = os.path.join(os.getcwd(), "uploaded_receipts")
+        else:
+            path = "/config/www/uploaded_receipts"
+
+        os.makedirs(path, exist_ok=True)
+        debug_print(f"[Config] Receipt folder: {path}")
+        return path
 
     # Inizializzazione statica
     DATABASE_PATH = get_database_path.__func__()
