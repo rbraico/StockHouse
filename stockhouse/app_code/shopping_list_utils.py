@@ -569,15 +569,17 @@ def get_shopping_list_data(save_to_db=False, conn=None, cursor=None, decade=None
 
     if save_to_db:
         # 1️⃣ Pulisce solo i record ATTIVI (within_budget=1) di decadi vecchie, escludendo i manuali
+        debug_print("Pulizia dei record della lista della spesa per decade:", decade)
         cursor.execute("""
             DELETE FROM shopping_list
-            WHERE decade_number != ?
+            WHERE NOT (decade_number = ? AND reason = 'Aggiunto manualmente')
 
         """, (decade,))
 
         # 2️⃣ Inserisce/aggiorna in un colpo solo
         for item in items:
             # Salta se il calcolo dice che non è nel budget
+            debug_print("Elaboro item per salvataggio:", item,item.get("within_budget"))
             if item.get("within_budget", 0) == 0:
                 continue
 
