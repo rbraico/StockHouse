@@ -1,4 +1,6 @@
 from stockhouse.utils import debug_print
+from stockhouse.app_code.shopping_list_refresh_scheduler import trigger_event
+
 import os
 import google.generativeai as genai
 import PIL.Image
@@ -50,7 +52,7 @@ from dotenv import load_dotenv
 # Carica il file .env dalla root del progetto
 load_dotenv()
 
-
+#--- Funzione di gestione scontrino JSON ---
 def manage_shopping_receipt(receipt_json):
     try:
         # Se è già un dict, salta parsing
@@ -140,6 +142,9 @@ def manage_shopping_receipt(receipt_json):
             conn.commit()
             conn.close()
 
+        # Triggera l'aggiornamento della lista della spesa
+        trigger_event()
+   
         return ("Processed succesfully", 200)
     except Exception as e:
         debug_print("Errore in manage_shopping_receipt:", e)
