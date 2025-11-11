@@ -635,19 +635,53 @@ def get_shopping_list_data(save_to_db=False, conn=None, cursor=None, decade=None
     #debug_print(f"Totali per negozio: {items}")
     return items, shop_totals
 
+def get_shopping_list_table():
+    debug_print("get_shopping_list_table")
+    conn = sqlite3.connect(Config.DATABASE_PATH)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+
+    # Recupera tutti gli elementi della lista della spesa
+    cursor.execute("SELECT * FROM shopping_list WHERE within_budget = 1")
+    items = cursor.fetchall() 
+
+    shop_totals = {}
+    for item in items:
+        #debug_print(f"Elaboro prodotto: {item['product_name']}, Ragione: {item['reason']}, Quantità da acquistare: {item['quantity_to_buy']}, Prezzo unitario: {item['price']:.2f}€")
+
+        shop = item["shop"]  # oppure item['shop'] se items è una lista di dict
+        product_cost = item["price"] * item["quantity_to_buy"]
+        if shop:
+            shop_totals.setdefault(shop, 0)
+            shop_totals[shop] += product_cost
+
+    # Ordina per negozio
+    shop_totals = dict(sorted(shop_totals.items(), key=lambda x: x[0].lower()))        
+
+    conn.close()
+
+    #debug_print(f"Totali per negozio: {items}")
+    return items, shop_totals
+
+
+
+
+
+
+    return shopping_list
 
 
 
 # Mainpage, calcola il numero dei prodotti che sono da riordinare
 def get_reorder_count_from_shopping_list():
     # Usa la funzione esistente per ottenere i dati della lista della spesa
-    items, _ = get_shopping_list_data()  # Considera la prima settimana del mese
+    items, _ = get_shopping_list_table()  # Considera la prima settimana del mese
     return len(items)  # Restituisce il numero totale di prodotti
 
 # Mainpage, calcola il costo totale dei prodotti da riordinare
 def get_reorder_total_cost():
     # Usa la funzione esistente per ottenere i dati della lista della spesa
-    items, _ = get_shopping_list_data()  # Considera la prima settimana del mese
+    items, _ = get_shopping_list_table()  # Considera la prima settimana del mese
     total_cost = 0
 
     # Calcola il costo totale

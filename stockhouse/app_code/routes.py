@@ -22,6 +22,7 @@ from stockhouse.app_code.shopping_list_utils import (
     get_week_date_range,
     is_last_week_with_25,
     get_shopping_list_data,
+    get_shopping_list_table,
     get_spesa_per_decade,
     get_budget_info,
     process_shopping_queue,
@@ -852,10 +853,10 @@ def get_decade_period_label(decade_code):
 def shopping_list():
 
     selected_decade = get_current_decade()
-    debug_print("Decade selezionata: ", selected_decade)
+    debug_print("shopping_list - decade corrente", selected_decade)
 
     refresh_needed = is_refresh_needed()
-    refresh_needed = True  # Forza il refresh per test
+    #refresh_needed = True  # Forza il refresh per test
     debug_print("Flag refresh_needed: ", refresh_needed)
 
     if refresh_needed:
@@ -864,7 +865,7 @@ def shopping_list():
         set_refresh_needed(False, selected_decade)
     else:
         debug_print("✅ Nessuna rigenerazione. Uso la lista salvata.")
-        items, shop_totals = get_shopping_list_data(save_to_db=False, decade=selected_decade)
+        items, shop_totals = get_shopping_list_table()
 
     suggested_items = get_suggested_products()
     period_label = get_decade_period_label(selected_decade)
@@ -1139,7 +1140,7 @@ def home_reorder_products():
        # Verifica se è la settimana di reintegro
     week_number = get_current_week()
     last_week_restock = is_last_week_with_25(week_number)
-    items, shop_totals = get_shopping_list_data(week_number, last_week_restock)
+    items, shop_totals = get_shopping_list_table()
     debug_print("home_reorder_producs - Prodotti coda riordinare: ", items)
  
     # Se non ci sono prodotti, restituisci un messaggio vuoto
