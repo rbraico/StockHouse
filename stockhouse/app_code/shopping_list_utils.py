@@ -381,7 +381,11 @@ def get_shopping_list_data(save_to_db=False, conn=None, cursor=None, decade=None
                 OR
             (pd.category LIKE '%Alimenti Congelati' AND COALESCE(stock.total_quantity, 0) < i.min_quantity)
         )
-        ORDER BY i.priority_level ASC, ins_date ASC, tf.price ASC;
+        ORDER BY 
+                i.priority_level ASC,
+                COALESCE(i.reorder_frequency, i.mean_usage_time, 180) ASC,
+                ins_date ASC,
+                tf.price ASC;
         """
     cursor.execute(main_query)
     rows = cursor.fetchall()
