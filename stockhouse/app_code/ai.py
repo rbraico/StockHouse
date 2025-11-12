@@ -7,13 +7,13 @@ import PIL.Image
 import json
 import re
 import requests
-
+import traceback
 import sqlite3
 from config import Config
 
 import openai
 from openai import OpenAI
-import fitz  # PyMuPDF
+import fitz
 from PIL import Image
 import io
 import pytesseract
@@ -55,7 +55,7 @@ load_dotenv()
 #--- Funzione di gestione scontrino JSON ---
 def manage_shopping_receipt(receipt_json):
     try:
-        # Se è già un dict, salta parsing
+        # Se Ã¨ giÃ  un dict, salta parsing
         if isinstance(receipt_json, dict):
             data = receipt_json
         else:
@@ -133,7 +133,7 @@ def manage_shopping_receipt(receipt_json):
 
         
 
-        # Aggiorna expenses_fact se spesa_totale è presente
+        # Aggiorna expenses_fact se spesa_totale Ã¨ presente
         if spesa_totale is not None and spesa_totale != 0:
             selected_decade = get_current_decade()
             conn = sqlite3.connect(Config.DATABASE_PATH)
@@ -163,7 +163,10 @@ def analyze_receipt_with_gemini(filename, upload_folder):
     # Costruisci il path
     file_path = f"{upload_folder}/{filename}"
     
-    openai.api_key = os.getenv("gemini_api_key")  # o inserisci la tua chiave qui direttamente
+    # Configura la chiave API correttamente
+    genai.configure(api_key=os.getenv("gemini_api_key"))
+
+    print("Gemini API key:", os.getenv("gemini_api_key"))
     
     model = genai.GenerativeModel('gemini-2.5-pro')
     
@@ -181,23 +184,25 @@ def analyze_receipt_with_gemini(filename, upload_folder):
                 content_list.append(img)
             doc.close()
         except Exception as e:
-            debug_print(f"Errore nella lettura del PDF: {e}")
+            print(f"Errore nella lettura del PDF: {e}")
+            print(traceback.format_exc())
             return None
     else:
-        # Se non è un PDF, tratta il file come un'immagine
+        # Se non Ã¨ un PDF, tratta il file come un'immagine
         try:
             img = PIL.Image.open(file_path)
             content_list.append(img)
         except Exception as e:
-            debug_print(f"Errore nella lettura dell'immagine: {e}")
+            print(f"Errore nella lettura dell'immagine: {e}")
+            print(traceback.format_exc())
             return None
     
-    # Se non c'è contenuto, esci
+    # Se non c'Ã¨ contenuto, esci
     if not content_list:
         return None
     
     question = "Analizza lo scontrino e restituisci solo il risultato in JSON senza testo introduttivo o commenti, \
-                con nome_negozio (se il negozio è Lidl, restituisci solo Lidl come nome), indirizzo_negozio,  \
+                con nome_negozio (se il negozio Ã¨ Lidl, restituisci solo Lidl come nome), indirizzo_negozio,  \
                 data_scontrino in formato yyyy-mm-dd, spesa_totale, lista_prodotti con nome_prodotto \
                 ( non aggiungere nella lista prodotti le righe con prezzi negativi oppure i prodotti che iniziano con Statiegeld.\
                 il nome_prodotto non deve contenere caratteri come %, ^, !, $ , oppure contengano parole come statiegeld), \
@@ -206,20 +211,19 @@ def analyze_receipt_with_gemini(filename, upload_folder):
                 Negli scontrini di Lidl, 'Volkoren ontbijt' e 'Brinta' sono due prodotti diversi. \
                 Rispondi esclusivamente con il JSON."
     
-
-    
     # Aggiunge la domanda all'inizio della lista di contenuti
     content_list.insert(0, question)
     
     try:
         response = model.generate_content(content_list)
         description = response.text
-        debug_print("modulo ai - analyze_receipt_with_gemini - Response: OK", description)
+        print("modulo ai - analyze_receipt_with_gemini - Raw Gemini response:", response)
+        print("modulo ai - analyze_receipt_with_gemini - Response: OK")
         return description
     except Exception as e:
-        debug_print(f"Errore durante la chiamata a Gemini: {e}")
+        print(f"Errore durante la chiamata a Gemini: {e}")
+        print(traceback.format_exc())
         return None
-
 
 def analyze_folder_products_with_gemini(filename, upload_folder):
     # Costruisci il path
@@ -310,11 +314,11 @@ def analyze_receipt_with_chatgpt(filename, upload_folder):
     # Prompt per ChatGPT
     question = (
         "Analizza lo scontrino e restituisci solo il risultato in formato JSON, senza testo introduttivo o commenti. "
-        "Includi i seguenti campi: nome_negozio (se il negozio è Lidl, restituisci solo 'Lidl' come nome), "
+        "Includi i seguenti campi: nome_negozio (se il negozio Ã¨ Lidl, restituisci solo 'Lidl' come nome), "
         "indirizzo_negozio, data_scontrino (formato yyyy-mm-dd), spesa_totale, "
         "lista_prodotti con: nome_prodotto (escludi righe con prezzi negativi o nomi che iniziano con 'Statiegeld' "
         "o che contengono caratteri come %, ^, !, $, o la parola 'statiegeld'), "
-        "quantita (arrotondata al valore intero più vicino), traduzione_italiano (sintetica), "
+        "quantita (arrotondata al valore intero piÃ¹ vicino), traduzione_italiano (sintetica), "
         "prezzo_unitario e prezzo_totale (anche se coincidono). "
         "Se trovi prezzi negativi, sottrai il valore dal prezzo del prodotto precedente. "
         "Negli scontrini di Lidl, 'Volkoren ontbijt' e 'Brinta' sono prodotti diversi. "
@@ -335,7 +339,7 @@ def analyze_receipt_with_chatgpt(filename, upload_folder):
 
     try:
         response = client.chat.completions.create(
-            model="gpt-4o-mini",  # oppure "gpt-4o" per più precisione
+            model="gpt-4o-mini",  # oppure "gpt-4o" per piÃ¹ precisione
             messages=[
                 {"role": "system", "content": "Sei un assistente esperto di analisi di scontrini e OCR."},
                 {"role": "user", "content": message_content},
@@ -389,7 +393,7 @@ def analyze_folder_products_with_chatgpt(filename, upload_folder):
         "i primi 10 prodotti alimentari presenti. Per ciascun prodotto includi: "
         "nome_negozio, nome_prodotto, prezzo_originale, prezzo_scontato, "
         "data_inizio_offerta (formato yyyy-mm-dd), data_fine_offerta (formato yyyy-mm-dd). "
-        "Se il volantino è del negozio Lidl, le date di validità dell'offerta sono indicate "
+        "Se il volantino Ã¨ del negozio Lidl, le date di validitÃ  dell'offerta sono indicate "
         "nella parte alta della prima pagina: applica queste date a tutti i prodotti. "
         "Se non trovi queste date, imposta i campi data_inizio_offerta e data_fine_offerta su null. "
         "Non aggiungere alcun commento, introduzione o spiegazione. Rispondi solo con il JSON."
@@ -406,7 +410,7 @@ def analyze_folder_products_with_chatgpt(filename, upload_folder):
 
     try:
         response = client.chat.completions.create(
-            model="gpt-3.5-turbo",  # oppure "gpt-4o" se vuoi la versione più potente
+            model="gpt-3.5-turbo",  # oppure "gpt-4o" se vuoi la versione piÃ¹ potente
             messages=[
                 {"role": "system", "content": "Sei un assistente esperto di analisi di volantini e OCR."},
                 {"role": "user", "content": message_content}
@@ -456,14 +460,14 @@ def download_vomar_emails():
     status, data = mail.search(None, 'FROM "roberto.braico@live.com"')
 
     if status != "OK":
-        print("❌ Errore nella ricerca.")
+        print("âŒ Errore nella ricerca.")
         return
 
     mail_ids = data[0].split()
     for i, mail_id in enumerate(mail_ids):
         status, msg_data = mail.fetch(mail_id, "(RFC822)")
         if status != "OK":
-            print(f"⚠️ Errore nel recupero dell'email ID {mail_id}")
+            print(f"âš ï¸ Errore nel recupero dell'email ID {mail_id}")
             continue
 
         raw_email = msg_data[0][1]
@@ -475,7 +479,7 @@ def download_vomar_emails():
         with open(filepath, "wb") as f:
             f.write(raw_email)
 
-        print(f"📩 Email salvata: {filename}")
+        print(f"ðŸ“© Email salvata: {filename}")
 
     mail.logout()
 
@@ -525,7 +529,7 @@ def fetch_shopping_list():
     offerte = ordina_lista_spesa(json_output)
     #debug_print("Lista spesa ordinata:", offerte)
    
-    print(f"\n🎯 Trovate {len(offerte)} offerte:\n")
+    print(f"\nðŸŽ¯ Trovate {len(offerte)} offerte:\n")
     for offerta in offerte:
         print(json.dumps(offerta, indent=2, ensure_ascii=False))
 
@@ -573,11 +577,11 @@ def analyze_receipt_with_chatgpt(filename, upload_folder):
     # Prompt per ChatGPT
 #    prompt = f"""
 #Analizza questo scontrino e restituisci solo il risultato in JSON senza testo introduttivo o commenti,
-#con nome_negozio (se il negozio è Lidl, restituisci solo Lidl come nome), indirizzo_negozio,
+#con nome_negozio (se il negozio Ã¨ Lidl, restituisci solo Lidl come nome), indirizzo_negozio,
 #data_scontrino in formato yyyy-mm-dd, spesa_totale, lista_prodotti con nome_prodotto
 #(non aggiungere nella lista prodotti le righe con prezzi negativi oppure i prodotti che iniziano con Statiegeld.
 #Il nome_prodotto non deve contenere caratteri come %, ^, !, $ , oppure contenga parole come statiegeld),
-#quantita (arrotondata al valore intero più vicino), traduzione_italiano (traduzione sintetica in italiano),
+#quantita (arrotondata al valore intero piÃ¹ vicino), traduzione_italiano (traduzione sintetica in italiano),
 #prezzo_unitario e prezzo_totale (anche se coincidono). Se trovi prezzi negativi, sottrai dal prezzo del prodotto precedente;
 #Negli scontrini di Lidl, 'Volkoren ontbijt' e 'Brinta' sono due prodotti diversi.
 #Rispondi esclusivamente con il JSON.
@@ -587,7 +591,7 @@ def analyze_receipt_with_chatgpt(filename, upload_folder):
 #"""
     prompt = f"""Analizza questo scontrino e restituisci solo il JSON richiesto, senza testo introduttivo.
 Campi: nome_negozio, indirizzo_negozio, data_scontrino (yyyy-mm-dd), spesa_totale,
-lista_prodotti con nome_prodotto (senza %, ^, !, $, né parole come statiegeld), quantita (intero),
+lista_prodotti con nome_prodotto (senza %, ^, !, $, nÃ© parole come statiegeld), quantita (intero),
 traduzione_italiano, prezzo_unitario, prezzo_totale. Se trovi prezzi negativi, sottrai dal prodotto precedente.
 Testo OCR:
 {ocr_text}
@@ -616,7 +620,7 @@ if __name__ == "__main__":
             parsed = json.loads(result_json)
             print(json.dumps(parsed, indent=4, ensure_ascii=False))
         except json.JSONDecodeError:
-            print("Il risultato non è un JSON valido:")
+            print("Il risultato non Ã¨ un JSON valido:")
             print(result_json)
     else:
         print("Nessun risultato ottenuto.")
@@ -643,7 +647,7 @@ def analyze_receipt_with_chatgpt_3_5(filename, upload_folder):
     # Prompt ottimizzato
     prompt = f"""Analizza questo scontrino e restituisci solo il JSON richiesto, senza testo introduttivo.
 Campi: nome_negozio, indirizzo_negozio, data_scontrino (yyyy-mm-dd), spesa_totale,
-lista_prodotti con nome_prodotto (senza %, ^, !, $, né parole come statiegeld), quantita (intero),
+lista_prodotti con nome_prodotto (senza %, ^, !, $, nÃ© parole come statiegeld), quantita (intero),
 traduzione_italiano, prezzo_unitario, prezzo_totale. Se trovi prezzi negativi, sottrai dal prodotto precedente.
 Testo OCR:
 {ocr_text}
@@ -671,33 +675,33 @@ def validate_receipt_json(json_text):
     try:
         parsed = json.loads(json_text)
     except json.JSONDecodeError as e:
-        print(f"❌ Errore di parsing JSON: {e}")
+        print(f"âŒ Errore di parsing JSON: {e}")
         return False
 
     required_fields = ["nome_negozio", "indirizzo_negozio", "data_scontrino", "spesa_totale", "lista_prodotti"]
     for field in required_fields:
         if field not in parsed:
-            print(f"❌ Campo mancante: {field}")
+            print(f"âŒ Campo mancante: {field}")
             return False
 
     if not isinstance(parsed["lista_prodotti"], list) or len(parsed["lista_prodotti"]) == 0:
-        print("❌ lista_prodotti non valida o vuota")
+        print("âŒ lista_prodotti non valida o vuota")
         return False
 
     for i, prodotto in enumerate(parsed["lista_prodotti"]):
         for subfield in ["nome_prodotto", "quantita", "prezzo_unitario", "prezzo_totale"]:
             if subfield not in prodotto:
-                print(f"❌ Prodotto {i+1} mancante campo: {subfield}")
+                print(f"âŒ Prodotto {i+1} mancante campo: {subfield}")
                 return False
 
-    print("✅ JSON valido e completo")
+    print("âœ… JSON valido e completo")
     return True
 
 def extract_json_from_markdown(text):
     match = re.search(r"```json\s*(\{.*?\})\s*```", text, re.DOTALL)
     if match:
         return match.group(1)
-    return text.strip()  # fallback se non è markdown
+    return text.strip()  # fallback se non Ã¨ markdown
 
 
 def sanitize_ocr_text(text):
@@ -764,7 +768,7 @@ def analyze_receipt_with_gemini(filename, upload_folder):
             return full_text.strip()
         except Exception as e:
             writelog(f"Step: Errore OCR PDF - {e}")
-            debug_print(f"❌ Errore OCR PDF: {e}")
+            debug_print(f"âŒ Errore OCR PDF: {e}")
             return None
 
     def extract_text_from_image(path):
@@ -775,7 +779,7 @@ def analyze_receipt_with_gemini(filename, upload_folder):
             return text.strip()
         except Exception as e:
             writelog(f"Step: Errore OCR immagine - {e}")
-            debug_print(f"❌ Errore OCR immagine: {e}")
+            debug_print(f"âŒ Errore OCR immagine: {e}")
             return None
 
     def extract_json_from_markdown(text):
@@ -800,7 +804,7 @@ def analyze_receipt_with_gemini(filename, upload_folder):
 
     if not ocr_text:
         writelog("Step: OCR non ha trovato testo")
-        debug_print("❌ OCR non ha trovato testo")
+        debug_print("âŒ OCR non ha trovato testo")
         return None
 
     # Sanitize OCR
@@ -809,7 +813,7 @@ def analyze_receipt_with_gemini(filename, upload_folder):
         ocr_text = truncate_after_total(ocr_text)
     except Exception as e:
         writelog(f"Step: Errore durante sanitizzazione OCR - {e}")
-        debug_print(f"❌ Errore sanitizzazione OCR: {e}")
+        debug_print(f"âŒ Errore sanitizzazione OCR: {e}")
         return None
 
     debug_print("\n" + "="*40)
@@ -824,7 +828,7 @@ def analyze_receipt_with_gemini(filename, upload_folder):
 
     prompt = f"""Analizza questo scontrino e restituisci solo il JSON richiesto, senza testo introduttivo.
 Campi: nome_negozio, indirizzo_negozio, data_scontrino (yyyy-mm-dd), spesa_totale,
-lista_prodotti con nome_prodotto (senza %, ^, !, $, né parole come statiegeld), quantita (intero),
+lista_prodotti con nome_prodotto (senza %, ^, !, $, nÃ© parole come statiegeld), quantita (intero),
 traduzione_italiano, prezzo_unitario, prezzo_totale. Se trovi prezzi negativi, sottrai dal prodotto precedente.
 Testo OCR:
 {ocr_text}
@@ -842,7 +846,7 @@ Testo OCR:
         raw_text = response.text
         if not raw_text or not isinstance(raw_text, str):
             writelog("Step: Nessuna risposta testuale da Gemini")
-            debug_print("❌ Nessuna risposta testuale da Gemini")
+            debug_print("âŒ Nessuna risposta testuale da Gemini")
             return None
 
         cleaned = extract_json_from_markdown(raw_text)
@@ -851,23 +855,23 @@ Testo OCR:
             writelog("Step: JSON parsing completato")
         except Exception as e:
             writelog(f"Step: Errore parsing JSON - {e}")
-            debug_print(f"❌ Errore parsing JSON: {e}")
+            debug_print(f"âŒ Errore parsing JSON: {e}")
             return None
 
         if not validate_receipt_json(cleaned):
             writelog("Step: JSON non valido")
-            debug_print("❌ JSON non valido")
+            debug_print("âŒ JSON non valido")
             return None
 
-        writelog("Step: Analisi completata con successo ✅")
-        debug_print("✅ JSON restituito da Gemini:")
+        writelog("Step: Analisi completata con successo âœ…")
+        debug_print("âœ… JSON restituito da Gemini:")
         debug_print(json.dumps(parsed, indent=2))
 
         return parsed
 
     except Exception as e:
         writelog(f"Step: Errore durante la chiamata a Gemini - {e}")
-        debug_print(f"❌ Errore durante la chiamata a Gemini: {e}")
+        debug_print(f"âŒ Errore durante la chiamata a Gemini: {e}")
         return None
 
     finally:
