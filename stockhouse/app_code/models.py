@@ -1842,7 +1842,7 @@ def get_critical_stock():
                 dim.barcode,
                 tf.quantity,
                 inv.security_quantity, 
-                SUM(tf.quantity) - COALESCE(SUM(tf.consumed_quantity),0)) AS tot
+                SUM(tf.quantity) - COALESCE(SUM(tf.consumed_quantity),0) AS tot
         FROM transaction_fact tf
         JOIN product_dim dim ON tf.barcode = dim.barcode
         JOIN product_settings inv ON tf.barcode = inv.barcode
