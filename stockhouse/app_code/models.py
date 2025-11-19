@@ -1812,7 +1812,7 @@ def get_critical_stock_count():
         SELECT COUNT(*) 
         FROM (
                 SELECT tf.barcode, 
-                SUM(tf.quantity) - COALESCE(SUM(tf.consumed_quantity),0)) AS tot
+                SUM(tf.quantity) - COALESCE(SUM(tf.consumed_quantity),0) AS tot
                 FROM transaction_fact tf
                 JOIN product_settings i ON tf.barcode = i.barcode
                 GROUP BY tf.barcode
