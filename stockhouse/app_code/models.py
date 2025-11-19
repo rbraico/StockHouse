@@ -1860,7 +1860,7 @@ def get_critical_stock():
         {
             "name": row[0],
             "barcode": row[1],
-            "quantity": ro(w[4],  # ritorna Tot
+            "quantity": row[4],  # ritorna Tot
             "security_quantity": row[3]
         }
         for row in rows
