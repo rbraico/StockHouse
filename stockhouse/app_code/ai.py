@@ -202,12 +202,13 @@ def analyze_receipt_with_gemini(filename, upload_folder):
         return None
     
     question = "Analizza lo scontrino e restituisci solo il risultato in JSON senza testo introduttivo o commenti, \
-                con nome_negozio (se il negozio Ã¨ Lidl, restituisci solo Lidl come nome), indirizzo_negozio,  \
+                con nome_negozio (se il negozio contiene Lidl, restituisci solo Lidl come nome), indirizzo_negozio,  \
                 data_scontrino in formato yyyy-mm-dd, spesa_totale, lista_prodotti con nome_prodotto \
-                ( non aggiungere nella lista prodotti le righe con prezzi negativi oppure i prodotti che iniziano con Statiegeld.\
-                il nome_prodotto non deve contenere caratteri come %, ^, !, $ , oppure contengano parole come statiegeld), \
+                ( non aggiungere nella lista prodotti le righe con prezzi negativi oppure i prodotti che iniziano con Statiegeld).\
+                Il nome_prodotto non deve contenere caratteri come %, ^, !, $ ;\
                 quantita (arrotondata al valore intero piu` vicino), traduzione_italiano (traduzione sintetica in italiano), \
-                prezzo_unitario e prezzo_totale (anche se coincidono). Se trovi prezzi negativi, sottrai dal prezzo del prodotto precedente; \
+                prezzo_unitario (e` uguale al prezzo totale, che vedi in fondo alla riga dove c'e` il nome del prodotto, diviso il numero di unita` di prodotto acquistate) \
+                e il prezzo_totale. Se trovi righe con prezzi negativi, ignorale. \
                 Negli scontrini di Lidl, 'Volkoren ontbijt' e 'Brinta' sono due prodotti diversi. \
                 Rispondi esclusivamente con il JSON."
     
