@@ -197,7 +197,7 @@ def analyze_receipt_with_gemini(filename, upload_folder):
             print(traceback.format_exc())
             return None
     
-    # Se non c'Ã¨ contenuto, esci
+    # Se non c'e` contenuto, esci
     if not content_list:
         return None
     
@@ -225,6 +225,65 @@ def analyze_receipt_with_gemini(filename, upload_folder):
         print(f"Errore durante la chiamata a Gemini: {e}")
         print(traceback.format_exc())
         return None
+    
+
+def enrich_items_with_description(items):
+    
+    debug_print("Enriching items with descriptions using Gemini AI...")
+    
+    # Configura la chiave API (rimane come l'originale)
+    genai.configure(api_key=os.getenv("gemini_api_key"))
+    
+    # Usa il modello Flash per evitare problemi di quota
+    model = genai.GenerativeModel("gemini-2.5-flash") 
+
+    prompt = f"""
+Standardizza la seguente lista di prodotti alimentari in formato JSON. 
+Per ogni oggetto, aggiungi il campo "descrizione" usando esattamente il formato: "Categoria, NomeStandardizzato".
+Esempi: 'Handsinasapple' -> "Fruit, sinasapple"; 'Sinasapplesap' -> "Sap, sinasapple".
+NON alterare la struttura e i campi esistenti. Restituisci **SOLO** l'ARRAY JSON.
+NON aggiungere nessun altro testo, intestazione o spiegazione.
+
+Lista da standardizzare:
+{json.dumps(items, ensure_ascii=False)}
+"""
+    
+    try:
+        response = model.generate_content(prompt)
+        
+        # ⚠️ FIX: Rimuovere il blocco di codice Markdown prima del parsing
+        response_text = response.text.strip()
+        
+        # 1. Pulizia delle virgolette inverse iniziali
+        if response_text.startswith('```'):
+            # Trova l'indice del primo carattere di nuova riga ('\n') dopo '```json' o '```'
+            first_newline_index = response_text.find('\n')
+            if first_newline_index != -1:
+                # Inizia la stringa dopo il primo '\n'
+                response_text = response_text[first_newline_index+1:].strip()
+            
+        # 2. Pulizia delle virgolette inverse finali
+        if response_text.endswith('```'):
+            response_text = response_text[:-3].strip()
+        
+        # Converte la risposta pulita in Python dict
+        enriched_items = json.loads(response_text)
+        #debug_print("Enriched items:", enriched_items)    
+        return enriched_items
+
+    except json.JSONDecodeError as e:
+        # Se fallisce il parsing DOPO la pulizia, registriamo e restituiamo gli item originali
+        print(f"ERRORE DI PARSING JSON: Fallimento dopo la pulizia. Risposta testuale: '{response.text}' Errore: {e}")
+        return items 
+        
+    except Exception as e:
+        # Gestisce errori API, timeout, ecc.
+        print(f"Errore API/Generazione con Gemini: {e}")
+        return items
+ 
+
+
+
 
 def analyze_folder_products_with_gemini(filename, upload_folder):
     # Costruisci il path

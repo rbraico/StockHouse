@@ -1,6 +1,8 @@
 from datetime import datetime, timedelta, date
 import sqlite3
 from stockhouse.app_code.models import get_week_date_range, recalculate_seasonal_priorities, upsert_expense, lookup_products_by_name, upsert_transaction_fact
+
+
 from config import Config  # usa il path corretto se è diverso
 from stockhouse.utils import debug_print
 import calendar
@@ -324,10 +326,44 @@ def calcola_priority_personalizzata(
     # Fallback finale
     return 10
 
+# Funzione per filtrare gli articoli più economici, quando nella lista selezionata da get_shopping_list_data ci sono più record per lo stesso prodotto standardizzato
+def filter_cheapest_item(enriched_items):
+    """
+    Normalizza la lista degli articoli della spesa scegliendo, per ogni prodotto 
+    standardizzato ('descrizione'), solo il record con il prezzo unitario più basso.
+    """
+    cheapest_items = {}
 
+    for item in enriched_items:
+        # 1. Definisce la chiave unica
+        unique_key = item["descrizione"] 
+        
+        # Estrae i dati
+        current_price = item.get("price", float('inf')) # Assicurati che il campo 'price' esista
+        
+        # 2. Logica di Selezione (Trova il Meno Costoso)
+        if unique_key not in cheapest_items:
+            # Se l'articolo è nuovo, lo aggiunge come record di riferimento
+            cheapest_items[unique_key] = item.copy()
+            
+        else:
+            # Se l'articolo esiste, controlla se il record corrente è più economico
+            existing_cheapest_price = cheapest_items[unique_key].get("price", float('inf'))
+            
+            if current_price < existing_cheapest_price:
+                # 3. Se il record corrente è meno costoso, SOSTITUISCE il record precedente
+                cheapest_items[unique_key] = item.copy()
+            # Se il prezzo è maggiore o uguale, scarta l'elemento corrente
+            
+    # 4. Restituisce la lista finale dei record meno costosi
+    final_list = list(cheapest_items.values())
+    
+    return final_list
 
 # Funzione per ottenere i dati della lista della spesa
 def get_shopping_list_data(save_to_db=False, conn=None, cursor=None, decade=None):
+
+    from stockhouse.app_code.ai import enrich_items_with_description
  
     
     debug_print("get_shopping_list_data, save_to_db:", save_to_db, "decade:", decade)
@@ -373,6 +409,7 @@ def get_shopping_list_data(save_to_db=False, conn=None, cursor=None, decade=None
         LEFT JOIN product_dim pd ON i.barcode = pd.barcode
         WHERE i.max_quantity > 0
         AND (pd.category LIKE '%Alimenti freschi' OR pd.item LIKE '%Alimenti Congelati')
+        AND NOT (i.necessity_level="Stagionale" AND i.priority_level>2)
         GROUP BY i.barcode
         HAVING (
             (i.necessity_level = 'Indispensabile' AND COALESCE(stock.total_quantity, 0) <= i.reorder_point)
@@ -568,6 +605,10 @@ def get_shopping_list_data(save_to_db=False, conn=None, cursor=None, decade=None
         debug_print(f"Aggiunto prodotto alla lista della spesa: {item}")
 
 
+    enriched_items = enrich_items_with_description(items) 
+    debug_print("Items after enrichment:", enriched_items)
+    items = filter_cheapest_item(enriched_items)
+    debug_print("Items after filtering cheapest:", items)
 
     debug_print("save_to_db, decade:", decade)
 
@@ -712,6 +753,8 @@ def get_suggested_products():
         FROM product_dim pd
         LEFT JOIN transaction_fact tf ON pd.barcode = tf.barcode
         LEFT JOIN shopping_list sl ON pd.barcode = sl.barcode
+        LEFT JOIN product_settings i ON pd.barcode = i.barcode
+        WHERE pd.item<>'💊 Medicine e accessori' AND NOT (i.necessity_level="Stagionale" AND i.priority_level>2)
         GROUP BY pd.barcode
         ORDER BY pd.name ASC
     """)
