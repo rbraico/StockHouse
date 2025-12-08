@@ -476,17 +476,27 @@ def lookup_category_by_item(item_name):
 
 def add_product_dim(barcode, name, brand, shop, category, item, notes, image):
 
-    debug_print(f"Risultato: Barcode={barcode}, Name={name}, Brand={brand}, Shop={shop}, Category={category}, Item={item}, Notes={notes}")
+    debug_print(
+        f"Risultato: Barcode={barcode}, Name={name}, Brand={brand}, "
+        f"Shop={shop}, Category={category}, Item={item}, Notes={notes}"
+    )
+
+    # Se image è NULL/vuota, costruisci l'URL con il barcode
+    if not image:  # copre None, "" e stringhe vuote
+        image = f"https://rbrha.duckdns.org:8123/local/stockhouse_images/{barcode}.jpg"
 
     conn = sqlite3.connect(Config.DATABASE_PATH)
     c = conn.cursor()
+
     c.execute("""
-        INSERT INTO product_dim (barcode, name, brand, shop, category, item, notes, image)
+        INSERT INTO product_dim 
+        (barcode, name, brand, shop, category, item, notes, image)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    """, (barcode, name, brand, shop, category, item, notes, image
-          ))
+    """, (barcode, name, brand, shop, category, item, notes, image))
+
     conn.commit()
     conn.close()
+
 
 
 def update_product_dim(id, name, brand, shop, category, item):

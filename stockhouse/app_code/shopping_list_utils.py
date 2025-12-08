@@ -617,7 +617,7 @@ def get_shopping_list_data(save_to_db=False, conn=None, cursor=None, decade=None
         debug_print("Pulizia dei record della lista della spesa per decade:", decade)
         cursor.execute("""
             DELETE FROM shopping_list
-            WHERE NOT (decade_number = ? AND reason = 'Aggiunto manualmente')
+            WHERE NOT (decade_number = ? AND (reason = 'Aggiunto manualmente' or within_budget = 0))
 
         """, (decade,))
 
@@ -1039,7 +1039,7 @@ def aggiorna_tabella_shopping_list(lista_ordinata):
     cursor = conn.cursor()
 
     # Cancella tutti i record esistenti
-    cursor.execute("DELETE FROM shopping_list")
+    cursor.execute("DELETE FROM shopping_list WHERE within_budget = 1")
 
     # Query di inserimento
     insert_query = """
@@ -1047,6 +1047,7 @@ def aggiorna_tabella_shopping_list(lista_ordinata):
             barcode, product_name, quantity_to_buy, shop,
             reason, price, decade_number, insert_date, within_budget
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(barcode, decade_number) DO NOTHING;
     """
 
     # Inserisci ogni record ordinato
@@ -1109,7 +1110,7 @@ def finalizza_shopping_list():
     cursor = conn.cursor()
     
     # Esegui la SELECT completa
-    cursor.execute("select distinct pd.item, sl.* from shopping_list sl left join product_dim pd on sl.barcode=pd.barcode")
+    cursor.execute("select distinct pd.item, sl.* from shopping_list sl left join product_dim pd on sl.barcode=pd.barcode WHERE sl.within_budget = 1")
     rows = cursor.fetchall()
 
     # Recupera i nomi delle colonne
