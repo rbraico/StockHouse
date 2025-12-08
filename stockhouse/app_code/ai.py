@@ -54,11 +54,14 @@ from dotenv import load_dotenv
 def load_stockhouse_env():
     if platform.system() == "Windows":
         # sviluppo locale → .env nella root del progetto
-        load_dotenv()
+        dotenv_path = r"\\192.168.1.31\Progetti\StockHouse\.env"
+        load_dotenv(dotenv_path)
     else:
         # Home Assistant / produzione → .env fisso
-        load_dotenv("/config/stockhouse_env/.env")
-
+        dotenv_path = "/config/stockhouse_env/.env"
+        
+    load_dotenv(dotenv_path)
+    debug_print(f"[DEBUG] Caricato .env da: {dotenv_path}")
 
 # Carica il file .env dalla root del progetto
 load_stockhouse_env()
