@@ -47,10 +47,21 @@ debug_print(f"[AI] Tessdata prefix: {os.environ.get('TESSDATA_PREFIX')}")
 from stockhouse.utils import debug_print
 from stockhouse.app_code.models import lookup_products_by_name, lookup_products_by_id,  upsert_transaction_fact, upsert_expense
 from stockhouse.app_code.shopping_list_utils import get_current_decade, normalize_text, fuzzy_match_product, lookup_products_by_name, get_aliases_from_db, insert_unknown_product
+import os
+import platform
 from dotenv import load_dotenv
 
+def load_stockhouse_env():
+    if platform.system() == "Windows":
+        # sviluppo locale → .env nella root del progetto
+        load_dotenv()
+    else:
+        # Home Assistant / produzione → .env fisso
+        load_dotenv("/config/stockhouse_env/.env")
+
+
 # Carica il file .env dalla root del progetto
-load_dotenv()
+load_stockhouse_env()
 
 #--- Funzione di gestione scontrino JSON ---
 def manage_shopping_receipt(receipt_json):
