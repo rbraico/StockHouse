@@ -41,7 +41,7 @@ from stockhouse.app_code.shopping_list_utils import (
     finalizza_shopping_list,
     trigger_thread_on_exit)
 
-from stockhouse.app_code.ai import manage_shopping_receipt, analyze_receipt_with_gemini, analyze_receipt_with_chatgpt
+from stockhouse.app_code.ai import manage_shopping_receipt, analyze_receipt_with_gemini, analyze_receipt_with_chatgpt, GeminiQuotaExceededError
 
 import calendar
 from calendar import month_name
@@ -1354,19 +1354,28 @@ def main_analyze_receipt():
     if not filename:
         return jsonify({"success": False, "msg": "Nessun file specificato"})
 
-    # Chiama la funzione di analisi
-    result_json = analyze_receipt_with_gemini(filename, UPLOAD_FOLDER)
-    #result_json = analyze_receipt_with_chatgpt(filename, UPLOAD_FOLDER)
+    # Prova prima Gemini, fallback su ChatGPT in caso di quota superata
+    try:
+        result_json = analyze_receipt_with_gemini(filename, UPLOAD_FOLDER)
+        if result_json is None:
+            print("Errore generico Gemini, nessun risultato ottenuto")
+            # opzionale: qui potresti decidere di chiamare ChatGPT anche per errori generici
+            result_json = analyze_receipt_with_chatgpt(filename, UPLOAD_FOLDER)
+    except GeminiQuotaExceededError:
+        print("Quota Gemini superata, uso fallback su ChatGPT")
+        result_json = analyze_receipt_with_chatgpt(filename, UPLOAD_FOLDER)
 
-    if result_json:
-        debug_print("Risultato LETTURA SCONTRINO:", result_json) 
-    else:
-        debug_print("Errore: nessun risultato ottenuto dall'analisi dello scontrino.")
+    # Debug
+    debug_print("Risultato analisi scontrino grezzo:", result_json)
 
+    # Gestione e normalizzazione dei dati
     result_manage = manage_shopping_receipt(result_json)
 
-    # Ritorna il JSON così com'è al frontend
-    return jsonify({"success": True, "msg": "Scontrino analizzato", "data": result_manage})
+    return jsonify({
+        "success": True,
+        "msg": "Scontrino analizzato",
+        "data": result_manage
+    })
 
 
 # --- Route di debug per cancellare scontrino ---

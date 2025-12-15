@@ -604,11 +604,11 @@ def get_shopping_list_data(save_to_db=False, conn=None, cursor=None, decade=None
         items.append(item)
         debug_print(f"Aggiunto prodotto alla lista della spesa: {item}")
 
-
-    enriched_items = enrich_items_with_description(items) 
-    debug_print("Items after enrichment:", enriched_items)
-    items = filter_cheapest_item(enriched_items)
-    debug_print("Items after filtering cheapest:", items)
+    # 🔹 Commentati perche non producono risultati evidenti e consumano moltissimi tockens
+    #enriched_items = enrich_items_with_description(items) 
+    #debug_print("Items after enrichment:", enriched_items)
+    #items = filter_cheapest_item(enriched_items)
+    #debug_print("Items after filtering cheapest:", items)
 
     debug_print("save_to_db, decade:", decade)
 

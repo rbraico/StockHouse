@@ -167,31 +167,38 @@ def manage_shopping_receipt(receipt_json):
 
 # --- Funzione di analisi scontrino tramite Gemini AI ---
 
-
+import os
+import io
+import traceback
 import fitz  # PyMuPDF
 import PIL.Image
-import io
+from google.api_core.exceptions import ResourceExhausted
 
+
+# Eccezione personalizzata per la quota
+class GeminiQuotaExceededError(Exception):
+    pass
 
 def analyze_receipt_with_gemini(filename, upload_folder):
-    # Costruisci il path
+    """
+    Analizza uno scontrino usando Gemini. Gestisce PDF e immagini.
+    Lancia GeminiQuotaExceededError se la quota è superata.
+    Ritorna la stringa JSON con i dati, o None se errore generico.
+    """
     file_path = f"{upload_folder}/{filename}"
     
-    # Configura la chiave API correttamente
+    # Configura la chiave API
     genai.configure(api_key=os.getenv("gemini_api_key"))
-
     print("Gemini API key:", os.getenv("gemini_api_key"))
     
     model = genai.GenerativeModel('gemini-2.5-pro')
-    
     content_list = []
-    
-    # Controlla l'estensione del file
+
+    # Apertura PDF o immagine
     if filename.lower().endswith('.pdf'):
         try:
             doc = fitz.open(file_path)
             for page in doc:
-                # Converte la pagina in un'immagine PIL
                 pix = page.get_pixmap()
                 img_data = pix.tobytes("png")
                 img = PIL.Image.open(io.BytesIO(img_data))
@@ -202,7 +209,6 @@ def analyze_receipt_with_gemini(filename, upload_folder):
             print(traceback.format_exc())
             return None
     else:
-        # Se non Ã¨ un PDF, tratta il file come un'immagine
         try:
             img = PIL.Image.open(file_path)
             content_list.append(img)
@@ -210,35 +216,40 @@ def analyze_receipt_with_gemini(filename, upload_folder):
             print(f"Errore nella lettura dell'immagine: {e}")
             print(traceback.format_exc())
             return None
-    
-    # Se non c'e` contenuto, esci
+
     if not content_list:
+        print("Nessun contenuto trovato nel file")
         return None
-    
-    question = "Analizza lo scontrino e restituisci solo il risultato in JSON senza testo introduttivo o commenti, \
-                con nome_negozio (se il negozio contiene Lidl, restituisci solo Lidl come nome), indirizzo_negozio,  \
-                data_scontrino in formato yyyy-mm-dd, spesa_totale, lista_prodotti con nome_prodotto \
-                ( non aggiungere nella lista prodotti le righe con prezzi negativi oppure i prodotti che iniziano con Statiegeld).\
-                Il nome_prodotto non deve contenere caratteri come %, ^, !, $ ;\
-                quantita (arrotondata al valore intero piu` vicino), traduzione_italiano (traduzione sintetica in italiano), \
-                prezzo_unitario (e` uguale al prezzo totale, che vedi in fondo alla riga dove c'e` il nome del prodotto, diviso il numero di unita` di prodotto acquistate) \
-                e il prezzo_totale. Se trovi righe con prezzi negativi, ignorale. \
-                Negli scontrini di Lidl, 'Volkoren ontbijt' e 'Brinta' sono due prodotti diversi. \
-                Rispondi esclusivamente con il JSON."
-    
-    # Aggiunge la domanda all'inizio della lista di contenuti
+
+    # Prompt per Gemini
+    question = (
+        "Analizza lo scontrino e restituisci solo il risultato in JSON senza testo introduttivo o commenti, "
+        "con nome_negozio (se il negozio contiene Lidl, restituisci solo Lidl come nome), "
+        "indirizzo_negozio, data_scontrino in formato yyyy-mm-dd, spesa_totale, lista_prodotti con nome_prodotto "
+        "(non aggiungere righe con prezzi negativi o prodotti che iniziano con Statiegeld). "
+        "Il nome_prodotto non deve contenere caratteri come %, ^, !, $ ; "
+        "quantita (arrotondata al valore intero più vicino), traduzione_italiano (traduzione sintetica in italiano), "
+        "prezzo_unitario (prezzo totale diviso quantità) e prezzo_totale. "
+        "Negli scontrini di Lidl, 'Volkoren ontbijt' e 'Brinta' sono due prodotti diversi. "
+        "Rispondi esclusivamente con il JSON."
+    )
     content_list.insert(0, question)
-    
+
     try:
         response = model.generate_content(content_list)
         description = response.text
-        print("modulo ai - analyze_receipt_with_gemini - Raw Gemini response:", response)
-        print("modulo ai - analyze_receipt_with_gemini - Response: OK")
+        print("Raw Gemini response:", response)
+        print("Response OK")
         return description
+    except ResourceExhausted as e:
+        print("Quota Gemini superata, usare fallback su ChatGPT")
+        raise GeminiQuotaExceededError("Quota Gemini superata") from e
     except Exception as e:
-        print(f"Errore durante la chiamata a Gemini: {e}")
+        print(f"Errore generico durante la chiamata a Gemini: {e}")
         print(traceback.format_exc())
         return None
+
+
     
 
 def enrich_items_with_description(items):
