@@ -1354,16 +1354,21 @@ def main_analyze_receipt():
     if not filename:
         return jsonify({"success": False, "msg": "Nessun file specificato"})
 
-    # Prova prima Gemini, fallback su ChatGPT in caso di quota superata
+
+    # Analisi diretta con ChatGPT (bypass Gemini per problemi di quota)
     try:
-        result_json = analyze_receipt_with_gemini(filename, UPLOAD_FOLDER)
-        if result_json is None:
-            print("Errore generico Gemini, nessun risultato ottenuto")
-            # opzionale: qui potresti decidere di chiamare ChatGPT anche per errori generici
-            result_json = analyze_receipt_with_chatgpt(filename, UPLOAD_FOLDER)
-    except GeminiQuotaExceededError:
-        print("Quota Gemini superata, uso fallback su ChatGPT")
+        print(f"Analisi di {filename} in corso con ChatGPT...")
         result_json = analyze_receipt_with_chatgpt(filename, UPLOAD_FOLDER)
+        
+        if result_json is None:
+            print("Errore: ChatGPT non ha restituito alcun risultato.")
+        else:
+            print("Analisi completata con successo via ChatGPT.")
+
+    except Exception as e:
+        print(f"Errore durante la chiamata a ChatGPT: {e}")
+        result_json = None
+
 
     # Debug
     debug_print("Risultato analisi scontrino grezzo:", result_json)

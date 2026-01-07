@@ -397,18 +397,46 @@ def analyze_receipt_with_chatgpt(filename, upload_folder):
         return None
 
     # Prompt per ChatGPT
+
     question = (
-        "Analizza lo scontrino e restituisci solo il risultato in formato JSON, senza testo introduttivo o commenti. "
-        "Includi i seguenti campi: nome_negozio (se il negozio Ã¨ Lidl, restituisci solo 'Lidl' come nome), "
-        "indirizzo_negozio, data_scontrino (formato yyyy-mm-dd), spesa_totale, "
-        "lista_prodotti con: nome_prodotto (escludi righe con prezzi negativi o nomi che iniziano con 'Statiegeld' "
-        "o che contengono caratteri come %, ^, !, $, o la parola 'statiegeld'), "
-        "quantita (arrotondata al valore intero piÃ¹ vicino), traduzione_italiano (sintetica), "
-        "prezzo_unitario e prezzo_totale (anche se coincidono). "
-        "Se trovi prezzi negativi, sottrai il valore dal prezzo del prodotto precedente. "
-        "Negli scontrini di Lidl, 'Volkoren ontbijt' e 'Brinta' sono prodotti diversi. "
-        "Rispondi esclusivamente con il JSON."
+        "Analizza l'immagine dello scontrino e restituisci ESCLUSIVAMENTE un oggetto JSON, senza testo introduttivo.\n\n"
+        "### REGOLE DI IDENTIFICAZIONE NEGOZIO:\n"
+        "1. Se vedi il logo 'ah', 'ch' stilizzato o 'Mijn AH', nome_negozio è 'Albert Heijn'.\n"
+        "2. Se il nome inizia con 'Lidl', nome_negozio è 'Lidl'.\n"
+        "3. Estrai sempre l'indirizzo_negozio se disponibile.\n\n"
+        "### REGOLE PER LA DATA:\n"
+        "- Cerca la data (DD-MM-YYYY o DD/MM/YY) con priorità nel blocco transazione PIN in fondo o vicino all'orario. "
+        "Converti sempre nel formato YYYY-MM-DD.\n\n"
+        "### LOGICA PRODOTTI E QUANTITÀ:\n"
+        "1. NOMI PRODOTTI: Estrai il nome escludendo pesi (kg, g) e caratteri speciali (%, ^, !, $). "
+        "Escludi righe 'Statiegeld' o nomi che iniziano con 'Statiegeld'.\n"
+        "2. DISTINZIONE (Esempio AH): Tratta 'PICKWICK 1' e 'PICKWICK 2' come prodotti distinti (varietà diverse). "
+        "Non rimuovere il numero se identifica una varietà.\n"
+        "3. QUANTITÀ (AANTAL): Se vedi un numero isolato sotto o accanto al nome (es. '2'), usalo come quantità. "
+        "Se vedi un prezzo totale riga (es. 3,98) e una quantità (es. 2), calcola il prezzo_unitario (3,98 / 2 = 1,99).\n"
+        "4. SCONTI/BONUS: Se trovi valori negativi o righe 'BONUS', NON creare una nuova riga nel JSON. "
+        "Sottrai il valore dal prezzo_totale del prodotto immediatamente precedente.\n\n"
+        "### CASI SPECIALI:\n"
+        "- Da Lidl, 'Volkoren ontbijt' e 'Brinta' sono prodotti diversi.\n"
+        "- spesa_totale: Usa sempre il valore finale pagato (es. 'BETAALD' o 'PINNEN'), non la base imponibile BTW.\n\n"
+        "JSON Structure:\n"
+        "{\n"
+        "  'nome_negozio': '',\n"
+        "  'indirizzo_negozio': '',\n"
+        "  'data_scontrino': 'YYYY-MM-DD',\n"
+        "  'spesa_totale': 0.00,\n"
+        "  'lista_prodotti': [\n"
+        "    {\n"
+        "      'nome_prodotto': '',\n"
+        "      'quantita': 0,\n"
+        "      'prezzo_unitario': 0.00,\n"
+        "      'prezzo_totale': 0.00,\n"
+        "      'traduzione_italiano': ''\n"
+        "    }\n"
+        "  ]\n"
+        "}"
     )
+   
 
     # Prepara i contenuti per il messaggio da mandare a GPT-4o
     message_content = [{"type": "text", "text": question}]
