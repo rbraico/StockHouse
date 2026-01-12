@@ -14,7 +14,7 @@ from config import Config
 import openai
 from openai import OpenAI
 import fitz
-from PIL import Image
+from PIL import Image, ImageEnhance
 import io
 import pytesseract
 import json
@@ -362,12 +362,31 @@ def analyze_folder_products_with_gemini(filename, upload_folder):
     except Exception as e:
         debug_print(f"Errore durante la chiamata a Gemini: {e}")
         return None
+    
+
+
+# Funzione di aumento contrasto immagine scontrino
+def aumenta_contrasto(percorso_input, percorso_output, fattore=2.0):
+    """
+    Aumenta il contrasto di un'immagine.
+    
+    percorso_input: path del file sorgente
+    percorso_output: path del file risultante
+    fattore: >1 aumenta il contrasto, <1 lo riduce
+    """
+    img = Image.open(percorso_input)
+    enhancer = ImageEnhance.Contrast(img)
+    img_contrasto = enhancer.enhance(fattore)
+    img_contrasto.save(percorso_output)
+
 
 #---------CHAT_GPT---------
 def analyze_receipt_with_chatgpt(filename, upload_folder):
-    # Costruisci il path completo
+
+        # Costruisci il path completo
     file_path = f"{upload_folder}/{filename}"
 
+  
     client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
     content_list = []
@@ -396,27 +415,28 @@ def analyze_receipt_with_chatgpt(filename, upload_folder):
     if not content_list:
         return None
 
-    # Prompt per ChatGPT
-
+    # Prompt per ChatGPT con regole dettagliate
     question = (
         "Analizza l'immagine dello scontrino e restituisci ESCLUSIVAMENTE un oggetto JSON, senza testo introduttivo.\n\n"
         "### REGOLE DI IDENTIFICAZIONE NEGOZIO:\n"
-        "1. Se vedi il logo 'ah', 'ch' stilizzato o 'Mijn AH', nome_negozio è 'Albert Heijn'.\n"
-        "2. Se il nome inizia con 'Lidl', nome_negozio è 'Lidl'.\n"
+        "1. Se vedi il logo 'ah', 'ch' stilizzato o 'Mijn AH', nome_negozio .. 'Albert Heijn'.\n"
+        "2. Se il nome inizia con 'Lidl', nome_negozio .. 'Lidl'.\n"
         "3. Estrai sempre l'indirizzo_negozio se disponibile.\n\n"
         "### REGOLE PER LA DATA:\n"
-        "- Cerca la data (DD-MM-YYYY o DD/MM/YY) con priorità nel blocco transazione PIN in fondo o vicino all'orario. "
+        "- Cerca la data (DD-MM-YYYY o DD/MM/YY) con priorit.. nel blocco transazione PIN in fondo o vicino all'orario. "
         "Converti sempre nel formato YYYY-MM-DD.\n\n"
-        "### LOGICA PRODOTTI E QUANTITÀ:\n"
+        "### LOGICA PRODOTTI E QUANTIT..:\n"
         "1. NOMI PRODOTTI: Estrai il nome escludendo pesi (kg, g) e caratteri speciali (%, ^, !, $). "
         "Escludi righe 'Statiegeld' o nomi che iniziano con 'Statiegeld'.\n"
-        "2. DISTINZIONE (Esempio AH): Tratta 'PICKWICK 1' e 'PICKWICK 2' come prodotti distinti (varietà diverse). "
-        "Non rimuovere il numero se identifica una varietà.\n"
-        "3. QUANTITÀ (AANTAL): Se vedi un numero isolato sotto o accanto al nome (es. '2'), usalo come quantità. "
-        "Se vedi un prezzo totale riga (es. 3,98) e una quantità (es. 2), calcola il prezzo_unitario (3,98 / 2 = 1,99).\n"
-        "4. SCONTI/BONUS: Se trovi valori negativi o righe 'BONUS', NON creare una nuova riga nel JSON. "
-        "Sottrai il valore dal prezzo_totale del prodotto immediatamente precedente.\n\n"
-        "### CASI SPECIALI:\n"
+        "2. DISTINZIONE (Esempio AH): Tratta 'PICKWICK 1' e 'PICKWICK 2' come prodotti distinti (variet.. diverse). "
+        "Non rimuovere il numero se identifica una variet...\n"
+        "3. QUANTIT.. (AANTAL): Se vedi un numero isolato sotto o accanto al nome (es. '2'), usalo come quantit... "
+        "Se vedi un prezzo totale riga (es. 3,98) e una quantit.. (es. 2), calcola il prezzo_unitario (3,98 / 2 = 1,99).\n"
+        "4. SCONTI/BONUS: Se trovi valori, prezzi, negativi o righe 'BONUS' oppure 'In prijs verlaagd',o simili, sottrai la cifra negativa dal valore dal prezzo_totale del prodotto immediatamente precedente. \n\n"
+        "5. Prijs/Bedrag: Se nello scontrino trovi le colonne Prijs e Bedrag (Vomar e Albert Heijn), la cifra sotto la colonna prijs deve essere salvata nel campo prezzo_unitario, mentre la cifra sotto la colonna Bedrag deve essere salvata nel campo prezzo_totale.\n\n"
+        "6. Traduci il nome del prodotto in italiano in modo sintetico e salvalo nel campo traduzione_italiano.\n\n"
+        "7. escludi le righe con nome 'Plastic draagtas' o simili.\n\n"
+        "### CASI SPECIALI:\n"   
         "- Da Lidl, 'Volkoren ontbijt' e 'Brinta' sono prodotti diversi.\n"
         "- spesa_totale: Usa sempre il valore finale pagato (es. 'BETAALD' o 'PINNEN'), non la base imponibile BTW.\n\n"
         "JSON Structure:\n"
@@ -436,7 +456,6 @@ def analyze_receipt_with_chatgpt(filename, upload_folder):
         "  ]\n"
         "}"
     )
-   
 
     # Prepara i contenuti per il messaggio da mandare a GPT-4o
     message_content = [{"type": "text", "text": question}]
@@ -452,7 +471,7 @@ def analyze_receipt_with_chatgpt(filename, upload_folder):
 
     try:
         response = client.chat.completions.create(
-            model="gpt-4o-mini",  # oppure "gpt-4o" per piÃ¹ precisione
+            model="gpt-4o",  # oppure "gpt-4o" per piu precisione
             messages=[
                 {"role": "system", "content": "Sei un assistente esperto di analisi di scontrini e OCR."},
                 {"role": "user", "content": message_content},
