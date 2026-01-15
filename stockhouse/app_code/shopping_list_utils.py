@@ -7,7 +7,7 @@ from config import Config  # usa il path corretto se è diverso
 from stockhouse.utils import debug_print
 import calendar
 from rapidfuzz import process, fuzz
-
+import requests
 import json
 import re
 
@@ -670,13 +670,53 @@ def get_shopping_list_data(save_to_db=False, conn=None, cursor=None, decade=None
     # Ordina per negozio
     shop_totals = dict(sorted(shop_totals.items(), key=lambda x: x[0].lower()))        
 
+
+
+    debug_print(f"🛒 Lista della spesa per la {decade} generata con {len(items)} prodotti, totale: {total_cost:.2f}€")
+
+
+    # 2. Chiamata a Home Assistant
+    lista_vocal_ha = get_home_assistant_list("todo.shopping_list")
+    debug_print(f"******Lista vocale Home Assistant: {lista_vocal_ha}")
+
+# --- INIZIO INTEGRAZIONE STOCKHOUSE (Versione Volatile Corretta) ---
+    if lista_vocal_ha:
+        # Convertiamo items in una lista di dizionari se non lo è già. 
+        # Questo risolve il problema degli oggetti sqlite3.Row immutabili.
+        if len(items) > 0 and not isinstance(items[0], dict):
+            items = [dict(row) for row in items]
+        elif not isinstance(items, list):
+            # Se per qualche motivo items non è una lista (es. cursore vuoto)
+            items = list(items)
+
+        # --- CORREZIONE BARCODE DINAMICO ---
+        for nome_prodotto in lista_vocal_ha:
+            # Creiamo un barcode basato sul nome (es. "HA_PANE", "HA_LATTE_INTERO")
+            # Puliamo il nome da spazi extra e mettiamo l'underscore al posto degli spazi
+            nome_pulito = nome_prodotto.strip().upper().replace(" ", "_")
+            barcode_dinamico = f"HA_{nome_pulito}"
+
+            item_ha = {
+                "barcode": barcode_dinamico, 
+                "product_name": f"🎤 {nome_prodotto.upper()}", 
+                "quantity_to_buy": 1,
+                "shop": "VOCE (HA)",
+                "reason": "Nota vocale",
+                "price": 0.0,
+                "decade_number": decade,
+                "within_budget": 1
+            }
+            items.append(item_ha)
+            debug_print(f"✨ Nota vocale aggiunta con barcode stabile: {barcode_dinamico}")
+
+# --- FINE INTEGRAZIONE ---
+    
     if external_connection:
         conn.close()
 
     # Se il refresh è stato richiesto, aggiorna lo stato
     set_refresh_needed(False, decade)
 
-    debug_print(f"🛒 Lista della spesa per la {decade} generata con {len(items)} prodotti, totale: {total_cost:.2f}€")
     #debug_print(f"Totali per negozio: {items}")
     return items, shop_totals
 
@@ -948,6 +988,61 @@ def remove_from_shopping_lst(barcodes):
     finally:
         conn.close()
 
+import urllib3
+
+# Rimuove elementi dalla lista Todo di Home Assistant via API.
+# Questa procedura è chiamata quando l'elemento selezionato viene rimosso.
+def remove_item_from_ha(entity_id, item_name):
+    """Rimuove un elemento dalla lista Todo di HA via API con gestione Case-Insensitive"""
+    
+    # Silenzia gli avvisi SSL per le connessioni non verificate (IP locale)
+    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+    
+    # 1. Recuperiamo la lista reale per trovare il nome con il casing corretto (es. "lenticchie")
+    # visto che item_name ci arriva tutto maiuscolo (es. "LENTICCHIE")
+    try:
+        lista_reale = get_home_assistant_list(entity_id)
+        nome_esatto = None
+        
+        if lista_reale:
+            for voce in lista_reale:
+                if voce.strip().upper() == item_name.strip().upper():
+                    nome_esatto = voce
+                    break
+        
+        # Se non lo troviamo nella lista, usiamo quello ricevuto come fallback
+        item_to_remove = nome_esatto if nome_esatto else item_name
+        
+    except Exception as e:
+        debug_print(f"⚠️ Impossibile recuperare lista per matching: {e}")
+        item_to_remove = item_name
+
+    debug_print(f"Rimuovo elemento dalla lista Todo di HA: {item_to_remove} dall'entità {entity_id}")
+
+    url = f"{Config.HOME_ASSISTANT_URL}/api/services/todo/remove_item"
+    headers = {
+        "Authorization": f"Bearer {Config.HOME_ASSISTANT_TOKEN}",
+        "Content-Type": "application/json",
+    }
+    
+    data = {
+        "entity_id": entity_id,
+        "item": item_to_remove
+    }
+    
+    try:
+        # Aggiunto verify=False per ignorare l'errore SSL sull'IP locale
+        response = requests.post(url, headers=headers, json=data, timeout=5, verify=False)
+        
+        if not response.ok:
+            debug_print(f"❌ Errore API HA: {response.status_code} - {response.text}")
+        else:
+            debug_print(f"✅ Elemento '{item_to_remove}' rimosso con successo da HA.")
+            
+        return response.ok
+    except Exception as e:
+        debug_print(f"❌ Errore cancellazione HA: {e}")
+        return False
 
 def normalize_text(text):
     # Funzione base di normalizzazione: minuscole, togli spazi
@@ -1068,6 +1163,50 @@ def aggiorna_tabella_shopping_list(lista_ordinata):
     conn.commit()
     conn.close()
     print("✅ Tabella shopping_list aggiornata con successo.")
+
+
+# Funzione per ottenere gli elementi dalla lista della spesa di Home Assistant
+import urllib3
+
+# Disabilita gli avvisi per certificati non verificati (se usi HTTPS su IP locale)
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+import token
+def get_home_assistant_list(entity_id):
+    ip_ha = "192.168.1.141"
+    url = f"https://{ip_ha}:8123/api/services/todo/get_items?return_response"
+    
+    ha_token = Config.HOME_ASSISTANT_TOKEN
+
+    headers = {
+        "Authorization": f"Bearer {ha_token.strip()}",
+        "Content-Type": "application/json",
+    }
+    
+    payload = {"entity_id": entity_id}
+
+    try:
+        response = requests.post(url, json=payload, headers=headers, timeout=5, verify=False)
+        
+        if response.status_code == 200:
+            data = response.json()
+            
+            # Navighiamo la struttura corretta: service_response
+            service_res = data.get("service_response", {})
+            items_dict = service_res.get(entity_id, {})
+            items = items_dict.get('items', [])
+            
+            # Estraiamo solo i nomi dei prodotti non ancora completati
+            lista_nomi = [item['summary'] for item in items if item.get('status') == 'needs_action']
+            
+            print(f"✅ Prodotti pronti per StockHouse: {lista_nomi}")
+            return lista_nomi
+        else:
+            return []
+            
+    except Exception as e:
+        print(f"Errore: {e}")
+        return []  
 
 
 

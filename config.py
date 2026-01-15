@@ -7,6 +7,12 @@ from stockhouse.utils import debug_print
 class Config:
     SECRET_KEY = secrets.token_hex(16)
 
+    # --- AGGIUNTA PER HOME ASSISTANT ---
+    # Inserisci qui l'IP del tuo Home Assistant e il Token generato dal tuo profilo
+    HOME_ASSISTANT_URL = "https://192.168.1.141:8123" 
+    HOME_ASSISTANT_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiI4NGE0YjQ2NDJhNWU0NzU3YmFiZjc4YmZlODIzODY5MyIsImlhdCI6MTc2ODMxMjYzNywiZXhwIjoyMDgzNjcyNjM3fQ.Pma7G2Fu2ZgukWY66jNR6Wv36892wuSLpl7fM85dHWA"
+    # -----------------------------------
+
     @staticmethod
     def get_database_path():
         db_path = os.getenv("DB_PATH")

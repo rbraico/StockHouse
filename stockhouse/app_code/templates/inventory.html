@@ -39,25 +39,22 @@
       border: 2px solid #dee2e6;
       display: block;
   }
-  .table-container .row.bg-primary {
-      background-color: transparent !important;
+  /* Tasto consumato compatto */
+  .consume-btn-small {
+    padding: 2px 8px;
+    font-size: 1.1rem;
   }
-  .consume-btn {
-    min-width: 160px;
+  /* Stile mini tabella HA */
+  .ha-card {
+    border: 2px solid #0050b9;
   }
-  #drop-zone {
-    cursor: pointer;
-    transition: background-color 0.2s;
-  }
-  #receipt-preview {
-    max-width: 100%;
-    margin-top: 15px;
-    border: 1px solid #dee2e6;
-    display: none;
+  .ha-header {
+    background-color: #0050b9 !important;
+    color: white;
+    font-weight: bold;
   }
 </style>
 
-<!-- Modale per selezionare il lotto da consumare -->
 <div class="modal fade" id="consumeModal" tabindex="-1" aria-labelledby="consumeModalLabel" aria-hidden="true">
   <div class="modal-dialog">
     <div class="modal-content">
@@ -75,105 +72,118 @@
   </div>
 </div>
 
-
 <div class="tab-content mt-3">
 
-  <!-- 📋 Gestione Magazzino -->
   <div class="tab-pane fade show active" id="gestione" role="tabpanel" aria-labelledby="gestione-tab">
-    <div class="table-container">
-      <table class="table table-bordered custom-table" id="gestione-table">
-        <thead class="table-dark">
-          <tr>
-            <th>Prodotto</th>
-            <th>Barcode</th>
-            <th>Nome</th>
-            <th>Articolo</th>
-            <th>Categoria</th>
-            <th>Prezzo</th>
-            <th>Quantità Attuale</th>
-            <th>Valore Totale</th>
-            <th>Azioni</th>
-          </tr>
-          <tr>
-            <th></th>
-            <th></th>
-            <th>
-              <select id="filterNameGestione" class="form-select form-select-sm"><option value="">Tutti</option></select>
-            </th>
-            <th>
-              <select id="filterArticleGestione" class="form-select form-select-sm"><option value="">Tutti</option></select>
-            </th>
-            <th>
-              <select id="filterCategoryGestione" class="form-select form-select-sm"><option value="">Tutte</option></select>
-            </th>
-            <th colspan="4"></th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for product in products %}
-          <tr data-barcode="{{ product.barcode }}">
-            <td>
-              {% if product.image %}
-                <img src="{{ product.image }}" alt="Immagine prodotto" style="max-width: 80px; height: auto;">
-              {% else %}
-                <span class="text-muted">Nessuna immagine</span>
-              {% endif %}
-            </td>
-            <td>{{ product.barcode or "-" }}</td>
-            <td>{{ product.name or "-" }}</td>
-            <td>{{ product.item or "-" }}</td>
-            <td>{{ product.category or "-" }}</td>
-            <td>€{{ product.price or "0.00" }}</td>  
-            <td>{{ product.quantity_in_inventory or "-" }}</td>
-            <td>€{{ product.total_value or "0.00" }}</td>
-            <td>
-              <button class="btn btn-sm btn-warning consume-btn">🍽️ Consumato</button>
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-  </div>
+    <div class="container-fluid px-0">
+      <div class="row">
+        
+        <div class="col-md-9">
+          <div class="table-container">
+            <table class="table table-bordered custom-table" id="gestione-table">
+              <thead class="table-dark">
+                <tr>
+                  <th>Prodotto</th>
+                  <th>Barcode</th>
+                  <th>Nome</th>
+                  <th>Articolo</th>
+                  <th>Categoria</th>
+                  <th>Quantità Attuale</th>
+                  <th>Azioni</th>
+                </tr>
+                <tr>
+                  <th></th>
+                  <th></th>
+                  <th>
+                    <select id="filterNameGestione" class="form-select form-select-sm"><option value="">Tutti</option></select>
+                  </th>
+                  <th>
+                    <select id="filterArticleGestione" class="form-select form-select-sm"><option value="">Tutti</option></select>
+                  </th>
+                  <th>
+                    <select id="filterCategoryGestione" class="form-select form-select-sm"><option value="">Tutte</option></select>
+                  </th>
+                  <th colspan="2"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for product in products %}
+                <tr data-barcode="{{ product.barcode }}">
+                  <td>
+                    {% if product.image %}
+                      <img src="{{ product.image }}" alt="Immagine prodotto" style="max-width: 80px; height: auto;">
+                    {% else %}
+                      <span class="text-muted">Nessuna immagine</span>
+                    {% endif %}
+                  </td>
+                  <td>{{ product.barcode or "-" }}</td>
+                  <td>{{ product.name or "-" }}</td>
+                  <td>{{ product.item or "-" }}</td>
+                  <td>{{ product.category or "-" }}</td>
+                  <td>{{ product.quantity_in_inventory or "-" }}</td>
+                  <td>
+                    <button class="btn btn-warning btn-sm consume-btn-small consume-btn" title="Consumato">🍽️</button>
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
 
-  <!-- 🩹 Primo soccorso -->
-  <div class="tab-pane fade" id="pharmacy" role="tabpanel" aria-labelledby="pharmacy-tab">
+        <div class="col-md-3">
+          <div class="card ha-card shadow-sm">
+            <div class="card-header ha-header text-center py-2">
+               <span class="fs-5">🎤 Da Scalare</span>
+            </div>
+            <div class="card-body p-0">
+              <div style="max-height: 560px; overflow-y: auto;">
+                <table class="table table-sm table-striped mb-0">
+                  <thead class="table-light">
+                    <tr>
+                      <th class="ps-3">Prodotto</th>
+                      <th class="text-center">X</th>
+                    </tr>
+                  </thead>
+                  <tbody id="consumati-ha-body">
+                    {% if consumati_ha %}
+                      {% for item in consumati_ha %}
+                      <tr>
+                        <td class="ps-3 align-middle text-start" style="font-size: 0.9rem;">
+                          {{ item.nome }}
+                        </td>
+                        <td class="text-center">
+                          <button class="btn btn-outline-danger btn-sm" 
+                                  onclick="rimuoviDaHA('{{ item.originale }}')">X</button>
+                        </td>
+                      </tr>
+                      {% endfor %}
+                    {% else %}
+                      <tr>
+                        <td colspan="2" class="text-center text-muted py-3 small">Nessun prodotto da scalare</td>
+                      </tr>
+                    {% endif %}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div> </div> </div>
+
+  <div class="tab-pane fade" id="pharmacy" role="tabpanel">
     <div class="container mt-4">
       <h5>🩹 Primo soccorso</h5>
       <p>Questa sezione è dedicata ai prodotti farmaceutici e sarà sviluppata in seguito.</p>
     </div>
   </div>
 
-  <!-- 🧼 Igene personale -->  
-  <div class="tab-pane fade" id="pharmacy" role="tabpanel" aria-labelledby="pharmacy-tab">
-    <div class="container mt-4">
-      <h5>🧼 Igene personale</h5>
-      <p>Questa sezione è dedicata ai prodotti farmaceutici e sarà sviluppata in seguito.</p>
-    </div>
-  </div>  
-
-  <!-- 🏠 Prodotti per la casa -->
-  <div class="tab-pane fade" id="pharmacy" role="tabpanel" aria-labelledby="pharmacy-tab">
-    <div class="container mt-4">
-      <h5>🏠 Prodotti per la casa</h5>
-      <p>Questa sezione è dedicata ai prodotti per la casa e sarà sviluppata in seguito.</p>
-    </div>
-  </div>  
-
-  <!-- 🔦 Tools, luce e energia -->
-  <div class="tab-pane fade" id="pharmacy" role="tabpanel" aria-labelledby="pharmacy-tab">
-    <div class="container mt-4">
-      <h5>🔦 Tools, luce e energia</h5>
-      <p>Questa sezione è dedicata ai prodotti Tool, Luce ed energia e sarà sviluppata in seguito.</p>
-    </div>
-  </div>  
-
 </div>
 
-<!-- --- SCRIPT --- -->
 <script>
 document.addEventListener("DOMContentLoaded", function () {
-  // --- FILTRI E CONSUMO ---
+  // --- FILTRI E CONSUMO (Indici aggiornati: Nome=2, Articolo=3, Categoria=4, Quantità=5) ---
   function populateGestioneFilters() {
     const nameSet = new Set(), articleSet = new Set(), categorySet = new Set();
     document.querySelectorAll('#gestione-table tbody tr').forEach(row => {
@@ -238,20 +248,42 @@ document.addEventListener("DOMContentLoaded", function () {
       .then(res=>res.json())
       .then(data=>{
         if(data.success){
-          selectedRow.children[6].textContent = data.quantita;
-          const prezzo = parseFloat(selectedRow.children[5].textContent.replace('€','').replace(',','.'));
-          selectedRow.children[7].textContent = isNaN(prezzo)||isNaN(data.quantita) ? "0.00" : `€${(prezzo*parseInt(data.quantita,10)).toFixed(2)}`;
+          // Aggiorna cella quantità (indice 5 dopo rimozione Prezzo/Valore)
+          selectedRow.children[5].textContent = data.quantita;
           const btn = selectedRow.querySelector('.consume-btn');
-          btn.textContent="✅ DB Aggiornato";
+          btn.textContent="✅";
           btn.classList.replace('btn-warning','btn-success');
           btn.disabled=true;
           bootstrap.Modal.getInstance(document.getElementById('consumeModal')).hide();
-          setTimeout(()=>{btn.textContent="🍽️ Consumato"; btn.classList.replace('btn-success','btn-warning'); btn.disabled=false;},2000);
+          setTimeout(()=>{btn.textContent="🍽️"; btn.classList.replace('btn-success','btn-warning'); btn.disabled=false;},2000);
         } else alert("Errore durante la registrazione del consumo.");
       });
   });
 });
 
-</script>
+// Funzione per rimuovere un elemento dalla lista "Da Scalare" in Home Assistant
+function rimuoviDaHA(itemName) {
+    // Chiediamo conferma per evitare cancellazioni accidentali
+    if (!confirm(`Vuoi rimuovere "${itemName}" dalla lista dei consumati?`)) return;
 
+    // Chiamata alla rotta Python che abbiamo appena creato
+    fetch(`/remove_item_ha?entity_id=todo.consumati&item_name=${encodeURIComponent(itemName)}`, {
+        method: 'POST'
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.success) {
+            // Ricarichiamo la pagina per vedere la lista aggiornata
+            // (Proprio come facciamo nella Shopping List)
+            window.location.reload();
+        } else {
+            alert("Errore durante la rimozione: " + (data.error || "riprova più tardi"));
+        }
+    })
+    .catch(err => {
+        console.error("Errore fetch:", err);
+        alert("Errore di connessione al server.");
+    });
+}
+</script>
 {% endblock %}

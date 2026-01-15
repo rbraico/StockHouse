@@ -39,7 +39,9 @@ from stockhouse.app_code.shopping_list_utils import (
     normalize_text,
     remove_from_shopping_lst,
     finalizza_shopping_list,
-    trigger_thread_on_exit)
+    trigger_thread_on_exit,
+    get_home_assistant_list,
+    remove_item_from_ha)
 
 from stockhouse.app_code.ai import manage_shopping_receipt, analyze_receipt_with_gemini, analyze_receipt_with_chatgpt, GeminiQuotaExceededError
 
@@ -369,14 +371,49 @@ def delete_product(barcode, ins_date):
 @main.route('/inventory')
 def list_inventory():
 
-    clean_old_transactions                  # 🧽 Step 1: pulizia
-    update_inventory_mean_usage_time()      # 🧠 Step 2: calcolo mean_usage_time
-    update_reorder_frequency()              # 🔄 Step 3: calcolo reorder_frequency
-    products = get_product_inventory()      # 🏭 Step 4 - Seleziona i records per l'inventario
+    clean_old_transactions()                 # 🧽 Step 1: pulizia
+    update_inventory_mean_usage_time()       # 🧠 Step 2: calcolo mean_usage_time
+    update_reorder_frequency()               # 🔄 Step 3: calcolo reorder_frequency
+    products = get_product_inventory()       # 🏭 Step 4 - Seleziona i records per l'inventario
 
-    #debug_print ("Show_Product in inventory: ", products)
+    # --- INTEGRAZIONE HOME ASSISTANT ---
+    # Recuperiamo la lista dei prodotti consumati dettati a voce
+    # Usiamo la funzione get_home_assistant_list già definita
+    lista_consumati_ha = get_home_assistant_list("todo.consumati")
+    
+    consumati_formattati = []
+    if lista_consumati_ha:
+        for voce in lista_consumati_ha:
+            # Creiamo un formato semplice per la mini-tabella a destra
+            # Salviamo il nome originale per la futura rimozione
+            consumati_formattati.append({
+                'nome': voce.strip().upper(),
+                'originale': voce 
+            })
+    # -----------------------------------
 
-    return render_template("inventory.html", products=products)
+    return render_template("inventory.html", 
+                           products=products, 
+                           consumati_ha=consumati_formattati)
+
+# Questa route viene chiamata quando si clicca sul pulsante per rimuovere un prodotto dalla tabella Da Scalare e dalla lista Consumati di Home Assistant
+@main.route('/remove_item_ha', methods=['POST'])
+def remove_item_ha():
+    # Recuperiamo l'ID entità e il nome del prodotto dalla richiesta
+    entity_id = request.args.get('entity_id')
+    item_name = request.args.get('item_name')
+    
+    if not entity_id or not item_name:
+        return jsonify({"success": False, "error": "Parametri mancanti"}), 400
+
+    # Chiamiamo la funzione che abbiamo salvato ieri
+    success = remove_item_from_ha(entity_id, item_name)
+    
+    if success:
+        return jsonify({"success": True})
+    else:
+        return jsonify({"success": False, "error": "Errore durante la rimozione su HA"})
+
 
 
 # Questa procedura viene chiamata dal metodo POST dopo aver cliccato sul pulsante Modifica Parametri di Magazzino
@@ -866,6 +903,27 @@ def shopping_list():
     else:
         debug_print("✅ Nessuna rigenerazione. Uso la lista salvata.")
         items, shop_totals = get_shopping_list_table()
+        
+        # --- AGGIUNTA FONDAMENTALE PER PRODOTTI VOCALI ---
+        # Anche se la lista DB è pronta, dobbiamo aggiungere i prodotti "volatili" di HA
+        lista_vocal_ha = get_home_assistant_list("todo.shopping_list")
+        if lista_vocal_ha:
+            for nome in lista_vocal_ha:
+                barcode_ha = f"HA_{nome.strip().replace(' ', '_').upper()}"
+                items.append({
+                    "barcode": barcode_ha,
+                    "product_name": f"🎤 {nome.upper()}",
+                    "quantity_to_buy": 1,
+                    "shop": "VOCE (HA)",
+                    "reason": "Nota HA",
+                    "price": 0.0
+                })
+            # Aggiungiamo il negozio HA ai totali se non esiste
+            if "VOCE (HA)" not in shop_totals:
+                shop_totals["VOCE (HA)"] = 0.0
+        # ------------------------------------------------
+
+
 
     suggested_items = get_suggested_products()
     period_label = get_decade_period_label(selected_decade)
@@ -1256,20 +1314,6 @@ def get_all_unknown_products():
     
 @main.route('/shopping_list/remove_selected', methods=['POST'])
 def remove_selected():
-    """
-    Route per rimuovere i prodotti selezionati dalla lista della spesa.
-
-    - Riceve via POST un JSON con una lista di barcode da rimuovere.
-    - Chiama la funzione `remove_from_shopping_lst(barcodes)` per aggiornare il database.
-    - Ricarica la lista aggiornata dei prodotti da acquistare, filtrando quelli ancora "within_budget" 
-      e appartenenti alla decade corrente, ordinandoli per negozio e nome prodotto.
-    - Calcola i totali della spesa per ogni negozio, moltiplicando prezzo per quantità.
-    - Renderizza dinamicamente tramite template HTML sia la tabella aggiornata della lista della spesa
-      che quella dei totali per negozio.
-    - Restituisce un JSON con gli HTML aggiornati per consentire un refresh fluido del frontend senza ricaricare la pagina.
-    - Gestisce eventuali errori ritornando un JSON con messaggio di errore e codice 500.
-    """
-
     data = request.get_json()
     barcodes = data.get('barcodes', [])
 
@@ -1277,7 +1321,21 @@ def remove_selected():
         return jsonify({"error": "Nessun barcode ricevuto"}), 400
 
     try:
-        remove_from_shopping_lst(barcodes)
+        # --- LOGICA DI CANCELLAZIONE IBRIDA ---
+        ha_barcodes = [b for b in barcodes if b.startswith("HA_")]
+        db_barcodes = [b for b in barcodes if not b.startswith("HA_")]
+
+        # 1. Cancella dal DB i prodotti normali
+        if db_barcodes:
+            remove_from_shopping_lst(db_barcodes)
+
+        # 2. Cancella da Home Assistant i prodotti vocali
+        if ha_barcodes:
+            for bc in ha_barcodes:
+                # Ricostruiamo il nome originale (es. HA_LENTICCHIE -> LENTICCHIE)
+                nome_originale = bc.replace("HA_", "").replace("_", " ")
+                remove_item_from_ha("todo.shopping_list", nome_originale)
+        # --------------------------------------
 
         conn = sqlite3.connect(Config.DATABASE_PATH, timeout=10)
         conn.row_factory = sqlite3.Row
@@ -1285,26 +1343,43 @@ def remove_selected():
 
         current_decade = get_current_decade(datetime.today())
 
-        # Prendi i prodotti filtrati per decade corrente e ordina come in add_selected
-        items = cursor.execute("""
+        # 3. Recupera i prodotti dal DB
+        db_items = cursor.execute("""
             SELECT barcode, product_name, quantity_to_buy, shop, reason, price
             FROM shopping_list
             WHERE within_budget = 1 AND decade_number = ?
             ORDER BY shop, product_name
         """, (current_decade,)).fetchall()
 
-        items = [dict(row) for row in items]
+        items = [dict(row) for row in db_items]
 
-        # Calcola i totali per negozio moltiplicando prezzo * quantità
+        # 4. AGGIUNGIAMO SEMPRE I PRODOTTI FRESCHI DA HA (Iniezione Volatile)
+        lista_vocal_ha = get_home_assistant_list("todo.shopping_list")
+        if lista_vocal_ha:
+            for nome in lista_vocal_ha:
+                barcode_ha = f"HA_{nome.strip().replace(' ', '_').upper()}"
+                items.append({
+                    "barcode": barcode_ha,
+                    "product_name": f"🎤 {nome.upper()}",
+                    "quantity_to_buy": 1,
+                    "shop": "VOCE (HA)",
+                    "reason": "Nota HA",
+                    "price": 0.0
+                })
+
+        # 5. Ricalcola i totali includendo i prodotti del DB
+        # (I prodotti HA pesano 0€, quindi non sballano il totale)
         shop_totals_raw = cursor.execute("""
             SELECT shop, SUM(price * quantity_to_buy) as total
             FROM shopping_list
             WHERE within_budget = 1 AND decade_number = ?
             GROUP BY shop
-            ORDER BY shop                             
         """, (current_decade,)).fetchall()
 
         shop_totals = {row['shop']: row['total'] for row in shop_totals_raw}
+        # Aggiungiamo il negozio "VOCE (HA)" se ci sono prodotti vocali
+        if lista_vocal_ha:
+            shop_totals["VOCE (HA)"] = 0.0
 
         conn.close()
 
@@ -1320,7 +1395,6 @@ def remove_selected():
     except Exception as e:
         print(traceback.format_exc())
         return jsonify({"error": str(e)}), 500
-
 
 @main.route('/import_receipt', methods=['POST'])
 def import_receipt():
