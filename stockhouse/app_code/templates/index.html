@@ -199,7 +199,7 @@
             <label for="name" class="form-label mb-0" style="color: #00008B">Nome</label>
           </div>
           <div class="col-8">
-            <input type="text" class="form-control form-control-sm" id="name" name="name" required maxlength="25" style="background-color:  #e6f2ff;">
+            <input type="text" class="form-control form-control-sm" id="name" name="name" required maxlength="125" style="background-color:  #e6f2ff;">
             <input type="hidden" id="old_name" name="old_name" value="">
           </div>
         </div>
@@ -949,7 +949,7 @@ document.addEventListener("DOMContentLoaded", function () {
         newInput.id = 'name';
         newInput.name = 'name';
         newInput.required = true;
-        newInput.maxLength = 25;
+        //newInput.maxLength = 25;
         newInput.style.backgroundColor = '#e6f2ff';
         newInput.setAttribute('list', 'unknown-products-datalist');
         nameInputContainer.replaceChild(newInput, nameInput);
