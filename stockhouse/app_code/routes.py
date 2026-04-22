@@ -8,7 +8,7 @@ from stockhouse.app_code.models import add_product_dim, add_transaction_fact, de
                        upsert_budget, get_budget, update_inventory_mean_usage_time, get_unconsumed_products_full_list, get_pharmacy, \
                        get_unique_unconsumed_record, clean_old_transactions, update_reorder_frequency,upsert_expense, delete_from_shopping_list, upsert_transaction_fact
 from stockhouse.app_code.models import add_shop, update_shop, delete_shop, get_unknown_products, delete_unknown_product_by_name, insert_product_alias_if_not_exists, lookup_products_by_id  
-from stockhouse.app_code.models import add_category, get_all_categories, update_category, delete_category, get_all_items, update_item, delete_item
+from stockhouse.app_code.models import add_category, get_all_categories, update_category, delete_category, get_all_items, update_item, delete_item, update_auto_sync_params
 import sqlite3
 import hashlib
 from datetime import datetime, date
@@ -340,6 +340,10 @@ def index():
             "item": item,
             "expiry_date": expiry_date 
             }
+
+
+    # Ricalcola i parametri gestiti da Auto Sync ogni volta che si apre la pagina, in modo da avere sempre dati aggiornati  
+    update_auto_sync_params()
 
     # 💡 Se la richiesta è GET, semplicemente carichiamo la pagina
     products      = get_all_products()

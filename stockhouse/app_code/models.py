@@ -522,7 +522,53 @@ def delete_product_from_db(barcode, ins_date):
     conn.commit()
     conn.close()
 
-
+def update_auto_sync_params():
+    conn = sqlite3.connect(Config.DATABASE_PATH)
+    cursor = conn.cursor()
+    
+    # Query chirurgica: aggiorna solo chi ha l'Auto Sync attivo (user_override = 1)
+    # Calcola la differenza giorni tra primo e ultimo acquisto e divide per la quantità totale (meno l'ultima spesa)
+    update_query = """
+        UPDATE product_settings
+        SET 
+            mean_usage_time = (
+                SELECT 
+                    CASE 
+                        WHEN SUM(tf.quantity) > MAX(last_q.quantity) THEN
+                            -- Arrotondiamo a 0 decimali per avere un numero pulito
+                            ROUND(CAST((strftime('%s', MAX(tf.ins_date)) - strftime('%s', MIN(tf.ins_date))) / 86400.0 AS FLOAT) / (SUM(tf.quantity) - MAX(last_q.quantity)), 0)
+                        ELSE mean_usage_time 
+                    END
+                FROM transaction_fact tf
+                JOIN (
+                    SELECT barcode, quantity 
+                    FROM transaction_fact 
+                    WHERE barcode = product_settings.barcode 
+                    ORDER BY ins_date DESC LIMIT 1
+                ) AS last_q ON tf.barcode = last_q.barcode
+                WHERE tf.barcode = product_settings.barcode
+            ),
+            reorder_frequency = (
+                SELECT 
+                    CASE 
+                        WHEN COUNT(tf.id) > 1 THEN
+                            -- Già arrotondato, ma assicuriamoci sia un intero
+                            CAST(ROUND(CAST((strftime('%s', MAX(tf.ins_date)) - strftime('%s', MIN(tf.ins_date))) / 86400.0 AS FLOAT) / (COUNT(tf.id) - 1), 0) AS INTEGER)
+                        ELSE reorder_frequency
+                    END
+                FROM transaction_fact tf
+                WHERE tf.barcode = product_settings.barcode
+            )
+        WHERE user_override = 1;
+        """
+    
+    try:
+        cursor.execute(update_query)
+        conn.commit()
+    except Exception as e:
+        print(f"Errore durante l'Auto Sync: {e}")
+    finally:
+        conn.close()
 
 def get_all_products():
     conn = sqlite3.connect(Config.DATABASE_PATH)
