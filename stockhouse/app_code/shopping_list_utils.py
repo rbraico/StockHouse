@@ -408,8 +408,12 @@ def get_shopping_list_data(save_to_db=False, conn=None, cursor=None, decade=None
         LEFT JOIN transaction_fact tf ON i.barcode = tf.barcode
         LEFT JOIN product_dim pd ON i.barcode = pd.barcode
         WHERE i.max_quantity > 0
-        AND (pd.category LIKE '%Alimenti freschi' OR pd.item LIKE '%Alimenti Congelati')
-        AND NOT (i.necessity_level="Stagionale" AND i.priority_level>2)
+        AND (
+            pd.category LIKE '%Alimenti freschi' 
+            OR pd.item LIKE '%Alimenti Congelati'
+            OR (i.necessity_level = 'Indispensabile' AND COALESCE(stock.total_quantity, 0) <= i.security_quantity)
+        )
+        AND NOT (i.necessity_level = "Stagionale" AND i.priority_level > 2)
         GROUP BY i.barcode
         HAVING (
             (i.necessity_level = 'Indispensabile' AND COALESCE(stock.total_quantity, 0) <= i.reorder_point)

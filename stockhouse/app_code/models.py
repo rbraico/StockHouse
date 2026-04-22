@@ -1088,10 +1088,14 @@ def update_inventory_mean_usage_time():
 
     # Calcola il mean_usage_time (media giorni di consumo) per ogni barcode
     cur.execute("""
-        SELECT barcode, AVG(JULIANDAY(consume_date) - JULIANDAY(ins_date)) AS avg_days
+        SELECT 
+            barcode, 
+            CAST(ROUND(AVG(JULIANDAY(consume_date) - JULIANDAY(ins_date))) AS INTEGER) AS avg_days
         FROM consumed_fact
-        WHERE consume_date IS NOT NULL
-        GROUP BY barcode
+        WHERE consume_date IS NOT NULL 
+        AND ins_date > DATE('now', '-12 months')
+        AND (JULIANDAY(consume_date) - JULIANDAY(ins_date)) >= 0
+        GROUP BY barcode;
     """)
 
     avg_records = cur.fetchall()
@@ -1127,11 +1131,11 @@ def update_reorder_frequency():
     barcodes = [row[0] for row in cur.fetchall()]
 
     for barcode in barcodes:
-        # Prendi tutte le ins_date ordinate
+        # MODIFICA: Aggiunto filtro ultimi 12 mesi
         cur.execute("""
             SELECT ins_date
             FROM transaction_fact
-            WHERE barcode = ?
+            WHERE barcode = ? AND ins_date > DATE('now', '-12 months')
             ORDER BY ins_date ASC
         """, (barcode,))
         rows = cur.fetchall()
@@ -1141,10 +1145,13 @@ def update_reorder_frequency():
         if len(dates) < 2:
             continue
 
+        # Calcola i gaps (differenza in giorni)
         gaps = [(dates[i+1] - dates[i]).days for i in range(len(dates)-1)]
-        avg_gap = int(sum(gaps) / len(gaps)) if gaps else None
+        
+        # MODIFICA: Aggiunto round() per l'arrotondamento corretto
+        avg_gap = int(round(sum(gaps) / len(gaps))) if gaps else None
 
-        if avg_gap:
+        if avg_gap is not None: # Controllo più sicuro per lo zero
             debug_print(f"Updating barcode {barcode} with reorder_frequency: {avg_gap}")
             cur.execute("""
                 UPDATE product_settings
@@ -1154,7 +1161,6 @@ def update_reorder_frequency():
 
     conn.commit()
     conn.close()
-
 
 
 # Funzione per sincronizzare i prodotti in inventory_fact con product_dim
